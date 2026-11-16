@@ -8,7 +8,9 @@ command output, not estimated.
 ## Bug index
 
 | Bug | Sub-step | Summary | Status |
-|---|---|---|---|
+|---|---|---|---|| BUG-001 | M3.3 | Every authenticated endpoint returned 422 `query.who: Field required` | Fixed |
+| BUG-002 | M0.4 | `uv run alembic upgrade head` failed on a checkout that only had `.env` | Fixed |
+
 ## Entries
 
 ### M0.1 — Repository scaffold
@@ -115,3 +117,68 @@ lookup that simply does not return unknown IDs. No external provider is called a
 tests); candidate and evidence behaviour is covered through the API flow tests in M3.3.
 
 **Bugs.** None.
+
+### M3.3 / M0.5 / M0.6 — Assessment application service, auth, health and errors
+
+**Implemented** in `services/api/feeltriva_api`:
+
+- `service.py` — `AssessmentService`, the only place assessment logic runs. Start session,
+  get session, submit observations (free text or structured corrections), submit answer, next
+  question, assess, summary, delete. Every method takes the verified `Principal`.
+  Idempotent mutations store an encrypted replay body per `(owner, key)`; a different payload
+  under the same key is 409. Observation versions use a row lock plus a conditional
+  `UPDATE … WHERE observation_version = :expected`. Urgency/scope screening runs on every
+  change. Corrections are append-only rows with `supersedes`.
+- `auth.py` — bearer authentication: mock dev tokens (development/test only) and JWT
+  verification (issuer, audience, expiry, RS256/ES256, known scopes only).
+- `settings.py` — refuses mock auth, a missing encryption key or raw prompt logging outside
+  development/test; clinical mode needs an approved bundle path.
+- `main.py` — FastAPI routes, `/healthz`, `/readyz`, one error envelope, request IDs,
+  `Cache-Control: no-store` on private routes, CORS from configuration.
+- `crypto.py`, `db.py`, `models.py`, `schemas.py`, `seed.py`, `container.py`, `review.py`.
+
+**Tests run** (figures from the runs on 2026-11-16):
+
+| Command | Result |
+|---|---|
+| `uv run pytest tests/unit` | 28 passed |
+| `uv run pytest tests/api/test_flow.py` | 12 passed |
+| `uv run pytest tests/api/test_guards.py` | 19 passed |
+| `uv run pytest tests/api/test_auth_jwt.py` | 9 passed |
+| `uv run pytest` (SQLite) | 73 passed, 7 skipped (PostgreSQL-only) |
+| same with `TEST_DATABASE_URL` / `TEST_MIGRATION_DATABASE_URL` (PostgreSQL, app role) | 80 passed |
+| `uv run pytest tests/postgres` on PostgreSQL | 7 passed |
+| `uv run mypy packages services` | no issues in 22 files |
+
+What the PostgreSQL-only tests establish: the application role is not a superuser, owns no
+tables and cannot bypass RLS; an unfiltered `SELECT` in one caller's transaction returns only
+that caller's rows on every private table; cross-owner `UPDATE`/`DELETE` affect 0 rows and
+cross-owner `INSERT` is rejected; six concurrent writers on one version produce exactly one
+200 and five 409s; five concurrent identical retries apply once.
+
+Live check with `uvicorn` against the Compose database: `/readyz` reported
+`clinical_mode: false, synthetic_release: true`; create session → 201; text → extracted
+`alpha` present and `beta` absent, both unconfirmed; assess with a stale version → 409;
+another caller → 404; delete → `deletion_scheduled`; CORS preflight from
+`http://localhost:5173` allowed `Authorization, Content-Type, Idempotency-Key`.
+
+**Bugs.**
+
+- **BUG-001 — every authenticated endpoint returned 422.** *Found by* the first run of
+  `tests/api/test_flow.py` (`assert 422 == 201`); the body said
+  `query.who: Field required; query.key: Field required`. *Cause:* `main.py` had
+  `from __future__ import annotations`, which turns annotations into strings; the dependency
+  aliases `Who` and `Key` are defined inside `create_app`, so FastAPI could not resolve the
+  strings and treated them as query parameters. *Resolution:* removed the future import from
+  `main.py` and documented why in the module docstring. *Verified:* full suite passes.
+- **BUG-002 — migrations ignored `.env`.** *Found by* the live smoke run:
+  `uv run alembic upgrade head` printed "Set MIGRATION_DATABASE_URL" although `.env` had it.
+  *Cause:* `migrations/env.py` read only process environment variables, unlike the
+  application. *Resolution:* `env.py` falls back to the application `Settings` (which loads
+  `.env`). *Verified:* `uv run alembic current` → `0003 (head)` with no variables exported.
+- Type check: mypy reported 15 errors on the first run (a reused loop variable name across
+  two branches, `rowcount` on an untyped result, `str` passed where a `Literal` is declared).
+  All fixed; none changed behaviour.
+
+**Not done in this sub-step.** No rate limiting (429). JWT verification was tested with a
+locally generated key, not against a real identity provider.
