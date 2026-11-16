@@ -1,0 +1,309 @@
+{
+  "dataset": "archive(11).zip only",
+  "model": "Bernoulli Naive Bayes; alpha=1; smoothed empirical training priors",
+  "clinical_validation": false,
+  "binary_zero_semantics": "assumed negative for offline experiment only; not established by source documentation",
+  "raw_rows": 100000,
+  "unique_labeled_rows": 100000,
+  "feature_groups": 100000,
+  "split": "SHA256 feature vector first 8 hex mod 100: <70 train, 70..84 validation, >=85 test",
+  "group_leakage": 0,
+  "classes": 46,
+  "features": 174,
+  "splits": {
+    "train": {
+      "n": 70119,
+      "top1_accuracy": 0.1565196309131619,
+      "top3_accuracy": 0.3988790484747358,
+      "macro_f1": 0.10739571686349873,
+      "balanced_accuracy": 0.30164426446778075,
+      "ece_10_bins": 0.6147963149715733,
+      "brier_multiclass": 1.3806172620517365,
+      "nll": 7.443306959722321,
+      "calibration_bins": [
+        {
+          "lower": 0.1,
+          "n": 101,
+          "mean_confidence": 0.17861543267529786,
+          "accuracy": 0.039603960396039604
+        },
+        {
+          "lower": 0.2,
+          "n": 1199,
+          "mean_confidence": 0.2602181285974473,
+          "accuracy": 0.07589658048373644
+        },
+        {
+          "lower": 0.3,
+          "n": 3265,
+          "mean_confidence": 0.3561555351251038,
+          "accuracy": 0.1004594180704441
+        },
+        {
+          "lower": 0.4,
+          "n": 5624,
+          "mean_confidence": 0.45440091585316494,
+          "accuracy": 0.10650782361308678
+        },
+        {
+          "lower": 0.5,
+          "n": 7604,
+          "mean_confidence": 0.548999468417065,
+          "accuracy": 0.12874802735402419
+        },
+        {
+          "lower": 0.6,
+          "n": 7404,
+          "mean_confidence": 0.6497059827709208,
+          "accuracy": 0.136547811993517
+        },
+        {
+          "lower": 0.7,
+          "n": 7384,
+          "mean_confidence": 0.7510346245217552,
+          "accuracy": 0.14599133261105093
+        },
+        {
+          "lower": 0.8,
+          "n": 8899,
+          "mean_confidence": 0.8519482652524869,
+          "accuracy": 0.156646814248792
+        },
+        {
+          "lower": 0.9,
+          "n": 28639,
+          "mean_confidence": 0.9750103078819707,
+          "accuracy": 0.191731554872726
+        }
+      ],
+      "classes_present": 46
+    },
+    "validation": {
+      "n": 14918,
+      "top1_accuracy": 0.15699155382759084,
+      "top3_accuracy": 0.3949591098002413,
+      "macro_f1": 0.08611714543584616,
+      "balanced_accuracy": 0.18546869815598058,
+      "ece_10_bins": 0.6173326084592256,
+      "brier_multiclass": 1.383419630487682,
+      "nll": 7.486545285411606,
+      "calibration_bins": [
+        {
+          "lower": 0.1,
+          "n": 14,
+          "mean_confidence": 0.17832503271071695,
+          "accuracy": 0.07142857142857142
+        },
+        {
+          "lower": 0.2,
+          "n": 249,
+          "mean_confidence": 0.26277204380045555,
+          "accuracy": 0.05220883534136546
+        },
+        {
+          "lower": 0.3,
+          "n": 714,
+          "mean_confidence": 0.35655901534961076,
+          "accuracy": 0.10084033613445378
+        },
+        {
+          "lower": 0.4,
+          "n": 1166,
+          "mean_confidence": 0.4556425372121155,
+          "accuracy": 0.10291595197255575
+        },
+        {
+          "lower": 0.5,
+          "n": 1571,
+          "mean_confidence": 0.5503766113940352,
+          "accuracy": 0.12030553787396563
+        },
+        {
+          "lower": 0.6,
+          "n": 1539,
+          "mean_confidence": 0.6496974044910278,
+          "accuracy": 0.1267056530214425
+        },
+        {
+          "lower": 0.7,
+          "n": 1595,
+          "mean_confidence": 0.7527415501553036,
+          "accuracy": 0.1523510971786834
+        },
+        {
+          "lower": 0.8,
+          "n": 1919,
+          "mean_confidence": 0.8523451218297571,
+          "accuracy": 0.15841584158415842
+        },
+        {
+          "lower": 0.9,
+          "n": 6151,
+          "mean_confidence": 0.9749276060771875,
+          "accuracy": 0.1959031051861486
+        }
+      ],
+      "classes_present": 41
+    },
+    "test": {
+      "n": 14963,
+      "top1_accuracy": 0.15712089821559846,
+      "top3_accuracy": 0.39671188932700663,
+      "macro_f1": 0.11507639185216888,
+      "balanced_accuracy": 0.2507023459982827,
+      "ece_10_bins": 0.6132569135870172,
+      "brier_multiclass": 1.3784582283049893,
+      "nll": 7.385121366721782,
+      "calibration_bins": [
+        {
+          "lower": 0.1,
+          "n": 35,
+          "mean_confidence": 0.17592198033350934,
+          "accuracy": 0.02857142857142857
+        },
+        {
+          "lower": 0.2,
+          "n": 280,
+          "mean_confidence": 0.26103014636502897,
+          "accuracy": 0.07857142857142857
+        },
+        {
+          "lower": 0.3,
+          "n": 667,
+          "mean_confidence": 0.35514323307357665,
+          "accuracy": 0.0944527736131934
+        },
+        {
+          "lower": 0.4,
+          "n": 1190,
+          "mean_confidence": 0.455201038165944,
+          "accuracy": 0.11596638655462185
+        },
+        {
+          "lower": 0.5,
+          "n": 1591,
+          "mean_confidence": 0.5488537802762861,
+          "accuracy": 0.12319296040226273
+        },
+        {
+          "lower": 0.6,
+          "n": 1611,
+          "mean_confidence": 0.6498101570771929,
+          "accuracy": 0.13097454996896338
+        },
+        {
+          "lower": 0.7,
+          "n": 1638,
+          "mean_confidence": 0.751292286003764,
+          "accuracy": 0.15079365079365079
+        },
+        {
+          "lower": 0.8,
+          "n": 1903,
+          "mean_confidence": 0.8528795518412867,
+          "accuracy": 0.15186547556489752
+        },
+        {
+          "lower": 0.9,
+          "n": 6048,
+          "mean_confidence": 0.974806652898817,
+          "accuracy": 0.19576719576719576
+        }
+      ],
+      "classes_present": 39
+    }
+  },
+  "missing_feature_experiment": [
+    {
+      "fraction_features_observed": 1,
+      "top1_accuracy": 0.15712089821559846,
+      "macro_f1": 0.11507639185216888
+    },
+    {
+      "fraction_features_observed": 0.75,
+      "top1_accuracy": 0.1658089955222883,
+      "macro_f1": 0.10018145777831752
+    },
+    {
+      "fraction_features_observed": 0.5,
+      "top1_accuracy": 0.17596738621934105,
+      "macro_f1": 0.09695359297800164
+    },
+    {
+      "fraction_features_observed": 0.25,
+      "top1_accuracy": 0.19655149368442157,
+      "macro_f1": 0.11585931216185037
+    }
+  ],
+  "learning_curve": [
+    {
+      "training_rows": 7011,
+      "validation_accuracy": 0.1923180050945167
+    },
+    {
+      "training_rows": 17529,
+      "validation_accuracy": 0.1670465209813648
+    },
+    {
+      "training_rows": 35059,
+      "validation_accuracy": 0.16342673280600617
+    },
+    {
+      "training_rows": 70119,
+      "validation_accuracy": 0.15699155382759084
+    }
+  ],
+  "top_confusions": [
+    [
+      330,
+      "Asthma",
+      "Systemic_Lupus_Erythematosus"
+    ],
+    [
+      322,
+      "Asthma",
+      "Peptic_Ulcer_Disease"
+    ],
+    [
+      239,
+      "Hyperthyroidism",
+      "Gastritis"
+    ],
+    [
+      229,
+      "Asthma",
+      "Hypothyroidism"
+    ],
+    [
+      227,
+      "Asthma",
+      "Type2_Diabetes"
+    ],
+    [
+      197,
+      "Asthma",
+      "Gastritis"
+    ],
+    [
+      193,
+      "Asthma",
+      "Flu"
+    ],
+    [
+      178,
+      "Pneumonia",
+      "Peptic_Ulcer_Disease"
+    ],
+    [
+      144,
+      "Hyperthyroidism",
+      "Flu"
+    ],
+    [
+      139,
+      "Irritable_Bowel_Syndrome",
+      "Flu"
+    ]
+  ],
+  "majority_test_accuracy": 0.20564058009757402
+}

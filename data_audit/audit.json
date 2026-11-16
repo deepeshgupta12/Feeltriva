@@ -1,0 +1,321 @@
+{
+  "normalization": "casefold + strip + collapse whitespace only; no semantic synonym merges",
+  "union_lexical_disease_labels": 960,
+  "source_sha256": {
+    "archive(11).zip": "92be3363aa4266c8f62128b739b1ef4149ef006777626f9bb84ae22988a61521",
+    "archive(12).zip": "6f81c9c46ee6f72c7fb755e5cb2f3143807d02f2146c79c01af1c094609555fc",
+    "archive(13).zip": "fbe1d4b7af59628ab1489fc3b770a776230b305dbb8e212336ade1a603e45a5f",
+    "archive(14).zip": "19ff1f13424d9c61b96fcdd9db627e66c252dc6f9325808116e7fe09dad1ad4c",
+    "archive(15).zip": "9e21f94ba54106157a28d2bab37ef32006234f492ef42c5ef08eb2668ce4020e",
+    "archive(16).zip": "61749286796ed856c4192a817c4fb5b76c2f4c3e795c02f4b8bb3ea9bb30ff73"
+  },
+  "files": [
+    {
+      "archive": "archive(11).zip",
+      "file": "Community Healthcare MultiSymptomsDisease Diagnostic Dataset.csv",
+      "rows": 100000,
+      "columns": 175,
+      "disease_labels": 46,
+      "exact_unique_rows": 100000,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 100000,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(12).zip",
+      "file": "data.csv",
+      "rows": 246945,
+      "columns": 378,
+      "disease_labels": 713,
+      "exact_unique_rows": 189640,
+      "exact_duplicate_rows": 57305,
+      "unique_profiles_excluding_patient_id": 189640,
+      "repeated_profiles_excluding_patient_id": 57305,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(12).zip",
+      "file": "final_symptoms_to_disease.csv",
+      "rows": 192715,
+      "columns": 2,
+      "disease_labels": 254,
+      "exact_unique_rows": 163727,
+      "exact_duplicate_rows": 28988,
+      "unique_profiles_excluding_patient_id": 163727,
+      "repeated_profiles_excluding_patient_id": 28988,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "causes.csv",
+      "rows": 714,
+      "columns": 3,
+      "disease_labels": 85,
+      "exact_unique_rows": 714,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 714,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "diseases_main.csv",
+      "rows": 85,
+      "columns": 6,
+      "disease_labels": 85,
+      "exact_unique_rows": 85,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 85,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "symptoms.csv",
+      "rows": 712,
+      "columns": 3,
+      "disease_labels": 82,
+      "exact_unique_rows": 712,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 712,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "treatments.csv",
+      "rows": 621,
+      "columns": 3,
+      "disease_labels": 84,
+      "exact_unique_rows": 621,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 621,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(14).zip",
+      "file": "Healthcare.csv",
+      "rows": 25000,
+      "columns": 6,
+      "disease_labels": 30,
+      "exact_unique_rows": 25000,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 25000,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {
+        "Male": 8271,
+        "Female": 8336,
+        "Other": 8393
+      },
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(15).zip",
+      "file": "test.csv",
+      "rows": 134529,
+      "columns": 228,
+      "disease_labels": 49,
+      "exact_unique_rows": 134529,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 126497,
+      "repeated_profiles_excluding_patient_id": 8032,
+      "malformed_rows": 0,
+      "sex_counts": {
+        "F": 69342,
+        "M": 65187
+      },
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(15).zip",
+      "file": "train.csv",
+      "rows": 475502,
+      "columns": 228,
+      "disease_labels": 49,
+      "exact_unique_rows": 475502,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 403568,
+      "repeated_profiles_excluding_patient_id": 71934,
+      "malformed_rows": 0,
+      "sex_counts": {
+        "M": 230958,
+        "F": 244544
+      },
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(16).zip",
+      "file": "symptom_Description_820_verified_v5.csv",
+      "rows": 820,
+      "columns": 6,
+      "disease_labels": 820,
+      "exact_unique_rows": 820,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 820,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 0,
+      "duplicate_column_disagreement_rows": {}
+    },
+    {
+      "archive": "archive(16).zip",
+      "file": "unified_820_diseases_symptoms_dataset_ROWLEVEL_CLEANED.csv",
+      "rows": 190672,
+      "columns": 655,
+      "disease_labels": 820,
+      "exact_unique_rows": 190672,
+      "exact_duplicate_rows": 0,
+      "unique_profiles_excluding_patient_id": 190672,
+      "repeated_profiles_excluding_patient_id": 0,
+      "malformed_rows": 0,
+      "sex_counts": {},
+      "duplicate_header_count": 37,
+      "duplicate_column_disagreement_rows": {
+        "itching": 86,
+        "acidity": 27,
+        "vomiting": 22272,
+        "cough": 19052,
+        "nausea": 18946,
+        "indigestion": 26,
+        "fatigue": 4576,
+        "dehydration": 15,
+        "headache": 18996,
+        "dizziness": 12757,
+        "sweating": 3317,
+        "constipation": 3000,
+        "coma": 26,
+        "phlegm": 46,
+        "anxiety": 23,
+        "shortness of breath": 16411,
+        "insomnia": 7351,
+        "sore throat": 11128,
+        "fainting": 5075,
+        "frequent urination": 5434,
+        "double vision": 3251,
+        "neck pain": 8581,
+        "weight gain": 2234,
+        "weakness": 9337,
+        "ear pain": 8608,
+        "back pain": 18588,
+        "joint pain": 3872,
+        "vomiting blood": 2498,
+        "muscle pain": 1398,
+        "diarrhea": 8501,
+        "fever": 16829,
+        "seizures": 2861,
+        "neck swelling": 1639,
+        "heartburn": 5589,
+        "muscle weakness": 87,
+        "dry skin": 27,
+        "swollen tongue": 4
+      }
+    }
+  ],
+  "overlap": [
+    {
+      "archive_a": "archive(11).zip",
+      "archive_b": "archive(12).zip",
+      "shared_lexical_labels": 13
+    },
+    {
+      "archive_a": "archive(11).zip",
+      "archive_b": "archive(13).zip",
+      "shared_lexical_labels": 12
+    },
+    {
+      "archive_a": "archive(11).zip",
+      "archive_b": "archive(14).zip",
+      "shared_lexical_labels": 10
+    },
+    {
+      "archive_a": "archive(11).zip",
+      "archive_b": "archive(15).zip",
+      "shared_lexical_labels": 2
+    },
+    {
+      "archive_a": "archive(11).zip",
+      "archive_b": "archive(16).zip",
+      "shared_lexical_labels": 18
+    },
+    {
+      "archive_a": "archive(12).zip",
+      "archive_b": "archive(13).zip",
+      "shared_lexical_labels": 39
+    },
+    {
+      "archive_a": "archive(12).zip",
+      "archive_b": "archive(14).zip",
+      "shared_lexical_labels": 15
+    },
+    {
+      "archive_a": "archive(12).zip",
+      "archive_b": "archive(15).zip",
+      "shared_lexical_labels": 13
+    },
+    {
+      "archive_a": "archive(12).zip",
+      "archive_b": "archive(16).zip",
+      "shared_lexical_labels": 674
+    },
+    {
+      "archive_a": "archive(13).zip",
+      "archive_b": "archive(14).zip",
+      "shared_lexical_labels": 10
+    },
+    {
+      "archive_a": "archive(13).zip",
+      "archive_b": "archive(15).zip",
+      "shared_lexical_labels": 5
+    },
+    {
+      "archive_a": "archive(13).zip",
+      "archive_b": "archive(16).zip",
+      "shared_lexical_labels": 50
+    },
+    {
+      "archive_a": "archive(14).zip",
+      "archive_b": "archive(15).zip",
+      "shared_lexical_labels": 5
+    },
+    {
+      "archive_a": "archive(14).zip",
+      "archive_b": "archive(16).zip",
+      "shared_lexical_labels": 22
+    },
+    {
+      "archive_a": "archive(15).zip",
+      "archive_b": "archive(16).zip",
+      "shared_lexical_labels": 18
+    }
+  ],
+  "archive15_train_test_shared_profiles_excluding_patient_id": 27622,
+  "clinical_dedup_status": "not established; no cross-source patient identity inferred"
+}

@@ -1,0 +1,22 @@
+{
+  "checks_passed": [
+    "All JSON artifacts parse",
+    "All supplied Python scripts parse",
+    "OpenAPI local references, operation IDs, required fields, auth and idempotency structure consistent",
+    "Source manifest agrees with audited CSV counts and includes 85 text entries",
+    "Candidate catalogs have 960 unique disease IDs and 958 unique feature IDs",
+    "Confusion matrix, split totals, class support and calibration counts match reported metrics",
+    "Relative Markdown links and image targets exist"
+  ],
+  "limits": [
+    "Not a full OpenAPI standards-validator run",
+    "SQL migration not executed against PostgreSQL",
+    "No application, browser, API, MCP or clinical validation performed",
+    "Baseline metrics unit tests are a separate command"
+  ],
+  "environment": {
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "Pillow": "13.0.0"
+  }
+}

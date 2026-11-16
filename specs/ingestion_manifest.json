@@ -1,0 +1,1260 @@
+{
+  "version": "0.1.0",
+  "source_archives": {
+    "archive(11).zip": "92be3363aa4266c8f62128b739b1ef4149ef006777626f9bb84ae22988a61521",
+    "archive(12).zip": "6f81c9c46ee6f72c7fb755e5cb2f3143807d02f2146c79c01af1c094609555fc",
+    "archive(13).zip": "fbe1d4b7af59628ab1489fc3b770a776230b305dbb8e212336ade1a603e45a5f",
+    "archive(14).zip": "19ff1f13424d9c61b96fcdd9db627e66c252dc6f9325808116e7fe09dad1ad4c",
+    "archive(15).zip": "9e21f94ba54106157a28d2bab37ef32006234f492ef42c5ef08eb2668ce4020e",
+    "archive(16).zip": "61749286796ed856c4192a817c4fb5b76c2f4c3e795c02f4b8bb3ea9bb30ff73"
+  },
+  "disease_normalization": "casefold, trim, collapse whitespace; semantic review required",
+  "files": [
+    {
+      "archive": "archive(11).zip",
+      "file": "Community Healthcare MultiSymptomsDisease Diagnostic Dataset.csv",
+      "expected_rows": 100000,
+      "expected_columns": 175,
+      "exact_unique_rows": 100000,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "positional_feature_matrix",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    },
+    {
+      "archive": "archive(12).zip",
+      "file": "data.csv",
+      "expected_rows": 246945,
+      "expected_columns": 378,
+      "exact_unique_rows": 189640,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "positional_feature_matrix",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    },
+    {
+      "archive": "archive(12).zip",
+      "file": "final_symptoms_to_disease.csv",
+      "expected_rows": 192715,
+      "expected_columns": 2,
+      "exact_unique_rows": 163727,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "symptom_list",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "causes.csv",
+      "expected_rows": 714,
+      "expected_columns": 3,
+      "exact_unique_rows": 714,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "narrative",
+      "local_join": "disease_id -> diseases_main.id",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "statements",
+        "statement_sources"
+      ]
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "diseases_main.csv",
+      "expected_rows": 85,
+      "expected_columns": 6,
+      "exact_unique_rows": 85,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "disease_metadata",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "statements",
+        "statement_sources"
+      ]
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "symptoms.csv",
+      "expected_rows": 712,
+      "expected_columns": 3,
+      "exact_unique_rows": 712,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "narrative",
+      "local_join": "disease_id -> diseases_main.id",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "statements",
+        "statement_sources"
+      ]
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "treatments.csv",
+      "expected_rows": 621,
+      "expected_columns": 3,
+      "exact_unique_rows": 621,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "narrative",
+      "local_join": "disease_id -> diseases_main.id",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "statements",
+        "statement_sources"
+      ]
+    },
+    {
+      "archive": "archive(14).zip",
+      "file": "Healthcare.csv",
+      "expected_rows": 25000,
+      "expected_columns": 6,
+      "exact_unique_rows": 25000,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "symptom_list",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    },
+    {
+      "archive": "archive(15).zip",
+      "file": "test.csv",
+      "expected_rows": 134529,
+      "expected_columns": 228,
+      "exact_unique_rows": 134529,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "positional_feature_matrix",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    },
+    {
+      "archive": "archive(15).zip",
+      "file": "train.csv",
+      "expected_rows": 475502,
+      "expected_columns": 228,
+      "exact_unique_rows": 475502,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "positional_feature_matrix",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    },
+    {
+      "archive": "archive(16).zip",
+      "file": "symptom_Description_820_verified_v5.csv",
+      "expected_rows": 820,
+      "expected_columns": 6,
+      "exact_unique_rows": 820,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "disease_description",
+      "disease_field": "Disease",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "statements",
+        "statement_sources"
+      ]
+    },
+    {
+      "archive": "archive(16).zip",
+      "file": "unified_820_diseases_symptoms_dataset_ROWLEVEL_CLEANED.csv",
+      "expected_rows": 190672,
+      "expected_columns": 655,
+      "exact_unique_rows": 190672,
+      "raw_policy": "retain_all",
+      "serving_policy": "reviewed_only",
+      "adapter": "positional_feature_matrix",
+      "targets": [
+        "source_records",
+        "disease_mappings",
+        "dataset_cases",
+        "case_labels",
+        "feature_mappings",
+        "case_features"
+      ],
+      "zero_semantics": "unknown_pending_review",
+      "duplicate_columns": "retain_positional_and_flag_conflicts"
+    }
+  ],
+  "text_files": [
+    {
+      "archive": "archive(13).zip",
+      "file": "alzheimers_disease.txt",
+      "sha256": "34f5905e7f4d4c7c898b270b02eab6ce83fd44a5f7622ff7574b886741dfb004",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "amyotrophic_lateral_sclerosis.txt",
+      "sha256": "465857ed93e2111b394db5ce64a172d80f61c6b921a6decc2044bcd908c89fd5",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "anorexia_nervosa.txt",
+      "sha256": "489e81c69e0b52da6a04a2c4691788b3362dff7e905fa19033018bb04fe68b5f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "anxiety_disorder.txt",
+      "sha256": "d29bca3533e78f0a50ae00556b8a24a4b000dafc2f3e7c01be98c3ed45c2b90d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "aortic_aneurysm.txt",
+      "sha256": "0cf732555a8e379c1bd1749192a01b2e7287eeccbd3237470e1eb807ae0ad98d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "asthma.txt",
+      "sha256": "5f5e353d0d2f206ca4f0646d56eda312ea119ddc43f7081496607ef1462db806",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "atherosclerosis.txt",
+      "sha256": "38b669cd6ce99da1a181832346ccc592908e8426d7e0e0f499b35a2268db165b",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "atrial_fibrillation.txt",
+      "sha256": "cf71874abad34823661673d6602a80bdd04789cea6a29af25000b4f21f25710f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "autism_spectrum_disorder.txt",
+      "sha256": "86062b0eaca762780b3ee2d38ee6ca6f33fee0033c75d3b18ead8ef519135444",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "bipolar_disorder.txt",
+      "sha256": "093933cee7587457ae2569b9bcb8d38e5dee06b231940da20e32733ac34d819e",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "breast_cancer.txt",
+      "sha256": "be2b1f82cd9f6f7ae4efd088929d1327cfb6fed2e493fd54da5ea19c6bc7f02e",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "bulimia_nervosa.txt",
+      "sha256": "1af1ed472795988eaa9cf5d3e715c5c5612c920c6a4afce55425986f79f91690",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "celiac_disease.txt",
+      "sha256": "4fb365934b257c211dbf0fd06e5489cbd860ee70c355425488b9fa1e3bfaaabc",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "cerebral_palsy.txt",
+      "sha256": "ffd954fa3b566e71e736bcd3dcdba0532d2d8b2dde9040c69cea145e2fb2526c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "cervical_cancer.txt",
+      "sha256": "0646093abc1da08082533bd35c57c55268a8407be08a74fec3f88ae5ca3d1687",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "cholera.txt",
+      "sha256": "c707eadf48dc4d85801dd2d1a0e6d9e77245ada937f57663f10b86a84c9c22bc",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "chronic_obstructive_pulmonary_disease.txt",
+      "sha256": "b2e6e8edd408a2207974373fe07457fe49201fc9dca37232613424f806d9b23f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "cirrhosis.txt",
+      "sha256": "e9628a664bd6e4726b126ddf63e8e152b88b8aa02e410de893e3280dedf5885e",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "colorectal_cancer.txt",
+      "sha256": "6a65145cf5222cdb0780a378621639617e9c55033278f9efbaf80801e32a4640",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "coronary_artery_disease.txt",
+      "sha256": "d8e4bfc6dabfc7ea64141889ee4edf4042cc050145586660ec31bcd1ae978667",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "covid-19.txt",
+      "sha256": "6277cd244d80beee615d8897180bce82e91bab4e4d6c9a15ff71b921b76e0db5",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "crohns_disease.txt",
+      "sha256": "fdeaee7176c4b2a42b9d60516d2db3b7b8f934888178427403ff78e902b04dca",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "cushings_syndrome.txt",
+      "sha256": "45e3dbf2be6be7bde37a433fa7642ba3909d1c147e21a162aa62da0819062c16",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "cystic_fibrosis.txt",
+      "sha256": "41fda3a7fac9b4e57a2f13e42ef98a755a0c9ce4363a87f52d6955e74eb5bb56",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "deep_vein_thrombosis.txt",
+      "sha256": "72a3011ec04b4d1cf7b23416e6c23ef21ecac2793cb255d3a02f494e6261543d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "dengue_fever.txt",
+      "sha256": "ed4af1d7d200d0ee0aef79cfa86481ce882957eba058bb5b31830914640c9692",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "depression_mood.txt",
+      "sha256": "7de35baa2890b67851dc6db94927856d18332f864955ab9f4d641d6c179f9f7e",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "diabetes_mellitus_type_1.txt",
+      "sha256": "ba6668b6dede85110ea205c9282acc53c4a2623a5923ab8ea9386ad40ecd9ce1",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "diabetes_mellitus_type_2.txt",
+      "sha256": "eb905ca1126e248218ef2a760671e7ac66087599a7c7ea22059f10d87870e79d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "down_syndrome.txt",
+      "sha256": "6bd71e820e308943576fcbe54d5a57784bf377b2416e6a3237c669fd0535ad2f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "ebola_virus_disease.txt",
+      "sha256": "f77fff2a74df8a30a1e11a490dd92d79c64ec12621d2cf4e4c31564e2743776c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "epilepsy.txt",
+      "sha256": "bb8b63b9d308ebcfd7f5d1683000cc4b14ad3fd5ff94a142e9c7960c8bc8dfe7",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "gout.txt",
+      "sha256": "1f176127ba4097e64d59d2e9518e3a7687537c65a9378d8a32e19920febb184c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "heart_failure.txt",
+      "sha256": "b44cd91097219854579ed2fa2ef491188a9ff3fb29506b20816ad06ff39662c8",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hemophilia.txt",
+      "sha256": "20fc8339eb80f9ebe42aeceff8ca79fec069d2ba6f9f51262cedd022286a228f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hepatitis_b.txt",
+      "sha256": "a72ffe0e370ded454ba8fbe2360086089f823b7f16b1cbeca1fa5b6f55e21450",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hepatitis_c.txt",
+      "sha256": "b6402e1a556bff842aeb5a9ceb57a9854d3df021c201daf2715436c182894aa4",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hiv_aids.txt",
+      "sha256": "66983359cc1266692e0e18668b14b4cb631b9383b3c3f591e09f1160b6d4e49e",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "huntingtons_disease.txt",
+      "sha256": "38894d34ce6da4bbbed3d1b2dd168f223476137398433bbbce51b828e711f6ec",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hypertension.txt",
+      "sha256": "0587a302e35aa3742a0aa8befd1e787fdebf5d477537029b9b66efa17db068df",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hyperthyroidism.txt",
+      "sha256": "8a72f53243492e68f8faf7c2c2b393a0997865eac9ce9d0c86c02af4e335edce",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "hypothyroidism.txt",
+      "sha256": "63e4cd8e6a31bac11468a757a4d8e13f23bc15f35c7fe838998b25e2864c2430",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "influenza.txt",
+      "sha256": "e69a27d754780fd5894ea10717dd3b9c2f1aa7248e282bcf4b357c869b8cf34c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "irritable_bowel_syndrome.txt",
+      "sha256": "a1fd0cbac05fe16a1e80a09a1f50c844191ed41b980a2f38596c0a203f46b36d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "leprosy.txt",
+      "sha256": "618f87bf4ad3dc801d370e0b4fa8ef195d38645467886554bc5008b79d7646da",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "leukemia.txt",
+      "sha256": "b8e241cdc1fde5e1707085b630706ee274c4d87d399e88e69923c77d482ebc46",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "liver_cancer.txt",
+      "sha256": "a785e17d190a3e4aa3cb53fdc34fd0fc9a2da84927177e36bebb7f71ddbffec2",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "lung_cancer.txt",
+      "sha256": "f4248eebb262cefc700ac75d89a48eeea36e1eeefa2f9bbbab0dd49f2d8ad1f3",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "lupus_erythematosus.txt",
+      "sha256": "8f173d812c9629ec409e8b1f5efe8728ab2e27014c5857d51db65d191a3e16f4",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "lymphoma.txt",
+      "sha256": "b824445ca3b04f9be7835552fa65059b1ee9905d5b41b869bb309787f147cb1e",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "malaria.txt",
+      "sha256": "f2961b0bcbb61ec6e7d12694ea656ddc3d0c48af17ea8ab2d9c12e1e7970075d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "marfan_syndrome.txt",
+      "sha256": "51e8e59aa9b7a6b817a11382fbb58c41ecb9a48942e97982d672c95acccff654",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "measles.txt",
+      "sha256": "4f865d45138efaebdaedd21b6407e32afbef2532084f6098d6f8d78460d73ec6",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "meningitis.txt",
+      "sha256": "1314ce3d932a1276178137124c911045f3e9e70437a78717a0b831d15551345c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "migraine.txt",
+      "sha256": "f3a650a69301a7203e97acb9059ba090035ae29d97d46dc492a00fa74dfb6bca",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "multiple_sclerosis.txt",
+      "sha256": "ba6fcc78bb73c9ab0be92e942ac8e06be9dce183d5d6e1d37cda366123abd00c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "myocardial_infarction.txt",
+      "sha256": "5e02b55622caa7a1fa49d4bcec023f12b8851b5face0a7e6c6a3dd86ff7bea72",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "obesity.txt",
+      "sha256": "eb8916b17f0e6a847b0efaabbeb8a988d44d08b53fddd14f2dde290a1c6d2212",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "obsessive-compulsive_disorder.txt",
+      "sha256": "809847cffa55783ce69fea58429803373359db7812f8226e4d57f60908268c2b",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "osteoporosis.txt",
+      "sha256": "71a6e12eef5cdd96911ab46089ea4cc2871a38b96ecda054583e3f4c6a84aeac",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "pancreatic_cancer.txt",
+      "sha256": "eff60229bde609c1e058fa8d17b0b1037982b4e3fcfa3478b3554fb4f4b3f25f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "pancreatitis.txt",
+      "sha256": "5c34c6993bd13f62ee2e0fa0083136a3adfd1f44648e83dd6520f57f0e5aeb2d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "parkinsons_disease.txt",
+      "sha256": "889c5b1eb2ec1148bfce1c667277774bbc017493e74ef040f9ac313d02139cad",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "peptic_ulcer.txt",
+      "sha256": "55223f43f5099d5defa04de36b29f278ec6bfadd67f41a9f6345915c9b8fe13c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "pertussis.txt",
+      "sha256": "dc352f604944fc2f9a767f5680cda57f1925c61ad16ebefc8616a4d8da2da3fb",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "phenylketonuria.txt",
+      "sha256": "f844491d3979eca685a8c0f01e2d890c9c8330c1c8cf60a10f33998dde322962",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "pneumonia.txt",
+      "sha256": "36f9396ed9e5326f2c46499e20b374a502fd704eedf0dab8049f0c37c6cb25af",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "poliomyelitis.txt",
+      "sha256": "c3fd33b44953b7c1abf71686491afd43753c99f358c2ddbd5c02ce7e2c5a0d17",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "post-traumatic_stress_disorder.txt",
+      "sha256": "a21aa91273f795d3cd7c7f233509034be8b91135ab51eaac334549ff8a25bdcf",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "prostate_cancer.txt",
+      "sha256": "6ba8f3a29eed32ea06283622a43a2ab7cf0a95fb5860c14e4c0d7f1e1c463e28",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "psoriasis.txt",
+      "sha256": "d4f5f458724b3fb6c38b9bc9974805d5f04682d7362280ca859c72dadeeeff62",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "pulmonary_embolism.txt",
+      "sha256": "0ce4e862ce823e0cbe08fd13a4769fc2c5fbd34a30c16c92a7deab3612a40c1f",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "pulmonary_fibrosis.txt",
+      "sha256": "5b9d5e70548c621c33b3ebacdf96063709038896451e9cfb6057df523cffeaa3",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "rabies.txt",
+      "sha256": "decd3921e8fd8c8ea5725f540da5945a4c1a8836eb74996ca144a9df9748ba5c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "rheumatoid_arthritis.txt",
+      "sha256": "0d98d42d3c704caf0c232f51dd1da88d66efad14be9d4fd89bb347c7ebda955c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "schizophrenia.txt",
+      "sha256": "32e37fae0f17ddfd09008f2f710fbc8e3102c1f1fe7dfbb4821fc486bd1bdb8d",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "sickle_cell_disease.txt",
+      "sha256": "d0b57025f75374e9cdc98e515f14a4f9a4053443a6a3f77c80f3b21b3462635c",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "sjogren_syndrome.txt",
+      "sha256": "2e27c6694442c6235c3862e562f69c865284b452048d2fa38a363b85f5b94d49",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "skin_cancer.txt",
+      "sha256": "29a616086686825f7c37c728a7050eca66a300daf360aa62261f50619607a345",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "stroke.txt",
+      "sha256": "5b0d2c61fbd81fcb46e18f6f7e514d2423952cd315da8498beb734c11a3f5fd9",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "tetanus.txt",
+      "sha256": "24683ea41f733b94ddb7729e6371f243ef92d6e8dffa8111f0af0955c22e84f2",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "tuberculosis.txt",
+      "sha256": "85a98dfd4721ddc587ad5cbe40fa0c851b537cfcc6b0a74d33de62aad0adb062",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "typhoid_fever.txt",
+      "sha256": "050a11e459e173ba8449daf810ab08239357d396559dc632eb0cf6db77ece647",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "ulcerative_colitis.txt",
+      "sha256": "380b1e4fb277ee671eb32d709802c405afeb26ee977f2195a7a3f493045ef6f7",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    },
+    {
+      "archive": "archive(13).zip",
+      "file": "yellow_fever.txt",
+      "sha256": "a79912352e1adbe25b1167d96c2bf220c39b0fc0ae35527b12766825493080e7",
+      "adapter": "narrative_text",
+      "targets": [
+        "source_records",
+        "statements",
+        "statement_sources"
+      ],
+      "serving_policy": "reviewed_only"
+    }
+  ]
+}

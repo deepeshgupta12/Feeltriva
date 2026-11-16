@@ -1,0 +1,16 @@
+archive_a,archive_b,shared_lexical_labels
+archive(11).zip,archive(12).zip,13
+archive(11).zip,archive(13).zip,12
+archive(11).zip,archive(14).zip,10
+archive(11).zip,archive(15).zip,2
+archive(11).zip,archive(16).zip,18
+archive(12).zip,archive(13).zip,39
+archive(12).zip,archive(14).zip,15
+archive(12).zip,archive(15).zip,13
+archive(12).zip,archive(16).zip,674
+archive(13).zip,archive(14).zip,10
+archive(13).zip,archive(15).zip,5
+archive(13).zip,archive(16).zip,50
+archive(14).zip,archive(15).zip,5
+archive(14).zip,archive(16).zip,22
+archive(15).zip,archive(16).zip,18
