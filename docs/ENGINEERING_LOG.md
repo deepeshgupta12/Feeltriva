@@ -199,3 +199,37 @@ or operation IDs. No API change was needed for the responses to validate.
 
 **Limits.** 429 is declared in the contract but never returned (no rate limiting yet). The
 contract has no 500; unexpected errors return 500 with the same envelope.
+
+### M3.5 — Product MCP adapter
+
+**Implemented.** `services/mcp/feeltriva_mcp/server.py`, built on the official MCP Python SDK
+2.3.0 (`MCPServer`; the API was checked against the installed package rather than assumed).
+Nine tools — `start_assessment`, `get_assessment_session`, `submit_observations`,
+`submit_answer`, `assess_session`, `get_next_question`, `get_condition_information`,
+`create_consultation_summary`, `delete_session` — each a thin call into the same
+`AssessmentService` / `KnowledgeService` the REST routes use. The caller comes from a bearer
+token verified by the API's `Authenticator` on every call; no tool takes a user or owner
+identifier; `delete_session` requires `confirm_delete: true`. Errors are returned as tool
+errors carrying the same `code` / `message` / `retryable` as REST. Run with
+`FEELTRIVA_MCP_BEARER_TOKEN=dev:<subject> uv run python -m feeltriva_mcp`.
+
+**Tests run.**
+
+- `uv run pytest tests/mcp` → 5 passed. Covered: tool surface equals the contract table and
+  exposes no identity/SQL/URL arguments; a full flow run independently over REST and over MCP
+  gives identical responses at every step once per-session IDs and timestamps are normalised
+  (sessions, questions, assessment, summary text); a session started over REST continues over
+  MCP for the same caller and a REST write makes the MCP client's version stale; another caller
+  gets `session_not_found` from every tool; out-of-turn and invalid answers are rejected;
+  read-only scope cannot assess or delete; urgent state pauses questions over MCP too.
+- Real protocol check: an MCP client over stdio initialised the server, listed the nine tools,
+  started and deleted a session. With no token the call returned
+  `is_error: true` with `{"code": "unauthenticated", …}`.
+- Full suite after this change: see the count in the next entry's table.
+
+**Bugs.** None in the adapter. Note: the SDK's own argument-validation errors echo the
+offending value, so tools take loosely typed arguments and validate them with the API's
+schemas, which report locations only.
+
+**Not done.** Remote (streamable HTTP) transport with OAuth, token-audience validation and
+per-tool scope metadata. Only stdio with an environment-supplied token exists.
