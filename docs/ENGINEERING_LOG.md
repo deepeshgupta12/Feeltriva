@@ -13,6 +13,8 @@ command output, not estimated.
 | BUG-002 | M0.4 | `uv run alembic upgrade head` failed on a checkout that only had `.env` | Fixed |
 | BUG-003 | G1 | GitNexus silently produced no call edges for the 37 KB `service.py` | Fixed |
 | BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
+| BUG-005 | M1.7 | PostgreSQL crashed during the first full case load (one transaction per file) | Mitigated — batched, resumable loader; root cause not proven |
+| BUG-006 | M1.7 | Formatter re-wrapped two already-applied migrations | Fixed — reverted before commit |
 
 ## Entries
 
@@ -420,3 +422,75 @@ opened its first update pull requests within a minute; none has been merged.
 
 **Not done.** The web job (typecheck, tests, build, generated-client diff) is added together
 with the web app in M3.6. No branch protection rule is set: commits go straight to `main`.
+
+### M1.7 — Row-level case load and profile clustering (in progress)
+
+**Impact analysis before editing** (GitNexus, index at the then-current commit):
+
+| Symbol | Action | Risk | Direct callers / flows |
+|---|---|---|---|
+| `main` (ingestion CLI) | modified: new `load-cases` command | LOW | 1 (module entry point) |
+| `read_csv_positional` | called only | HIGH | `audit_csv`, `load_reference`; flows `main`, `run_audit` |
+| `source_id` | called only | HIGH | `load_reference`, `load_reference.add` |
+| `disease_candidate_id` | called only | HIGH | `load_reference.add` |
+| `_load_file`, `load_cases` (new, re-indexed before the batching change) | modified | LOW | `load_cases` → `main` |
+
+The three HIGH-risk functions were reported before editing and left unchanged; new code only
+calls them.
+
+**Implemented.** `pipelines/ingestion/feeltriva_ingestion/cases.py`, CLI
+`uv run python -m feeltriva_ingestion load-cases [--files …] [--batch-rows N]`, migration
+`0004` (indexes on `dataset_cases.profile_cluster_id`, `dataset_cases.source_split`,
+`case_labels.disease_id`). Every row of a case file becomes a `source_records` row (file, row
+locator, content hash, original split, quality flags), a `dataset_cases` row (source-scoped
+patient ID, age as supplied with no unit assumed, demographic field and value as supplied,
+profile cluster) and a `case_labels` row (original label, pending lexical candidate, label
+origin `unknown`). Nothing is merged or dropped. After loading, each case gets
+`duplicate_status` (`exact_duplicate_row`, `repeated_profile`, `no_duplicate_detected`) and
+records whose profile occurs in more than one original split get the flag
+`profile_shared_across_original_split`. Loading is idempotent.
+
+Definition used: a *profile cluster* is the hash of all cells except the patient ID and the
+disease label, scoped to the archive and column layout. It deliberately differs from the
+audit's figure of 27,622 shared archive-15 profiles, which includes the label; identical
+features with different labels must stay together when data is split.
+
+**Tests run.**
+
+- `uv run pytest tests/ingestion/test_cases.py` on PostgreSQL → 3 passed (crafted two-file
+  archive, batch size 2: every row kept; malformed row flagged and not turned into a case;
+  unparsable age flagged, not guessed; exact duplicates marked; same profile with different
+  labels kept as one cluster with both labels; cross-split members flagged; patient IDs scoped
+  per file; unknown labels become pending candidates; rerun inserts and updates nothing;
+  unregistered source refused).
+- Full suites after the change: PostgreSQL 115 passed (archive tests excluded while the load
+  runs); SQLite 104 passed, 11 skipped; `ruff` and `mypy` clean.
+- Real data so far: archive 11 → 100,000 records, cases and labels. Archive 14 → 25,000 /
+  25,000 / 25,000 in 27 s, "matches manifest" (25,000 exact-unique rows, 24,999 profile
+  clusters, 2 rows in one repeated profile, 0 malformed).
+- `detect_changes` before commit: see BUG-006.
+
+**Bugs.**
+
+- **BUG-005 — PostgreSQL crashed during the first full load.** The first version loaded each
+  file in a single transaction. Archive 11 committed; during archive 12 `data.csv` (246,945
+  rows × 378 columns) the server logged a 139.6-second checkpoint, then
+  `untracked child process … exited with exit code 2`, terminated all connections and spent
+  about six minutes in crash recovery. The client saw `connection is lost`; the unfinished
+  transaction was rolled back (0 rows for that file). At that moment the host had a load
+  average of 16.8, about 66 MB of free memory and seven other containers running. *Cause:*
+  not proven; no out-of-memory or out-of-disk message was logged, so resource starvation is
+  the most likely explanation, not a confirmed one. *Mitigation:* the loader now commits every
+  20,000 rows, so no transaction grows with file size and a rerun resumes; files can be loaded
+  selectively; the owner had the other containers stopped. *Verified so far:* archives 14 and
+  15 (test split) loaded without incident under the new loader.
+- **BUG-006 — formatter changed applied migrations.** *Found by* `detect_changes`, which
+  listed `0001` and `0003` as touched although only `0004` was meant to be added. *Cause:*
+  `ruff format` was run on the whole `migrations/` directory and re-wrapped long lines in the
+  two older files (no SQL changed). *Resolution:* both files restored with `git checkout`
+  before committing; new migrations are formatted individually.
+
+**Not done.** Archive 15 `train.csv` is loading; archives 12 and 16 are pending. Throughput on
+this machine is roughly 250 – 1,000 rows per second, limited by disk I/O. Cell-level feature
+values (`case_features`) are not loaded (decision E23). The final numbers, including the
+archive-15 cross-split result, will be added to this entry when the load completes.

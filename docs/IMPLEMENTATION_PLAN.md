@@ -46,7 +46,7 @@ instruction.
 | M1.4 | Archive-13 narrative adapter | `diseases_main` and causes / symptoms / treatments joined on the native `disease_id`; redundant names checked; statements stored `pending` with source record, URL and row locator | Statement counts 85 / 714 / 712 / 621; join mismatches reported as quality flags | Done |
 | M1.5 | Archive-16 descriptions | 820 descriptions as `pending` statements with supplied provenance columns | Statement count 820 | Done |
 | M1.6 | Idempotent rerun | Loading twice changes nothing | Second `load` reports 0 inserted; `uv run pytest tests/ingestion -m postgres` | Done |
-| M1.7 | Row-level case load and profile clustering | `source_records`, `dataset_cases`, `case_labels`, `case_features` for the matrix files (about 1.4 M rows) with exact-content and profile cluster IDs and split namespaces | Counts equal the audit; archive-15 split recorded and flagged | Not started |
+| M1.7 | Row-level case load and profile clustering | `source_records`, `dataset_cases`, `case_labels`, `case_features` for the matrix files (about 1.4 M rows) with exact-content and profile cluster IDs and split namespaces | Counts equal the audit; archive-15 split recorded and flagged | Partial — loader, index migration and tests done; archives 11 and 14 loaded and verified; 15 loading, 12 and 16 pending; cell-level `case_features` not loaded |
 
 ## Step M2 — reviewable knowledge model
 

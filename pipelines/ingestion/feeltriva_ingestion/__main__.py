@@ -1,4 +1,4 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases}"""
 
 from __future__ import annotations
 
@@ -14,9 +14,11 @@ from .audit import compare, run_audit
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="feeltriva_ingestion")
-    parser.add_argument("command", choices=["verify", "audit", "load"])
+    parser.add_argument("command", choices=["verify", "audit", "load", "load-cases"])
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "derived" / "ingestion_audit.json")
+    parser.add_argument("--files", nargs="+", help="load-cases: only these file names (default: all case files)")
+    parser.add_argument("--batch-rows", type=int, default=20_000, help="load-cases: rows per transaction")
     args = parser.parse_args()
     started = time.monotonic()
     try:
@@ -39,6 +41,26 @@ def main() -> int:
             for diff in diffs:
                 print("DIFF", diff)
             print("reproduces manifest and audit.json" if not diffs else f"{len(diffs)} differences")
+            return 1 if diffs else 0
+        if args.command == "load-cases":
+            from .cases import compare_with_manifest, load_cases
+
+            result = load_cases(args.raw_dir, only=set(args.files) if args.files else None, batch_rows=args.batch_rows)
+            for name, counts in result["files"].items():
+                print(
+                    f"{name}: read {counts['rows_read']}, inserted {counts['records_inserted']} records / "
+                    f"{counts['cases_inserted']} cases / {counts['labels_inserted']} labels"
+                )
+            print(f"finalise: {result['finalise']}")
+            for name, summary in result["summary"].items():
+                print(f"{name}: {summary}")
+            diffs = compare_with_manifest(result)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + ("matches manifest" if not diffs else f"{len(diffs)} differences")
+            )
             return 1 if diffs else 0
         from .load import load_reference
 
