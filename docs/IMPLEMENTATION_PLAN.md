@@ -105,8 +105,8 @@ Not started.
 
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
-| G1 | Index this repository | GitNexus index of source, schemas, tests and docs; raw data, secrets, build output and dependencies excluded | `gitnexus status` shows this repo at the current commit with a non-zero symbol count | Not started |
-| G2 | Developer MCP access | The GitNexus MCP server answers queries for this repo; the REST → service call chain is visible | Context query on `AssessmentService` lists the REST and MCP callers | Not started |
-| G3 | Dependency check before critical changes | Written rule in `CLAUDE.md` and the PR template: impact analysis before changing shared modules, change detection before commit, tests always | Recorded impact report for one real shared change in the engineering log | Not started |
-| G4 | Index provenance | Indexed commit and exclusions recorded; re-index after substantive changes | Entry in the engineering log | Not started |
-| G5 | Privacy inspection | Generated files inspected for private data before sharing; index never published | `.gitnexus/` ignored; inspection noted in the log | Not started |
+| G1 | Index this repository | GitNexus index of source, schemas, tests and docs; raw data, secrets, build output and dependencies excluded | `gitnexus status` shows this repo at the current commit with a non-zero symbol count | Done |
+| G2 | Developer MCP access | The GitNexus MCP server answers queries for this repo; the REST → service call chain is visible | Context query on `AssessmentService` lists the REST and MCP callers | Done — REST edges resolve; MCP tool edges do not (see log) |
+| G3 | Dependency check before critical changes | Written rule in `CLAUDE.md` and the PR template: impact analysis before changing shared modules, change detection before commit, tests always | Recorded impact report for one real shared change in the engineering log | Done |
+| G4 | Index provenance | Indexed commit and exclusions recorded; re-index after substantive changes | Entry in the engineering log | Done |
+| G5 | Privacy inspection | Generated files inspected for private data before sharing; index never published | `.gitnexus/` ignored; inspection noted in the log | Done |

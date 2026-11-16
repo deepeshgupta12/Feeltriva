@@ -1,0 +1,10 @@
+# GitNexus indexes source, schemas, tests and documentation only.
+# Everything in .gitignore (raw archives, .env, model artifacts, exports) is already excluded.
+data/
+data_audit/
+experiments/results/
+figures/
+uv.lock
+pnpm-lock.yaml
+*.csv
+*.png

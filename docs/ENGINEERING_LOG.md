@@ -10,7 +10,8 @@ command output, not estimated.
 | Bug | Sub-step | Summary | Status |
 |---|---|---|---|| BUG-001 | M3.3 | Every authenticated endpoint returned 422 `query.who: Field required` | Fixed |
 | BUG-002 | M0.4 | `uv run alembic upgrade head` failed on a checkout that only had `.env` | Fixed |
-
+| BUG-003 | G1 | GitNexus silently produced no call edges for the 37 KB `service.py` | Fixed |
+| BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
 ## Entries
 
 ### M0.1 — Repository scaffold
@@ -339,3 +340,57 @@ retiring it removes it at once; imported dataset candidates are 404; on PostgreS
 history, immutable release publication or rollback (M2.5). No atomic claim extraction (M2.6).
 Approving a row here does not publish it into a served release; fixture mode serves only the
 synthetic bundle.
+
+### G1 – G5 — GitNexus code intelligence
+
+**Implemented.** GitNexus 1.6.3 (`gitnexus analyze`) indexes this repository into the local,
+git-ignored `.gitnexus/` directory. `.gitnexusignore` excludes `data/`, `data_audit/`,
+`experiments/results/`, `figures/`, lockfiles, CSV and PNG files on top of everything already
+in `.gitignore`. No embeddings were generated and nothing left the machine. The analyzer
+appended a marked GitNexus section to `CLAUDE.md` (authored content verified unchanged above
+it) and created `AGENTS.md` and `.claude/skills/gitnexus/`. `CLAUDE.md` now states which
+changes count as critical and the check to run before and after them. The developer GitNexus
+MCP server is separate from the product MCP server in `services/mcp`.
+
+**Checks run.**
+
+- First index: 3,303 nodes, 6,797 edges, 247 flows. `gitnexus status` → "up-to-date".
+- G2, call chain: `context` on `submit_observations` and `impact` on `AssessmentService`
+  showed **no callers at all** → BUG-003 below. After the fix, `impact` (upstream) on
+  `ServiceCore._idempotent` lists exactly its six callers (`start_session`,
+  `submit_observations`, `submit_answer`, `assess_session`, `create_summary`,
+  `delete_session`) at risk CRITICAL, and `impact` on `IntakeOperations.submit_observations`
+  lists the REST route `main.py:submit_observations` (confidence 0.85).
+- G3, a real critical change checked with the tool: splitting the assessment service and
+  restructuring the MCP tools. `detect_changes` before commit reported the touched symbols
+  (`create_app`, `AssessmentService`, `build_server` and the nine MCP tool functions) and 11
+  affected flows, which matches the intended scope. Then the real tests: 106 passed, 9 skipped
+  on SQLite; 115 passed on PostgreSQL; `mypy` clean; MCP stdio check repeated successfully.
+- G5: generated `CLAUDE.md` section, `AGENTS.md` and skill files searched for local paths,
+  names and e-mail addresses: none. `.gitnexus/meta.json` contains the local path and stays
+  ignored. `gitnexus wiki` (external LLM, optional public gist) was not run.
+
+**Bugs.**
+
+- **BUG-003 — the graph had no call edges for the most important module.** *Found by* the G2
+  check; the analyzer had printed `scope extraction failed for
+  services/api/feeltriva_api/service.py: Invalid argument` and still reported success.
+  *Cause:* the file was 37,323 bytes; GitNexus's parser fails above 32 KB. *Resolution:* the
+  service was split by responsibility into `service_core.py` (9.0 KB), `service_intake.py`
+  (14.3 KB) and `service_results.py` (15.0 KB); `service.py` keeps the public
+  `AssessmentService` class, so no import changed. The REST and MCP modules now hold the
+  service in a typed variable, and the MCP tools call it directly through a small error
+  decorator instead of lambdas. *Verified:* the impact results above, and both test suites.
+- **BUG-004 — ingestion load test failed on PostgreSQL (`43 == 13` sources).** *Found by* the
+  full PostgreSQL run after the refactor. *Cause:* not the refactor. The test database
+  persists between runs and `tests/api/test_review.py` adds its own synthetic sources,
+  mappings and statements, so table-wide counts drifted. *Resolution:* the ingestion test
+  counts only rows with the loader's deterministic ID prefixes. *Verified:* full PostgreSQL
+  suite → 115 passed.
+
+**Known limits (also in `CLAUDE.md`).** Files over 32 KB lose their edges without an error
+exit. MCP tool → `AssessmentService` edges are still not resolved (inherited methods called
+across package roots), and tests call the service over HTTP, so neither shows up as a caller:
+changes to a public service method need a manual look at `services/mcp/feeltriva_mcp/server.py`
+plus `tests/mcp`. Empty `__init__.py` files produce harmless "no Module scope" warnings.
+The index must be rebuilt after each commit (`gitnexus analyze --skip-agents-md`).

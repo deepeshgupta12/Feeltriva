@@ -11,6 +11,7 @@ HTTP transport is not implemented yet.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import uuid
@@ -21,6 +22,8 @@ from feeltriva_api import schemas as sc
 from feeltriva_api.auth import Principal
 from feeltriva_api.container import Container, build_container
 from feeltriva_api.errors import ApiError
+from feeltriva_api.review import KnowledgeService
+from feeltriva_api.service import AssessmentService
 from feeltriva_api.settings import get_settings
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -56,15 +59,23 @@ def _parse[T: BaseModel](model: type[T], data: dict[str, Any]) -> T:
 
 def build_server(container: Container, principal: Callable[[], Principal]) -> MCPServer:
     server = MCPServer("feeltriva", instructions=INSTRUCTIONS, version="0.1.0")
-    svc = container.assessments
+    svc: AssessmentService = container.assessments
+    knowledge: KnowledgeService = container.knowledge
 
-    def run(fn: Callable[[Principal], Any]) -> Any:
-        try:
-            return fn(principal())
-        except ApiError as exc:
-            raise _fail(exc.code, exc.message, exc.retryable) from None
+    def guarded[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
+        """Turns the service's ApiError into a tool error with the same code/message/retryable."""
+
+        @functools.wraps(fn)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            try:
+                return fn(*args, **kwargs)
+            except ApiError as exc:
+                raise _fail(exc.code, exc.message, exc.retryable) from None
+
+        return wrapper
 
     @server.tool()
+    @guarded
     def start_assessment(
         consent_version: str, idempotency_key: str, demographics: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -77,14 +88,16 @@ def build_server(container: Container, principal: Callable[[], Principal]) -> MC
                 **({"demographics": demographics} if demographics is not None else {}),
             },
         )
-        return run(lambda who: svc.start_session(who, body, idempotency_key))
+        return svc.start_session(principal(), body, idempotency_key)
 
     @server.tool()
+    @guarded
     def get_assessment_session(session_id: str) -> dict[str, Any]:
         """Current state, observation_version and current observations of the caller's session."""
-        return run(lambda who: svc.get_session(who, _session_id(session_id)))
+        return svc.get_session(principal(), _session_id(session_id))
 
     @server.tool()
+    @guarded
     def submit_observations(
         session_id: str,
         observation_version: int,
@@ -101,9 +114,10 @@ def build_server(container: Container, principal: Callable[[], Principal]) -> MC
         if observations is not None:
             data["observations"] = observations
         body = _parse(sc.ObservationSubmit, data)
-        return run(lambda who: svc.submit_observations(who, _session_id(session_id), body, idempotency_key))
+        return svc.submit_observations(principal(), _session_id(session_id), body, idempotency_key)
 
     @server.tool()
+    @guarded
     def submit_answer(
         session_id: str, observation_version: int, question_id: str, answer: Any, idempotency_key: str
     ) -> dict[str, Any]:
@@ -112,39 +126,44 @@ def build_server(container: Container, principal: Callable[[], Principal]) -> MC
         body = _parse(
             sc.AnswerSubmit, {"observation_version": observation_version, "question_id": question_id, "answer": answer}
         )
-        return run(lambda who: svc.submit_answer(who, _session_id(session_id), body, idempotency_key))
+        return svc.submit_answer(principal(), _session_id(session_id), body, idempotency_key)
 
     @server.tool()
+    @guarded
     def get_next_question(session_id: str, observation_version: int) -> dict[str, Any]:
         """The next approved follow-up question, or {"question": null} when there is none
         (including when routine questioning is paused by an urgent or out-of-scope state)."""
-        return run(lambda who: {"question": svc.get_next_question(who, _session_id(session_id), observation_version)})
+        return {"question": svc.get_next_question(principal(), _session_id(session_id), observation_version)}
 
     @server.tool()
+    @guarded
     def assess_session(session_id: str, observation_version: int, idempotency_key: str) -> dict[str, Any]:
         """Run the assessment for the current observations. Returns the same Assessment as REST:
         status, urgency, next action, up to three provisional candidates and their evidence."""
         body = _parse(sc.AssessmentRequest, {"observation_version": observation_version})
-        return run(lambda who: svc.assess_session(who, _session_id(session_id), body, idempotency_key))
+        return svc.assess_session(principal(), _session_id(session_id), body, idempotency_key)
 
     @server.tool()
+    @guarded
     def create_consultation_summary(session_id: str, observation_version: int, idempotency_key: str) -> dict[str, Any]:
         """A previewable consultation summary. The user must review it before it is shared."""
         body = _parse(sc.AssessmentRequest, {"observation_version": observation_version})
-        return run(lambda who: svc.create_summary(who, _session_id(session_id), body, idempotency_key))
+        return svc.create_summary(principal(), _session_id(session_id), body, idempotency_key)
 
     @server.tool()
+    @guarded
     def get_condition_information(disease_id: str) -> dict[str, Any]:
         """Reviewed, source-linked information about a condition. Unreviewed content is never returned."""
-        return run(lambda who: container.knowledge.get_condition_information(who, disease_id))
+        return knowledge.get_condition_information(principal(), disease_id)
 
     @server.tool()
+    @guarded
     def delete_session(session_id: str, confirm_delete: bool, idempotency_key: str) -> dict[str, Any]:
         """Delete the caller's session. confirm_delete must be true: the user has explicitly asked
         for deletion. Returns a receipt; 'deletion_scheduled' means backups are not yet purged."""
         if confirm_delete is not True:
             raise _fail("confirmation_required", "Deletion requires the user's explicit confirmation.")
-        return run(lambda who: svc.delete_session(who, _session_id(session_id), idempotency_key))
+        return svc.delete_session(principal(), _session_id(session_id), idempotency_key)
 
     return server
 

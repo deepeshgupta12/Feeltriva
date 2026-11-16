@@ -16,6 +16,7 @@ from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
 from .errors import ApiError
+from .service import AssessmentService
 from .settings import Settings, get_settings
 
 log = logging.getLogger("feeltriva.api")
@@ -99,7 +100,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     Who = Annotated[Principal, Depends(principal)]
     Key = Annotated[str, Depends(idem)]
-    svc = container.assessments
+    svc: AssessmentService = container.assessments
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

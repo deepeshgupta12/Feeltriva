@@ -35,37 +35,71 @@ def test_audit_reproduces_the_handoff_measurements():
 
 @pytest.mark.postgres
 def test_reference_load_is_idempotent_and_everything_is_pending(owner_db):
-    from feeltriva_api.models import Disease, DiseaseMapping, FeatureMapping, Statement
+    from feeltriva_api.models import (
+        Disease,
+        DiseaseMapping,
+        FeatureMapping,
+        Source,
+        SourceRecord,
+        Statement,
+        StatementSource,
+    )
     from feeltriva_ingestion.load import load_reference
     from sqlalchemy import func, select
 
     url = os.environ["TEST_MIGRATION_DATABASE_URL"]
     load_reference(database_url=url)
     second = load_reference(database_url=url)
-    assert all(inserted == 0 for inserted, _ in second.values()), second
-    totals = {table: total for table, (_, total) in second.items()}
-    assert totals["sources"] == 13 and totals["source_records"] == 3037
-    assert totals["disease_mappings"] == 3117 and totals["feature_mappings"] == 1651
-    assert totals["statements"] == totals["statement_sources"]
-    manifest = load_manifest()
-    assert totals["source_records"] == 85 + 714 + 712 + 621 + 820 + len(manifest.text_files)
+    assert all(inserted == 0 for inserted, _ in second.values()), second  # rerun changes nothing
 
+    # The test database persists and other tests add their own synthetic rows, so count only
+    # what the loader creates: its IDs are deterministic and prefixed.
+    loaded = {
+        Source: ("source_id", "src_"),
+        SourceRecord: ("record_id", "rec_"),
+        Disease: ("disease_id", "dis_"),
+        DiseaseMapping: ("mapping_id", "dm_"),
+        FeatureMapping: ("mapping_id", "fm_"),
+        Statement: ("statement_id", "st_"),
+        StatementSource: ("statement_id", "st_"),
+    }
+    manifest = load_manifest()
     with owner_db.transaction(None) as tx:
-        lexical = tx.execute(
-            select(func.count()).select_from(Disease).where(Disease.disease_id.like("dis_%"))
-        ).scalar_one()
-        assert lexical == 960
-        for model in (DiseaseMapping, FeatureMapping, Statement):
+
+        def scoped(model):
+            column, prefix = loaded[model]
+            return getattr(model, column).like(prefix.replace("_", r"\_") + "%", escape="\\")
+
+        totals = {
+            m.__tablename__: tx.execute(select(func.count()).select_from(m).where(scoped(m))).scalar_one()
+            for m in loaded
+        }
+        assert totals == {
+            "sources": 13,
+            "source_records": 85 + 714 + 712 + 621 + 820 + len(manifest.text_files),
+            "diseases": 960,
+            "disease_mappings": 3117,
+            "feature_mappings": 1651,
+            "statements": 85 + 714 + 712 + 621 + 820,
+            "statement_sources": 85 + 714 + 712 + 621 + 820,
+        }
+        for model in (Disease, DiseaseMapping, FeatureMapping, Statement):
             not_pending = tx.execute(
-                select(func.count()).select_from(model).where(model.status != "pending")
+                select(func.count()).select_from(model).where(scoped(model), model.status != "pending")
             ).scalar_one()
             assert not_pending == 0, model.__tablename__
         by_type = dict(
-            tx.execute(select(Statement.statement_type, func.count()).group_by(Statement.statement_type)).all()
+            tx.execute(
+                select(Statement.statement_type, func.count())
+                .where(scoped(Statement))
+                .group_by(Statement.statement_type)
+            ).all()
         )
         assert by_type == {"description": 85 + 820, "cause": 714, "symptom": 712, "treatment": 621}
         repeated = [
-            m for m in tx.execute(select(FeatureMapping)).scalars() if (m.transformation or {}).get("repeated_header")
+            m
+            for m in tx.execute(select(FeatureMapping).where(scoped(FeatureMapping))).scalars()
+            if (m.transformation or {}).get("repeated_header")
         ]
         assert len(repeated) == 74 and len({m.original_term for m in repeated}) == 37
         assert all(m.transformation["disagreement_rows"] > 0 for m in repeated)  # conflicts retained per position
