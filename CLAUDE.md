@@ -32,25 +32,43 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
 
 ## Working agreement for this repository
 
-- Work follows `docs/IMPLEMENTATION_PLAN.md`. One sub-step = one commit, pushed, with its
+- Work follows `docs/IMPLEMENTATION_PLAN.md`. Surface the plan, log and current status to the
+  owner at each sub-step; do not run long stretches of work without reporting what was done,
+  what can be tested and what is still missing. One sub-step = one commit, pushed, with its
   status updated in the plan and an entry in `docs/ENGINEERING_LOG.md` (implementation, tests
   actually run with real results, each bug with cause and resolution). New decisions go in
   `docs/DECISIONS.md`. Keep `README.md` current with what really runs.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
 
-### Dependency check before critical changes (GitNexus)
+### GitNexus impact analysis before ANY code change (mandatory)
 
-A change is critical if it touches a shared module or contract: `specs/openapi.json`,
-`services/api/feeltriva_api/{service,schemas,models,auth,db}.py`, anything in `packages/`,
-`migrations/`, or `apps/web/src/api`. For those:
+Owner's standing instruction (2026-11-16): **always run GitNexus impact analysis before making
+any change to the code, and follow this process diligently.** It applies to every code edit:
+application code, tests, migrations, scripts, CI and the web app. Documentation-only edits are
+the single exception. No step may be skipped because a change "looks small".
 
-1. Before editing: GitNexus `context` on the symbol and `impact` (upstream) to list callers
-   and affected flows across REST, MCP, tests and the web client. Read the result; if it
-   includes callers you did not plan to touch, plan them.
-2. Make the change and run the real tests (commands below).
-3. Before commit: GitNexus `detect_changes`, compare with the intended scope.
-4. After substantive changes re-index (`gitnexus analyze --skip-agents-md`) and note the
-   indexed commit in the engineering log. The graph informs testing; it never replaces it.
+For every change, in this order:
+
+1. **Before editing — impact.** For each existing symbol you will modify, run GitNexus
+   `impact` with `direction: "upstream"` (and `context` when the callers need reading).
+   For new code, run `impact`/`context` on the existing symbols it will call, extend or be
+   called from (the integration points). State the result — direct callers, affected flows,
+   risk level — to the owner before editing.
+2. **Stop and warn on HIGH or CRITICAL risk.** Report it to the owner and explain the plan for
+   every listed caller before proceeding. Never ignore a HIGH/CRITICAL result.
+3. **Make the change**, covering every caller the analysis listed.
+4. **Run the real tests** (commands below): lint, type check, SQLite suite and PostgreSQL
+   suite; the web checks when `apps/web` is touched. The graph never replaces tests.
+5. **Before committing — `detect_changes`.** Compare the changed symbols and affected flows
+   with the intended scope. Anything unexpected is investigated, not committed.
+6. **Commit and push** the sub-step, then **re-index** (`gitnexus analyze --skip-agents-md`)
+   so the index matches the new commit (`gitnexus status` must say up-to-date).
+7. **Record it** in `docs/ENGINEERING_LOG.md`: the impact result, tests run with real numbers,
+   bugs and resolutions, and the indexed commit.
+
+Changes to shared modules and contracts deserve the most care: `specs/openapi.json`,
+`services/api/feeltriva_api/{service*,schemas,models,auth,db}.py`, anything in `packages/`,
+`migrations/`, and `apps/web/src/api`.
 
 Known limits of the graph in this repository (measured, see the engineering log, entry G):
 
