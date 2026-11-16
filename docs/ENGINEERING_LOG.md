@@ -13,7 +13,7 @@ command output, not estimated.
 | BUG-002 | M0.4 | `uv run alembic upgrade head` failed on a checkout that only had `.env` | Fixed |
 | BUG-003 | G1 | GitNexus silently produced no call edges for the 37 KB `service.py` | Fixed |
 | BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
-| BUG-005 | M1.7 | PostgreSQL crashed during the first full case load (one transaction per file) | Mitigated — batched, resumable loader; root cause not proven |
+| BUG-005 | M1.7 | PostgreSQL crashed during the first full case load (one transaction per file) | Mitigated — batched, resumable loader completed the full load; root cause not proven |
 | BUG-006 | M1.7 | Formatter re-wrapped two already-applied migrations | Fixed — reverted before commit |
 
 ## Entries
@@ -423,7 +423,7 @@ opened its first update pull requests within a minute; none has been merged.
 **Not done.** The web job (typecheck, tests, build, generated-client diff) is added together
 with the web app in M3.6. No branch protection rule is set: commits go straight to `main`.
 
-### M1.7 — Row-level case load and profile clustering (in progress)
+### M1.7 — Row-level case load and profile clustering
 
 **Impact analysis before editing** (GitNexus, index at the then-current commit):
 
@@ -482,15 +482,48 @@ features with different labels must stay together when data is split.
   not proven; no out-of-memory or out-of-disk message was logged, so resource starvation is
   the most likely explanation, not a confirmed one. *Mitigation:* the loader now commits every
   20,000 rows, so no transaction grows with file size and a rerun resumes; files can be loaded
-  selectively; the owner had the other containers stopped. *Verified so far:* archives 14 and
-  15 (test split) loaded without incident under the new loader.
+  selectively; the owner had the other containers stopped. *Verified:* all seven case files (1,365,363 rows) then loaded without incident under the
+  batched loader.
 - **BUG-006 — formatter changed applied migrations.** *Found by* `detect_changes`, which
   listed `0001` and `0003` as touched although only `0004` was meant to be added. *Cause:*
   `ruff format` was run on the whole `migrations/` directory and re-wrapped long lines in the
   two older files (no SQL changed). *Resolution:* both files restored with `git checkout`
   before committing; new migrations are formatted individually.
 
-**Not done.** Archive 15 `train.csv` is loading; archives 12 and 16 are pending. Throughput on
-this machine is roughly 250 – 1,000 rows per second, limited by disk I/O. Cell-level feature
-values (`case_features`) are not loaded (decision E23). The final numbers, including the
-archive-15 cross-split result, will be added to this entry when the load completes.
+**Full load result** (completed 2026-11-16; every file reported "matches manifest"):
+
+| File | Rows = records = cases = labels | Exact-unique rows | Profile clusters | Rows in exact-duplicate groups | Rows in repeated profiles | Rows flagged shared across split |
+|---|---|---|---|---|---|---|
+| archive 11 matrix | 100,000 | 100,000 | 100,000 | 0 | 0 | 0 |
+| archive 12 `data.csv` | 246,945 | 189,640 | 169,888 | 94,079 | 27,265 | 0 |
+| archive 12 `final_symptoms_to_disease.csv` | 192,715 | 163,727 | 149,241 | 52,887 | 21,855 | 0 |
+| archive 14 `Healthcare.csv` | 25,000 | 25,000 | 24,999 | 0 | 2 | 0 |
+| archive 15 `test.csv` | 134,529 | 134,529 | 126,431 | 0 | 38,261 | 33,590 |
+| archive 15 `train.csv` | 475,502 | 475,502 | 402,932 | 0 | 136,693 | 51,767 |
+| archive 16 matrix | 190,672 | 190,672 | 170,911 | 0 | 32,397 | 0 |
+| **Total** | **1,365,363** | | | 146,966 | 256,473 | 85,357 |
+
+Cross-checks in SQL after the load:
+
+- `source_records` (case rows), `dataset_cases` and `case_labels` each hold 1,365,363 rows; 0
+  malformed rows; statuses sum to the total (146,966 + 256,473 + 961,924).
+- Exact-unique row counts equal `specs/ingestion_manifest.json` for all seven files (for
+  example 189,640 and 163,727 for archive 12, i.e. the handoff's 57,305 and 28,988 duplicate
+  rows).
+- Demographic row counts equal the handoff: archive 14 Male 8,271 / Female 8,336 / Other
+  8,393; archive 15 M 296,145 / F 313,886. These are rows in files, not people or prevalence.
+- Archive 15: 501,453 feature profiles; **27,910 occur in both train and test**, covering the
+  85,357 flagged rows; 985 profiles carry more than one disease label (455 of them also span
+  both splits). The audit's 27,622 counts label-inclusive profiles, so the two figures are
+  expected to differ.
+- 926 distinct lexical disease candidates are referenced by case labels; all 960 candidates
+  are still `pending`.
+- Timings on this machine: archive 15 in 949 s, archives 12 + 16 (plus a no-op pass over
+  archive 11) in 1,244 s. Database size afterwards 1,729 MB (`source_records` 666 MB,
+  `dataset_cases` 710 MB, `case_labels` 338 MB). Reruns insert nothing.
+
+**Not done.** Cell-level feature values (`case_features`) are not loaded (decision E23), so
+repeated-header conflicts are recorded per column (M1.3) but not per case. List-valued fields
+(archive 12 `symptom_text`, archive 14 `Symptoms`) are stored only inside the row hash, not
+parsed into feature candidates. The real-archive load has no automated test (it needs the
+archives and about 35 minutes); the crafted-archive tests cover the logic in CI.

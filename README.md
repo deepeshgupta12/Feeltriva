@@ -74,6 +74,7 @@ unchanged in `data/raw/`, then:
 uv run python -m feeltriva_ingestion verify      # SHA-256 against the manifest + ZIP safety checks
 uv run python -m feeltriva_ingestion audit       # positional audit; must reproduce data_audit/audit.json
 uv run python -m feeltriva_ingestion load        # pending crosswalks and statements into PostgreSQL
+uv run python -m feeltriva_ingestion load-cases  # 1.37 M case rows in 20,000-row batches (about 35 min, 1.7 GB)
 ```
 
 ### MCP
@@ -90,7 +91,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | Step | State |
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, CI done |
-| M1 Reproducible ingestion | Verification, audit and reference load done; row-level case load not started |
+| M1 Reproducible ingestion | Verification, audit, reference load and row-level case load (1,365,363 cases with duplicate, profile-cluster and split-leakage flags) done; cell-level feature values not loaded |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests and stdio MCP done |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
