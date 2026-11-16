@@ -32,6 +32,22 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
 
 ## Working agreement for this repository
 
+- **One sub-step at a time, then stop for the owner's go-ahead.** (Owner's instruction,
+  2026-11-16, repeated after it was not followed.) The cycle for every sub-step is:
+  1. State which single sub-step is next and what it will change; run the impact analysis.
+  2. Implement only that sub-step.
+  3. Run the tests; commit and push.
+  4. Report to the owner: what was done, test results, bugs and their status, and the
+     **test scenarios the owner should run themselves** (commands, and click-by-click steps
+     with the expected result).
+  5. **Stop. Do not start the next sub-step until the owner says to go ahead.** Planning the
+     next sub-step in the report is fine; starting it is not.
+  Never batch several sub-steps into one run, and never continue because a background job
+  finished or because the next step "is obvious".
+- **Plan from the whole handoff, not a summary of it.** Before adding or starting a sub-step,
+  check it against every relevant handoff document (`docs/01` – `docs/06`, `specs/`,
+  `data_audit/`, `figures/`) and against `docs/FIGURES_CROSSCHECK.md`. A requirement that has
+  no sub-step is a defect in the plan and is reported to the owner.
 - Work follows `docs/IMPLEMENTATION_PLAN.md`. Surface the plan, log and current status to the
   owner at each sub-step; do not run long stretches of work without reporting what was done,
   what can be tested and what is still missing. One sub-step = one commit, pushed, with its
