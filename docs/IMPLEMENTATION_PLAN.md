@@ -18,10 +18,27 @@ nonmedical fixture until a clinical owner approves a real release.
 
 ## Execution order
 
-`M0 → M1 → M2 (API) → M3 (service, REST, MCP, web) → C (conversations on Cassandra) → M3.7 (web
-against the live API) → M2.4 – M2.6 → M4 → M5 → L (continuous learning) → M6 → M7`, with step G
-(GitNexus) applied to every change. Steps C and L were added on 2026-11-16 on the owner's
-instruction.
+One sub-step at a time; each starts only after the owner's go-ahead (see `CLAUDE.md`).
+Proposed order for what remains, to be confirmed sub-step by sub-step:
+
+1. **Finish ingestion**: M1.8 → M1.9 → M1.10 → M1.11 → M1.12 → M1.13
+2. **Knowledge model**: M2.7 → M2.8 → M2.5 → M2.9 → M2.6 → M2.4
+3. **Product gaps**: M3.14 → M3.8 → M3.9 → M3.10 → M3.12 → M3.13 → M3.11 → M3.15
+4. **Conversations on Cassandra**: C2 → C12
+5. **Model training and testing**: M4.1 → M4.6
+6. **Language model and retrieval**: M5.1 → M5.6
+7. **Continuous learning**: L1 → L12
+8. **Operations and pilot**: M0.9, M0.10, G6, M6, M7
+
+Step G (GitNexus impact analysis) applies to every code change. Steps C and L were added on
+2026-11-16 on the owner's instruction. Every requirement of the handoff is traced to a
+sub-step in [`TRACEABILITY.md`](TRACEABILITY.md).
+
+## Step R — reconciliation with the handoff
+
+| ID | Sub-step | What it delivers | Verify | Status |
+|---|---|---|---|---|
+| R0 | Requirements traceability | `TRACEABILITY.md`: 203 requirements from `docs/01` – `docs/06`, the specs, the audit and the figures, each with a status and the sub-step that covers it; 14 missing sub-steps added to this plan; `FIGURES_CROSSCHECK.md` for the five figures | Pick any requirement from the handoff: it appears in the trace with a checkable status and a sub-step ID that exists here (automated check: all 68 cited IDs resolve) | Done |
 
 ## Step M0 — bootable project and contracts
 
@@ -35,6 +52,8 @@ instruction.
 | M0.6 | Health, errors, request IDs | `/healthz`, `/readyz`; one error envelope (`code`, `message`, `retryable`, `request_id`); validation errors never echo input; private responses `no-store` | `curl localhost:8000/readyz`; `uv run pytest tests/api` | Done |
 | M0.7 | Typed frontend API client | Types generated from `specs/openapi.json` into the web app, deterministic regeneration | `pnpm --dir apps/web gen:api && git diff --exit-code apps/web/src/api/generated` | Done |
 | M0.8 | CI and repository hygiene | GitHub Actions: lint, unit, PostgreSQL suite with migrations, web typecheck/test/build, contract-generation diff; Dependabot; PR and bug templates; security policy | CI run green on the pushed commit | Done — backend and web jobs (web job added with M3.6) |
+| M0.9 | Observability | OpenTelemetry traces and metrics for API, MCP and loaders; structured logs with redaction; latency, failures, evidence availability and (later) token use recorded without any symptom text | A test request produces a trace and metrics; a log-scrubbing test proves no request or response body is written | Not started |
+| M0.10 | Deployable images and environment separation | Container images for the API and the web app; separate development, staging and production configuration; secrets from the environment only; a kill switch that turns clinical suggestions off; documented rollback | `docker compose up` starts API and web from images; production configuration refuses mock auth and missing keys (already tested for settings); kill switch test | Not started |
 
 ## Step M1 — reproducible ingestion
 
@@ -65,6 +84,8 @@ instruction.
 | M2.5 | Redirects, merge/split history, immutable releases, rollback; approval of rules, questions and releases | Disease redirects with history; publish and roll back mapping, knowledge and rule/question releases; reviewer approval of each rule, question and release version; serving pinned to a release | Release cannot be edited after publish; rollback test; an unapproved rule or question cannot be published | Not started |
 | M2.6 | Atomic statement extraction queue | Narrative statements split into atomic claims with text spans, all `pending` | Every claim has a span and source | Not started |
 | M2.7 | Feature meaning review queue | Every feature mapping queued for a reviewer to set its kind (symptom, sign, history, risk factor, measurement) and what a zero means in that source. Archive 15's `E_*` questions must not be treated as present symptoms until classified | No mapping reaches a serving or training view while its kind is `other` or its zero meaning is `unknown` (test) | Not started |
+| M2.8 | Synonym and subtype suggestions | Candidate pairs of disease labels (and of feature terms) that may be synonyms or subtype/parent, generated lexically and queued for a reviewer. Nothing is merged automatically; subtype, acuity and severity distinctions are preserved | Suggestions appear in the review queue with both source terms; accepting one creates a redirect with history (M2.5); rejecting one is remembered | Not started |
+| M2.9 | Serving views | `reviewed_disease_catalog`, `reviewed_disease_feature_edges` and `reviewed_care_statements` as database views restricted to approved content of the current release, with rights and applicability filters | A pending, rejected, retired or expired row never appears in any view (test); views are the only objects the serving code reads | Not started |
 
 ## Step M3 — fixture-mode vertical slice
 
@@ -78,6 +99,13 @@ instruction.
 | M3.6 | Web application | The interface in `docs/06_LOVABLE_FRONTEND_PROMPT.md`: all routes, states and the ten demo scenarios; typed mock and HTTP service adapters | `pnpm --dir apps/web typecheck && pnpm --dir apps/web test && pnpm --dir apps/web build` | Done — built and verified; review findings BUG-007 to BUG-010 open (see log) |
 | M3.7 | Web against the live API | Browser run of intake → confirm → follow-up → result → correction → summary → delete with the HTTP adapter against FastAPI | Playwright end-to-end run | Done — 43/43 live browser checks; not yet part of CI |
 | M3.8 | Question selection policy | Follow-up questions chosen by safety priority first, then missing essentials, expected information value and burden on the user, instead of the fixed priority order used today | Policy tests on synthetic bundles: a safety question always precedes an informative one; no repeat; fewer questions for equal coverage | Not started |
+| M3.9 | Clinically relevant context | Questions about sex-related clinical factors asked only when a reviewed rule makes them applicable; stored in `clinically_relevant_context`, separate from self-described gender; "prefer not to answer" always available; nothing inferred from gender | Rule-driven fixture: the question appears only when applicable; gender alone never triggers it | Not started |
+| M3.10 | Saved history | Optional saved history: list a caller's sessions (title, date, state, summary available), reopen, delete; off unless the user opts in | Another caller sees nothing; a deleted session disappears; the web history screen reads the API instead of memory | Not started |
+| M3.11 | Remote MCP transport | Streamable HTTP transport for the product MCP server with OAuth, token-audience validation and per-tool scopes; client tokens are never passed downstream | Wrong audience or missing scope is refused per tool; parity tests pass over the remote transport | Not started |
+| M3.12 | Contract extensions | OpenAPI additions the product needs and the supplied contract lacks: display label for a concept, symptom attributes (location, pattern, triggers, relieving factors), retrieving the current assessment, history, condition information and review endpoints; contract and generated types published from `packages/contracts` | Contract tests cover the new operations; regenerated web types compile; no existing operation changes shape | Not started |
+| M3.13 | Rate limiting | Per-caller request limits returning 429 with `Retry-After` and the standard error body | Exceeding the limit returns 429; other callers are unaffected | Not started |
+| M3.14 | Open web defects | BUG-007 focus restore, BUG-008 duplicated duration, BUG-009 raw option value, BUG-010 "not sure" formats, the missing date answer type, and the `minimatch` advisory | `pnpm smoke` 375 of 375; `pnpm e2e:live` still 43 of 43; alert closed | Not started |
+| M3.15 | Accessibility audit | WCAG 2.2 AA review: screen reader pass, 200 % zoom, measured colour contrast, real iOS and Android keyboards | Written audit with each failure fixed or listed | Not started |
 
 ## Step C — user conversations on Apache Cassandra
 
@@ -122,20 +150,21 @@ that make leakage-free splits possible. After this step, retraining over time is
 |---|---|---|---|---|
 | M4.1 | Reproduce the supplied baseline | Re-run `experiments/audit_and_baseline.py` on archive 11 (Bernoulli Naive Bayes) in this repository's environment and keep its failing result on record. The stored results were checked against the handoff figures on 2026-11-16 (`FIGURES_CROSSCHECK.md`); the experiment itself has not been re-run here | `python -m unittest discover -s experiments -p 'test_*.py'` passes; splits 70,119 / 14,918 / 14,963; test top-1 15.71 %, top-3 39.67 %, macro F1 0.115, ECE 0.613, majority 20.56 %, 39 of 46 labels present; masking and learning-curve values equal `experiments/results/metrics.json` | Not started |
 | M4.2 | Training-data eligibility | Per source: label origin, feature meanings (symptom vs history vs risk factor), meaning of zero, permitted use. Sources without documented rights or semantics are excluded from training. Includes an investigation of the two anomalies in the baseline figure (accuracy rising as features are hidden and falling as training data grows), which suggest archive 11's labels are weakly related to its features | A data card per source; the anomaly investigation written up with evidence; the training configuration refuses an ineligible source (test) | Not started |
-| M4.3 | Train / validation / calibration / test splits | Split manifests built from profile clusters so identical profiles never straddle partitions; a separate calibration partition; an untouched final test partition; archive 15's original split reported separately as contaminated; manifests identified by content hash and seed | Test: zero `profile_cluster_id` shared between any two partitions; the same seed reproduces the same manifest | Not started |
-| M4.4 | Model training | Majority and nearest-profile baselines, regularised logistic regression and gradient-boosted trees on identical splits; all preprocessing, feature selection and imputation fitted on the training partition only; one model per source before any pooled model; unknown stays unknown (missingness masks), never false | One command trains each model; same seed and data hash give identical metrics; a test fails if any transform sees validation or test rows | Not started |
-| M4.5 | Model testing | Top-k recall, macro F1, rare-class recall, calibration (reliability diagram, expected calibration error) on the calibration partition, abstention and risk-coverage, robustness to missing features, results per source and subgroup with cluster-bootstrap confidence intervals. Model selection uses validation only; the final test partition is used once | Evaluation report generated by one command; metrics that cannot be computed are reported "unavailable", not zero; the test partition is read exactly once (logged) | Not started |
+| M4.3 | Train / validation / calibration / test splits and model views | `model_cases` and `model_observations` views (unknown is never false) exported as Parquet; split manifests built from profile clusters so identical profiles never straddle partitions; a separate calibration partition; **a fresh untouched final test partition** (the archive-11 test split is already exposed); archive 15's original split reported separately as contaminated; manifests identified by content hash and seed | Test: zero `profile_cluster_id` shared between any two partitions; the same seed reproduces the same manifest; the exposed archive-11 test rows are never used for a final claim | Not started |
+| M4.4 | Model training | Majority and nearest-profile baselines, regularised logistic regression and gradient-boosted trees on identical splits; all preprocessing, feature selection and imputation fitted on the training partition only; one model per source before any pooled model; unknown stays unknown (missingness masks), never false; every run recorded in an experiment tracker with data hash, seed and configuration | One command trains each model; same seed and data hash give identical metrics; a test fails if any transform sees validation or test rows | Not started |
+| M4.5 | Model testing | Top-k recall, macro F1, balanced accuracy, rare-class recall, Brier score and log loss, calibration (reliability diagram, expected calibration error) on the calibration partition, abstention and risk-coverage, explicit missingness evaluation, leave-one-source-out, results per source and subgroup with cluster-bootstrap confidence intervals. Model selection uses validation only; the final test partition is used once | Evaluation report generated by one command; metrics that cannot be computed (age/sex for archive 11, urgency, external population) are reported "unavailable", not zero; the test partition is read exactly once (logged) | Not started |
 | M4.6 | Model cards, failure review and promotion decision | Model and data cards, learning curves, confusion matrix, reliability and risk-coverage plots, a reviewed sample of failures, and a recorded decision. A model is a candidate only if it beats the simpler baseline on independent data and on the safety metrics; otherwise it is rejected like the archive-11 baseline. No score is shown to users as a disease probability | Cards exist for every trained model; promotion is refused without the baseline comparison (test) | Not started |
 
 ## Step M5 — language-model and retrieval adapters, and their testing
 
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
-| M5.1 | Real extraction / explanation provider | A provider adapter behind the existing `Extractor` and explanation interfaces with deadlines, retries and rejection of malformed output; disabled unless credentials and `ALLOW_EXTERNAL_HEALTH_DATA_PROCESSING` are set | Stubbed-provider tests: timeout, malformed output and refusal each end in an explicit incomplete state; no network call is made when not configured | Not started |
-| M5.2 | Retrieval over the approved corpus | Lexical + vector search in PostgreSQL (full-text and pgvector), filters for release, population and permissions, reranking, one bounded hop through reviewed disease–feature evidence | Gold-passage retrieval tests; pending, retired or expired evidence is never returned | Not started |
-| M5.3 | Claim-level evidence validation | Every generated claim carries evidence IDs that are checked for existence, support and review state before rendering | A claim with a missing or unsupported citation is withheld (test) | Not started |
+| M5.1 | Real extraction / explanation provider | An Anthropic adapter (provider-neutral interface) for `extract(message, context)` and a new `explain(assessment, evidence_bundle)`: spans, concept IDs, polarity, time, experiencer, qualifiers, uncertainty; deadlines, retries, rejection of malformed output; disabled unless credentials and `ALLOW_EXTERNAL_HEALTH_DATA_PROCESSING` are set and the provider's data terms are documented | Stubbed-provider tests: timeout, malformed output and refusal each end in an explicit incomplete state; no network call is made when not configured | Not started |
+| M5.2 | Retrieval over the approved corpus | pgvector extension enabled with a fixed embedding model and dimension; mock and real embedding adapters; lexical + vector search, filters for release, population and permissions, reranking, one bounded hop through reviewed disease–feature evidence; `retrieval_corpus` export | Gold-passage retrieval tests; pending, retired or expired evidence is never returned; model spaces are never mixed | Not started |
+| M5.3 | Claim-level evidence validation and contradiction check | Every generated claim carries evidence IDs checked for existence, support and review state; an explanation that adds a diagnosis or medication, or lowers urgency, is rejected and replaced by the reviewed template | A claim with a missing or unsupported citation is withheld; a contradicting explanation falls back to the template (tests) | Not started |
 | M5.4 | Adversarial fixtures | Prompt injection in user text and in source text, revoked or outdated evidence, contradictions, provider outage | Each fixture passes: no instruction override, no cross-session data, abstention on outage | Not started |
 | M5.5 | Testing the language and retrieval parts | Extraction precision and recall by polarity, time and experiencer on a labelled gold set; retrieval recall and nDCG; groundedness of explanations; latency and cost per turn | Evaluation harness report with prompt, model and knowledge versions recorded | Not started |
+| M5.6 | Evaluation harness | `evaluations/`: redacted harnesses for datasets, inference, dialogue, triage, retrieval and security, each recording prompt, model, rule and knowledge versions; a smoke subset in CI | `uv run python -m evaluations smoke` runs in CI; a full run produces a versioned report | Not started |
 
 ## Step L — continuous learning: the product and its models train and evolve
 
@@ -178,6 +207,7 @@ from the system's own unverified suggestions or from a user merely agreeing with
 | M6.3 | Frozen-release evaluation: clinical errors, subgroups, under- and over-triage | Not started |
 | M6.4 | Privacy, retention, deletion (including backups), provider terms, access control, restore and rollback drills | Not started |
 | M6.5 | Load test, latency and cost budgets, outage and incident rehearsal | Not started |
+| M6.6 | Threat model (ownership, prompt injection, data exfiltration, supply chain) and an incident and near-miss response plan with named owners | Not started |
 
 ## Step M7 — expansion after evidence
 
@@ -194,3 +224,4 @@ Not started.
 | G3 | Dependency check before critical changes | Written rule in `CLAUDE.md` and the PR template: impact analysis before changing shared modules, change detection before commit, tests always | Recorded impact report for one real shared change in the engineering log | Done |
 | G4 | Index provenance | Indexed commit and exclusions recorded; re-index after substantive changes | Entry in the engineering log | Done |
 | G5 | Privacy inspection | Generated files inspected for private data before sharing; index never published | `.gitnexus/` ignored; inspection noted in the log | Done |
+| G6 | Pin GitNexus | GitNexus version pinned in the repository instead of relying on a global install | Fresh checkout indexes with the pinned version | Not started |

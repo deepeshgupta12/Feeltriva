@@ -611,3 +611,42 @@ fixtures (no REST endpoints in the contract; M2.4). No date answer type. Mobile 
 behaviour checked only in desktop Chrome at phone sizes. Screen reader and 200 % zoom not
 tested by hand. `pnpm smoke` and `pnpm e2e:live` are not in CI (they need Chrome and, for the
 live test, a running API and database). CI run 43866522296 on commit `e9dfbc8`: backend job and the new web job both succeeded.
+
+### R0 — Requirements traceability (documents only, no code change)
+
+**Why.** The owner pointed out that the complete data was not ingested and that the figures
+had never been checked. Both were true. The plan had been written from the backlog summary
+(`docs/05`) instead of from the whole handoff, `docs/02_MEASURED_RESULTS.md` had not been
+read, and several sub-steps had been run back to back without waiting for the owner's
+go-ahead. The working agreement in `CLAUDE.md` now requires one sub-step at a time and a stop
+for go-ahead.
+
+**Done.**
+
+- Read `docs/02` in full and opened all five figures. The three result charts match
+  `experiments/results/metrics.json` and `per_class.csv` value by value
+  (`FIGURES_CROSSCHECK.md`).
+- Measured the missing data (read-only): the four matrix files hold 371,234,666 cells, every
+  one `0` or `1`, of which 14,565,013 are `1`; archive 12's symptom text has 1,081,459 items
+  in 283 distinct terms; archive 14's symptom lists have 125,036 items in 28 terms, and its
+  declared counts match the lists in every row.
+- Wrote `TRACEABILITY.md`: 203 requirements traced. **73 done, 72 partial, 46 missing, 12
+  need an external decision.**
+- Added 14 sub-steps that had no place in the plan (M0.9, M0.10, M2.8, M2.9, M3.9 – M3.15,
+  M5.6, M6.6, G6), after M1.8 – M1.13, M2.7 and M3.8 from the figures cross-check; widened
+  M4.3, M4.5, M5.1, M5.2, M5.3 and M2.5.
+
+**What was missing from the plan before this (the substance of the owner's complaint).**
+Which features each case has (`case_features`, 14.6 million values); the symptom text and
+lists; disease–feature evidence; the 85 narrative texts as searchable content; the serving
+views and the vector / full-text knowledge base; the meaning of each feature; question
+selection by safety, relevance and burden; a fresh untouched test set and the next experiments
+listed in `docs/02`; the explanation step and its contradiction check; observability;
+deployable images; rate limiting; remote MCP authentication; saved history; the evaluation
+harness; the threat model.
+
+**Checks run.** A script confirmed that all 68 sub-step IDs cited in the trace exist as rows
+in the plan and that the 13 IDs marked new are present. No code changed, so no test suite was
+re-run for this sub-step.
+
+**Bugs.** None in code. Process failures recorded above.

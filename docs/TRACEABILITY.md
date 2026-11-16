@@ -1,0 +1,320 @@
+# Requirements traceability
+
+Every requirement in the handoff, traced on 2026-11-16 to what exists in this repository and to
+the plan sub-step that covers what is missing. Sources walked: `docs/01` – `docs/06`,
+`docs/SOURCES.md`, `specs/schema.sql`, `specs/openapi.json`, `specs/ingestion_manifest.json`,
+`data_audit/`, `experiments/`, `figures/` (see `FIGURES_CROSSCHECK.md`), and the owner's later
+instructions.
+
+Status words:
+
+- **Done** — implemented and verified by a test or a recorded run.
+- **Partial** — some of it exists; the "What exists / what is missing" column says which part.
+- **Missing** — nothing exists yet.
+- **External** — cannot be completed by engineering alone; needs the owner, a clinician or a
+  legal/data decision.
+
+"Fixture" means it works with the synthetic, nonmedical release only. Sub-step IDs refer to
+`IMPLEMENTATION_PLAN.md`; IDs marked *new* were added by this trace.
+
+## Summary
+
+| Area | Done | Partial | Missing | External |
+|---|---:|---:|---:|---:|
+| Functional requirements | 7 | 10 | 1 | 0 |
+| Data | 28 | 22 | 10 | 0 |
+| Architecture | 11 | 13 | 9 | 1 |
+| Model training and testing | 5 | 3 | 13 | 4 |
+| Test and evaluation layers | 0 | 9 | 2 | 0 |
+| Contracts and repository | 10 | 6 | 4 | 0 |
+| Backlog milestones | 2 | 2 | 4 | 1 |
+| Frontend prompt | 9 | 6 | 0 | 0 |
+| Other requirements | 1 | 1 | 3 | 6 |
+| **Total** | **73** | **72** | **46** | **12** |
+
+Of 203 traced requirements, 73 are done. The largest missing blocks are the per-case feature values and evidence (section 2), model training and testing (section 4) and retrieval / language-model work (sections 3 and 5).
+
+## 1. Functional requirements (`docs/01` §2)
+
+| Ref | Requirement | Status | What exists / what is missing | Sub-step |
+|---|---|---|---|---|
+| FR01 | Consent and scope: explain use and data handling; no named account needed; unsupported age/scope identified without calling the complaint harmless | Partial | Consent step, anonymous session, minor and caregiver states in the web app; API requires a consent version; age < 18 → out of scope (fixture rule). Consent and privacy wording are drafts; scope rules are not clinically approved | M3.3, M3.6; M6.1 |
+| FR02 | Free-text intake preserving negation, time, uncertainty and who has the symptom | Partial | Raw wording stored encrypted; mock extractor handles negation and uncertainty with exact spans. Time is not extracted; experiencer is always "self"; vocabulary is synthetic | M3.2; M5.1 |
+| FR03 | Confirmation: user edits interpreted list; every extraction references its message span; speculative items stay unconfirmed | Done | Span stored per observation; confirm / edit / remove in API and web; tested | M3.3, M3.6 |
+| FR04 | Urgency screening on every new or corrected message, before ranking, never waiting for a questionnaire | Partial | Mechanism done and tested (runs on unconfirmed details too). No approved urgency rules exist | M3.1, M3.3; M2.5, M6.1 |
+| FR05 | Relevant context: age; sex-related factors only when applicable; self-described gender kept separately; prefer-not-to-answer | Partial | Age (optional) and gender identity captured. Nothing asks sex-related clinical factors when applicable | M3.3; **M3.9 new** |
+| FR06 | Adaptive questions by safety priority, missing essentials, information value and burden; one at a time; no repeats | Partial | One at a time, no repeats, applicability rules. Selection is a fixed priority order | M3.1; M3.8 |
+| FR07 | Candidate assessment with supporting/conflicting observations, unknowns, scope status, evidence IDs; abstain when insufficient | Partial | Contract and abstention done; candidates come only from rule-matched fixture definitions | M3.3; M4, M5 |
+| FR08 | Results: next step first, up to three provisional explanations, no uncalibrated percentages | Done | API caps at three; web order verified in a browser; no score field exists | M3.4, M3.6, M3.7 |
+| FR09 | Revisions invalidate stale assessments; recompute from confirmed observations; keep an audit | Done | Append-only corrections, 409 on stale version, audit events; tested on PostgreSQL | M3.3 |
+| FR10 | Summary previewed by the user with symptoms, negatives, onset/duration, context, answers, missing facts, guidance; sharing is explicit | Done | API summary; web blocks export until reviewed; nothing auto-shared | M3.3, M3.6 |
+| FR11 | Optional saved history; delete sessions, summaries and retrieval traces per retention policy; no automatic training consent | Partial | Deletion of primary data with honest receipt. No saved history (no list endpoint; web keeps it in memory). No retention policy | M3.3; **M3.10 new**, C8, L1 |
+| FR12 | Review console: approve mappings, evidence, questions, rules; publish immutable versions; rollback | Partial | API for mappings and statements with notes and audit. No rule/question approval, no publishing, no rollback; screens on fixtures | M2.1; M2.4, M2.5 |
+| FR13 | Timeout or error gives an explicit incomplete state, never reassurance | Done | 503 with nothing concluded; state `system_unavailable`; tested | M3.3 |
+| FR14 | MCP surface on the same service, no bypass of scope, safety or access control | Partial | Nine tools over stdio with parity tests. No remote authenticated transport | M3.5; **M3.11 new** |
+| States | `consent_pending → intake → clarifying → assessing → result_ready` plus urgent, out of scope, insufficient, unavailable, closed; version on every question and assessment | Done | Enforced in service and database check constraint | M3.3, M0.4 |
+| Attributes | Presence, onset, duration, location, severity, pattern, triggers, relieving factors | Partial | Contract carries presence, onset, duration, severity only | **M3.12 new** |
+| Targets | WCAG 2.2 AA; rule evaluation p95 < 300 ms; turn p95 < 8 s at pilot load | Missing | Not measured; accessibility only by automated checks | **M3.15 new**, M6.5 |
+| Exclusions | No autonomous diagnosis, dosing, emergency monitoring, image interpretation, children, pregnancy-specific flows, impersonation, booking | Done | None of these exist; minors are routed out of scope | — |
+
+## 2. Data (`docs/01` §3–4, `docs/04`, `docs/02` source audit)
+
+### 2.1 Combination policy and deduplication rules
+
+| Ref | Requirement | Status | What exists / what is missing | Sub-step |
+|---|---|---|---|---|
+| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Partial | All rows kept as records; no external IDs forced. Feature values not yet kept | M1.7; M1.8 |
+| D1 | Fingerprint ZIPs and files; namespace versions and split names | Done | SHA-256 per archive and file; split names namespaced by archive | M1.1, M1.3, M1.7 |
+| D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
+| D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
+| D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Partial | Lexical groups done (960). No synonym suggestions are produced | M1.3; **M2.8 new**, M2.5 |
+| D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | Candidates done. Every feature is still kind `other` | M1.3; M2.7 |
+| D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Partial | Each position kept with its measured conflict count. Conflict per case not stored | M1.3; M1.8 |
+| D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
+| D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
+| D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
+| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping release, hashes, audit. No split manifest, no publishing | M1.2, M1.3; M4.3, M2.5 |
+| Demog. | Sex/gender counts are row counts, never combined as priors; identity, case ID, clinical sex context and gender identity kept separate | Done | Stored as supplied with the original field name; counts equal the handoff | M1.7 |
+| Zones | Four storage zones: raw immutable objects, normalised relational data, reviewed serving knowledge, private session data | Partial | Relational and session zones exist. Raw objects are not in object storage; no reviewed serving knowledge | M1.12, M2.5; C |
+
+### 2.2 Source-to-target mapping table (`docs/04`)
+
+| Ref | Source field → target | Status | What exists / what is missing | Sub-step |
+|---|---|---|---|---|
+| T1 | All files → `sources`, `source_records`, original byte object retained | Partial | 13 sources, 1,368,400 records. Original objects not in storage | M1.3, M1.7; M1.12 |
+| T2 | 11 `disease` → mappings, `case_labels` | Done | | M1.3, M1.7 |
+| T3 | 11 `symptom_*`, `rare_symptom_*` → `feature_mappings`, `case_features` | Partial | Mappings done; **2,852,472 values not loaded** | M1.8 |
+| T4 | 12 `data.csv` `diseases` | Done | | M1.3, M1.7 |
+| T5 | 12 `data.csv` 377 columns → mappings, `case_features` | Partial | Mappings done; **1,316,921 values not loaded** | M1.8 |
+| T6 | 12 `final_symptoms_to_disease.csv` → labels, records, parsed `case_features` | Partial | Labels and records done; **1,081,459 list items not parsed** | M1.9 |
+| T7 | 13 `id`, `name` → `original_id`, `original_label` | Done | 336 mappings carry the native ID | M1.3 |
+| T8 | 13 `category` → record metadata / review queue | Partial | Kept beside the description statement; not on the record, not queued | M1.10 |
+| T9 | 13 `summary` → `statements(description)` | Done | 85 | M1.4 |
+| T10 | 13 `word_count`, `url` → raw metadata, `source_url` | Partial | URL kept; `word_count` not stored | M1.10 |
+| T11 | 13 `causes.csv` joined on native ID, name checked | Done | 714; no mismatch | M1.4 |
+| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; **no evidence proposals** | M1.4; M1.11 |
+| T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
+| T14 | 13 text files → records; chunks after review with offsets | Partial | 85 registered by hash; **text not chunked** | M1.10 |
+| T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
+| T16 | 14 `Age` numeric, unit unconfirmed | Done | Unit left empty | M1.7 |
+| T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |
+| T18 | 14 `Symptoms` → raw record, parsed `case_features` | Partial | Only inside the row hash; **125,036 items not parsed** | M1.9 |
+| T19 | 14 `Symptom_Count` → comparison | Missing | Measured once by hand (0 mismatches), not stored or automated | M1.9 |
+| T20 | 14 `Disease` | Done | | M1.7 |
+| T21 | 15 `PATIENT_ID`, `AGE`, `SEX`, `DISEASE` with split | Done | | M1.7 |
+| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | Mappings done; **9,363,408 values not loaded**; unclassified | M1.8, M2.7 |
+| T23 | 15 `SYMPTOM_COUNT` → consistency check | Missing | | M1.9 |
+| T24 | 16 matrix `diseases` | Done | | M1.7 |
+| T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Partial | Mappings and column-level conflicts done; **1,032,212 values not loaded** | M1.8 |
+| T26 | 16 descriptions → statements | Done | 820 | M1.5 |
+| T27 | 16 `Source`, `Source_URL`, `Retrieved_Date`, `Canonical_Query` | Done | Kept with each statement source | M1.5 |
+
+### 2.3 Entity relationships
+
+| Ref | Relationship | Status | Sub-step |
+|---|---|---|---|
+| R1 | Source → source record | Done | M1.3, M1.7 |
+| R2 | Disease → source aliases, scoped by release | Done | M1.3 |
+| R3 | Feature → positional and list term mappings | Partial (list terms missing) | M1.3; M1.9 |
+| R4 | Source record → imported case | Done | M1.7 |
+| R5 | Case ↔ disease | Done | M1.7 |
+| R6 | **Case ↔ feature** | **Missing** | M1.8, M1.9 |
+| R7 | **Disease ↔ feature evidence** | **Missing** | M1.11 |
+| R8 | Disease → narrative statements | Done | M1.4, M1.5 |
+| R9 | Statement ↔ source record | Done | M1.4, M1.5 |
+| R10 | Knowledge release → evidence chunks | Missing | M1.10 |
+| R11 | Session → observations, answers, assessments | Done (moving to Cassandra) | M3.3; C |
+| R12 | Assessment → model, rules, knowledge releases | Partial (IDs recorded; no real releases) | M3.3; M2.5, L9 |
+
+### 2.4 Serving and ML exports
+
+| Ref | Export / view | Status | Sub-step |
+|---|---|---|---|
+| X1 | `reviewed_disease_catalog` | Missing | **M2.9 new** |
+| X2 | `reviewed_disease_feature_edges` | Missing | M1.11; **M2.9 new** |
+| X3 | `reviewed_care_statements` | Partial (condition endpoint returns approved, sourced statements) | M2.2; **M2.9 new** |
+| X4 | `model_cases` | Missing | M4.3 |
+| X5 | `model_observations` (unknown is not false) | Missing | M1.8; M4.3 |
+| X6 | `retrieval_corpus` | Missing | M1.10; M5.2 |
+| X7 | `session_summary` | Done | M3.3 |
+| X8 | No combined male/female prevalence export | Done (none exists) | — |
+
+## 3. Architecture (`docs/01` §6, `figures/technical-architecture.png`)
+
+| Ref | Component / rule | Status | What exists / what is missing | Sub-step |
+|---|---|---|---|---|
+| A1 | Frontend: React + TypeScript, accessible primitives | Done | Built here, not by Lovable (E22) | M3.6 |
+| A2 | API: Python 3.12, FastAPI, Pydantic, SQLAlchemy, Alembic | Done | | M0, M3.3 |
+| A3 | Explicit state machine | Done | | M3.3 |
+| A4 | PostgreSQL + **pgvector** + **full-text search** | Partial | PostgreSQL in use. Vector extension not enabled; no search vectors | M1.10, M5.2 |
+| A5 | Private object storage with versioning and encrypted backups | Missing | MinIO defined in Compose, never started | M1.12 |
+| A6 | Redis + worker queue for ingestion, embeddings, training, reports | Missing | Redis defined, never started; loaders run as commands | L7 |
+| A7 | Provider-neutral AI gateway, Anthropic adapter first | Partial | Interface and mock only | M5.1 |
+| A8 | ML: scikit-learn and gradient boosting for validated experiments | Missing | | M4.4 |
+| A9 | Data pipeline with Parquet, validation contracts, versioned manifests | Partial | Streaming loaders and manifest checks. No Parquet exports | M1; M4.3 |
+| A10 | Experiment tracking (MLflow or equivalent) | Missing | | M4.4, L7 |
+| A11 | Observability: OpenTelemetry, redacted logs, metrics | Missing | Request IDs and redacted audit events only | **M0.9 new** |
+| A12 | MCP on the official SDK, remote authenticated transport | Partial | stdio only | M3.5; **M3.11 new** |
+| A13 | Delivery: Compose locally; containers and managed services for pilot | Partial | Compose for PostgreSQL only; API and web are not containerised | **M0.10 new**, M6 |
+| A14 | GitNexus developer index | Done | Version noted, not pinned in the repository | G; **G6 new** |
+| P1 | Pipeline 1: authenticate, owner from token | Done | | M3.3 |
+| P2 | Pipeline 2: consent, **rate limits**, idempotency, version | Partial | No rate limiting | M3.3; **M3.13 new** |
+| P3 | Pipeline 3: complaint screening and extraction; failure is incomplete, not negative | Done (fixture) | | M3.3 |
+| P4 | Pipeline 4: confirm, apply transactionally, invalidate stale results | Done | | M3.3 |
+| P5 | Pipeline 5: urgency and scope rules; urgent bypasses ranking | Done (fixture) | | M3.3 |
+| P6 | Pipeline 6: evidence and candidates only from approved releases | Partial | Enforced for clinical mode at load time; no approved release exists | M3.1; M2.5 |
+| P7 | Pipeline 7: rank and choose next question or abstain; scores internal | Partial | Rule match and fixed-priority questions | M4, M3.8 |
+| P8 | Pipeline 8: compose with cited evidence; validate every cited ID and scope | Partial | Citation existence validated; no composed explanation | M3.3; M5.1, M5.3 |
+| P9 | Pipeline 9: check no contradiction with urgency/action; fall back to reviewed template | Missing | No generated explanation yet, so nothing to check | M5.3 |
+| P10 | Pipeline 10: persist assessment version and redacted audit | Done | | M3.3 |
+| RAG | Chunking by clinical section, filters, hybrid retrieval, rerank, one bounded hop, claim-to-evidence IDs, abstain without context | Missing | | M1.10, M5.2, M5.3 |
+| S1 | Ownership checks on every read, write, export | Done | Service + forced row-level security; tested | M3.3, M0.4 |
+| S2 | Remote MCP: OAuth, audience validation, least-privilege scopes | Missing | | **M3.11 new** |
+| S3 | Tool arguments untrusted; no SQL, shell or URL fetch | Done | | M3.5 |
+| S4 | Encrypt transport, database storage, raw data, backups | Partial | Free text encrypted before storage. No TLS, disk or backup encryption (deployment) | M3.3; M0.10, M6.4 |
+| S5 | Provider tracing off by default; provider terms documented before sending health text | Partial | No provider is called. Terms not documented | M5.1 |
+| S6 | No training on assessment data without separate consent | Partial | Nothing is trained on. Consent model not built | L1 |
+| S7 | Retention chosen and tested through backup expiry; no promise of instant erasure | External | Receipt wording is honest; no retention period decided | C8, M6.4 |
+| S8 | Prompt injection cannot override rules or expose another session | Missing | No LLM in the loop yet; no fixtures | M5.4 |
+| S9 | Incident response and access audit trails | Partial | Audit events exist. No incident plan | **M6.6 new** |
+
+## 4. Model training and testing (`docs/01` §7, `docs/02`)
+
+| Ref | Requirement | Status | What exists / what is missing | Sub-step |
+|---|---|---|---|---|
+| E0 | Supplied baseline preserved as a reproducible benchmark and rejected for serving | Partial | Results stored and checked against the figures; not re-run here; not wired into serving | M4.1 |
+| E1 | Confirm rights, provenance, label origin, populations, feature meanings | External | Unknown for all six archives | M4.2 |
+| E2 | Review mappings; exact and near-duplicate clusters; group by identity where available | Partial | Exact and profile clusters done | M1.7; M2.5, M4.3 |
+| E3 | Archive 15 original test kept untouched; overlap audited; contaminated result reported separately | Partial | Overlap audited and flagged (27,910 shared profiles) | M1.7; M4.3 |
+| E4 | Train, validation, separate calibration and untouched test; transforms fitted on training only; clusters kept together | Missing | | M4.3, M4.4 |
+| E4b | **A fresh untouched test set**: the archive-11 test split is "now exposed" (`docs/02`) | Missing | Was not in the plan | M4.3 (widened) |
+| E5 | Leave-source-out and external clinician-adjudicated tests | Missing / External | | M4.5 (widened), M6.2 |
+| E6 | Selection on validation only; calibration and abstention on their own partition; freeze before final test | Missing | | M4.5 |
+| E7 | Class support and cluster-bootstrap confidence intervals; sparse slices marked inconclusive | Missing | Baseline has none | M4.5 |
+| E8 | Urgency evaluated separately with adjudicated labels | External | Disease labels must not stand in for urgency | M6.2, M6.3 |
+| N1 | Next experiment: verify zero semantics and label origins | Missing | | M2.7, M4.2 |
+| N2 | Next: inspect feature relationships and source artefacts (accuracy rises when features are hidden; falls with more data) | Missing | | M4.2 |
+| N3 | Next: regularised linear baseline and boosted challenger on controlled splits | Missing | | M4.4 |
+| N4 | Next: evaluate missingness explicitly | Missing | | M4.5 |
+| N5 | Next: separately adjudicated external case set | External | | M6.2 |
+| N6 | Next: calibrate and test abstention on dedicated partitions; study error families before adding complexity | Missing | | M4.5, M4.6 |
+| Plots | Learning curves, confusion matrix, per-class precision/recall/support, reliability, risk-coverage, by source/age/sex/missingness, under/over-triage, retrieval recall/nDCG, latency/cost; unavailable shown as unavailable | Missing | Only the handoff's baseline charts exist | M4.6, M5.5, M6.3 |
+| G1 | Gate: zero detected split overlap | Missing | | M4.3 |
+| G2 | Gate: all responses match contracts | Done | | M3.4 |
+| G3 | Gate: all source claims trace to records | Done | Every statement has a source record; served statements require one | M1.4, M2.2 |
+| G4 | Gate: ownership tests pass; stale versions rejected; incomplete never reassurance | Done | | M3.3 |
+| G5 | Gate: unapproved rules cannot run in clinical mode | Done | Refused at load time; tested | M3.1 |
+| G6 | Gate: no secrets or raw sessions in public artefacts | Done | Ignore rules, CI check, secret scanning | M0.8 |
+| G7 | Clinical gates: named owner, representative cases, protocol, thresholds | External | | M6 |
+| Self-learning | Product and models learn and evolve (owner, 2026-11-16) | Missing | Planned | L |
+
+## 5. Test and evaluation layers (`docs/01` §8)
+
+| Layer | Required | Status | Missing part | Sub-step |
+|---|---|---|---|---|
+| Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Partial | Blank-cell handling and schema drift | M1.1 – M1.7; M1.13 |
+| Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym, ambiguity and merge tests | M2.5, M2.8 |
+| ML | Split leakage, target leakage, train-only transforms, coverage, calibration isolation, OOD, partial observations, per-source and subgroup | Missing | All | M4 |
+| Rules | Approved fixtures, boundary ages, unknown inputs, contradictions, precedence, missing bundle | Partial | Clinician-approved fixtures | M3.1; M6.2 |
+| Conversation | Negation, temporality, experiencer, uncertainty, mixed complaints, repeats, unknowns, non-English, correction | Partial | Temporality, experiencer, non-English | M5.1, M5.5 |
+| RAG | Gold passages, revoked evidence, incompatible populations, contradiction, citation existence and support | Missing | All except citation existence | M5 |
+| API/MCP | Owner isolation, malformed JSON, idempotency conflict, stale version, rate limit, timeout, tool parity, transport auth | Partial | Rate limit, remote transport auth | M3.11, M3.13 |
+| Frontend | Keyboard, screen reader, mobile, reconnect, cancellation, correction, expired session, urgent visibility | Partial | Screen reader, real devices, one focus defect | M3.14, M3.15 |
+| Security | Prompt injection, cross-tenant, SSRF, secret leakage, export authorisation, retention/deletion, dependency scanning | Partial | Prompt injection, export-scope test, retention | M5.4, C8 |
+| Operations | Provider outage, queue failure, restore, model rollback, kill switch, stale index, migration rollback | Partial | All except provider outage and migration rollback | M6.4, M6.5, L9 |
+| Harness | pytest, contract tests, Playwright, redacted evaluation harness | Partial | `evaluations/` is empty | **M5.6 new** |
+
+## 6. Contracts and repository (`docs/03`)
+
+| Ref | Requirement | Status | What exists / what is missing | Sub-step |
+|---|---|---|---|---|
+| L1 | Repository layout (15 paths) | Partial | `packages/contracts`, `pipelines/training`, `evaluations` are empty; contract lives in `specs/`, generated types in `apps/web` | M3.12, M4, M5.6 |
+| API1 | Authenticate every private request; owner from principal | Done | | M3.3 |
+| API2 | Idempotency keys, transactional versions, one error shape | Done | | M3.3 |
+| API3 | No numerical probability; `not_assessed` is not low; failed assessment is not benign | Done | | M3.3, M3.7 |
+| API4 | Append-only corrections; latest non-superseded; reject cross-session targets; 409 on concurrent writes | Done | | M3.3 |
+| API5 | Same key replays; different payload under the same key is 409 | Done | | M3.3 |
+| API6 | Summary needs preview and an explicit sharing action | Done | | M3.6 |
+| API7 | Deletion queued for database, object storage, traces, caches; reported accurately | Partial | Database only; receipt says "scheduled" | M3.3; C8 |
+| API8 | Audit event without symptom content | Done | | M3.3 |
+| MCP1 | Nine tools with the listed inputs, outputs and scopes | Done | | M3.5 |
+| MCP2 | Remote deployments: sessions bound to callers, token audience validated | Missing | | **M3.11 new** |
+| RULE1 | Declarative AST: AND/OR, presence, numeric comparison, missingness; validated; three-valued | Done | | M3.1 |
+| RULE2 | Actions escalate, clarify, exclude from scope, continue; human-approved priority | Partial | `clarify` and `continue` are defined but unused; rules live in a bundle file, not `clinical_rules` | M3.1; M2.5 |
+| LLM1 | `extract(message, context)` and `explain(assessment, evidence_bundle)` only | Partial | `extract` exists without context; `explain` does not exist | M5.1 |
+| LLM2 | Extraction returns spans, concept IDs, polarity, time, experiencer, qualifiers, uncertainty | Partial | No time or qualifiers | M5.1 |
+| LLM3 | Explanation cannot add a diagnosis, medication or lower urgency | Missing | | M5.3 |
+| CI1 | Lint/types → unit → migrations on disposable PostgreSQL → contract diff → ownership/version tests → UI tests → eval smoke → dependency/secret scanning | Partial | No evaluation smoke suite; browser tests not in CI | M0.8; M5.6 |
+| CI2 | On model release: full frozen evaluation suite and clinical checklist | Missing | | L8 |
+| DEP | Separate development, staging, production; kill switch; rollback; managed secrets; encrypted backups; restore drills | Missing | Development only | **M0.10 new**, M6.4 |
+| GN | GitNexus actions 1 – 6 | Done | | G |
+
+## 7. Backlog milestones (`docs/05`): acceptance criteria
+
+| Milestone | Acceptance | Status | Missing part | Sub-step |
+|---|---|---|---|---|
+| M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | "Preserve original values": feature values and list fields not loaded; text files not chunked | M1.8 – M1.13 |
+| M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
+| M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
+| M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |
+| M5 | Missing evidence abstains; explanation cannot change urgency or add a candidate; no private text in telemetry | Missing | All (abstention on missing evidence is done) | M5 |
+| M6 | Documented release decision with evidence and residual risks | External | All | M6 |
+| M7 | Each expansion with its own contract, consent, scope, evaluation, rollback | Missing | | M7 |
+| Cost | Cost worksheet per session and per month | Missing | | M6.5 |
+
+## 8. Frontend prompt (`docs/06`, 15 sections)
+
+| § | Section | Status | Missing part | Sub-step |
+|---|---|---|---|---|
+| 1 | Prototype boundaries, demo banner, no AI diagnosis in the browser | Done | | M3.6 |
+| 2 | Visual tokens, type, spacing, 44 px targets, reduced motion | Partial | Colour contrast not measured | M3.15 |
+| 3 | Ten routes; reviewer preview is not authorisation | Done | | M3.6 |
+| 4 | Landing page, draft footer pages, no invented claims | Done | | M3.6 |
+| 5 | Start and consent in three steps; no guessed age; unsupported scope state | Done | | M3.6 |
+| 6 | Conversation workspace, answer types, "Why this question?", editable observations, version conflict | Partial | No **date** answer type; BUG-008, BUG-009 | M3.14 |
+| 7 | Results hierarchy, possibility cards, sources drawer, stale result | Done | | M3.6, M3.7 |
+| 8 | Ten urgent/incomplete/unsupported states | Done | | M3.6 |
+| 9 | Print-friendly summary, review acknowledgement, no auto-share | Done | | M3.6 |
+| 10 | History and privacy screens; nothing sensitive in browser storage | Partial | History is in-memory only | M3.10 |
+| 11 | Condition information page from reviewed content | Partial | Runs on fixtures; not wired to the API endpoint | M2.4 |
+| 12 | Reviewer console with real audit facts | Partial | Runs on fixtures | M2.4 |
+| 13 | Twenty components, state model, service interface, OpenAPI types, idempotency | Done | BUG-010 (latent) | M3.6; M3.14 |
+| 14 | Responsive 320 – 1440, 200 % zoom, keyboard, screen reader, focus restore | Partial | Zoom and screen reader untested; BUG-007 | M3.14, M3.15 |
+| 15 | Ten demo scenarios and README | Done | | M3.6 |
+
+## 9. Other requirements (`docs/01` §10–11, `docs/05` decision register)
+
+| Ref | Requirement | Status | Sub-step |
+|---|---|---|---|
+| O1 | Named clinical owner, intended-use statement, regulatory assessment, incident reporting | External | M6.1, M6.6 |
+| O2 | Dataset rights, provenance, real-or-synthetic determination | External | M4.2 |
+| O3 | Target population, supported conditions, languages | External | M6.1 |
+| O4 | Consent, retention, deletion, residency, provider data handling | External | L1, C8, M5.1, M6.4 |
+| O5 | Gold clinical test set, urgency labels, adverse-event review | External | M6.2 |
+| O6 | Accessibility, understandable uncertainty, unsupported-user behaviour | Partial | M3.15 |
+| O7 | Cost model, observability, rollback, release gates, operational ownership | Missing | M0.9, M6.5, L9 |
+| O8 | Outcome feedback separating clinician-confirmed outcomes from user agreement | Missing | L2 |
+| O9 | Business incentives must not bias suggestions or urgency | Done (no referral or commercial feature exists) | — |
+| O10 | Name, domain, trademark clearance; security threat modelling | External / Missing | M6.6 |
+| O11 | GitNexus package pinned rather than an unpinned download | Missing | **G6 new** |
+
+## 10. Owner's instructions after the handoff
+
+| Ref | Instruction | Status | Sub-step |
+|---|---|---|---|
+| U1 | Conversations in Cassandra; everything conversational moves | Missing (design confirmed) | C1 – C12 |
+| U2 | PostgreSQL is the source of truth for data; new entities learned from conversations are written there carefully | Missing | L3a – L3c |
+| U3 | Product and model learn and evolve; a person approves go-live | Missing | L |
+| U4 | Impact analysis before every code change | In force | `CLAUDE.md` |
+| U5 | One sub-step, commit and push, report with tests for the owner, then wait for go-ahead | In force | `CLAUDE.md` |
+| U6 | Backend and frontend kept running for the owner | In force | — |
+| U7 | Repository public on the owner's GitHub with description, topics, CI | Done | M0.8 |
+
+## 11. Sub-steps added by this trace
+
+M0.9 observability · M0.10 deployable images and environment separation · M2.8 synonym and
+subtype suggestions · M2.9 serving views · M3.9 clinically relevant context · M3.10 saved
+history · M3.11 remote MCP transport · M3.12 contract extensions · M3.13 rate limiting ·
+M3.14 open web defects · M3.15 accessibility audit · M5.6 evaluation harness · M6.6 threat
+model and incident response · G6 pin GitNexus. M4.3 and M4.5 were widened.

@@ -113,7 +113,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | Step | State |
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
-| M1 Reproducible ingestion | Verification, audit, reference load and row-level case load (1,365,363 cases with duplicate, profile-cluster and split-leakage flags) done; cell-level feature values not loaded |
+| M1 Reproducible ingestion | Verification, audit, reference load and row-level case load (1,365,363 cases) done. **Not done: per-case feature values (14.6 M), symptom lists, narrative chunks, disease–feature evidence** (M1.8 – M1.13) |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
@@ -121,6 +121,10 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | L Continuous learning: automated retraining, evaluation gates, promotion | Planned, not started |
 | M6 – M7 Pilot, expansion | Not started |
 | G GitNexus code intelligence | Indexed; dependency check documented |
+
+Every handoff requirement is traced to its status and sub-step in
+[`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) (203 requirements: 73 done, 72 partial, 46 missing,
+12 awaiting an external decision).
 
 Work follows [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md): steps and sub-steps with
 a verification command and status each. Test results, bugs and resolutions per sub-step are in
