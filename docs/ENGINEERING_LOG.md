@@ -396,3 +396,27 @@ across package roots), and tests call the service over HTTP, so neither shows up
 changes to a public service method need a manual look at `services/mcp/feeltriva_mcp/server.py`
 plus `tests/mcp`. Empty `__init__.py` files produce harmless "no Module scope" warnings.
 The index must be rebuilt after each commit (`gitnexus analyze --skip-agents-md`).
+
+### M0.8 — CI and repository hygiene
+
+**Implemented.** `.github/workflows/ci.yml` (backend job): locked install, ruff, mypy, the
+SQLite suite, then a PostgreSQL 18 + pgvector service container where it creates the
+least-privilege role, runs migrations up → down → up and the same suite with row-level
+security and concurrency tests, and finally fails if data, archives or `.env` files are
+tracked. Tests that need the source archives are excluded (the archives are never committed).
+Also: Dependabot (uv and GitHub Actions), a pull-request checklist that includes the GitNexus
+dependency check, a bug-report template that mirrors this log, and `SECURITY.md`.
+
+Repository settings applied on GitHub: description and 12 topics; Dependabot alerts and
+security updates; secret scanning with push protection; private vulnerability reporting;
+delete branch on merge. The repository was created private and made public on the owner's
+instruction (decision E24).
+
+**Checks run.** CI run 43848920712 on commit `bd53f4a` → **success** (every step of the
+backend job passed, including both test suites and the migration round trip). Dependabot
+opened its first update pull requests within a minute; none has been merged.
+
+**Bugs.** None.
+
+**Not done.** The web job (typecheck, tests, build, generated-client diff) is added together
+with the web app in M3.6. No branch protection rule is set: commits go straight to `main`.
