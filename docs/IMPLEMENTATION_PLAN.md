@@ -73,15 +73,17 @@ instruction.
 
 ## Step C — user conversations on Apache Cassandra
 
-Owner's instruction (2026-11-16): **user conversations are recorded in Cassandra; PostgreSQL is
-not used for them.** PostgreSQL keeps the reference, knowledge and review data (sources,
-mappings, statements, releases) and the imported dataset cases. Today the conversation data
-(`sessions`, `session_messages`, `session_observations`, `session_answers`, `assessments`,
-`idempotency_keys`) is in PostgreSQL from M3.3; this step moves it.
+Owner's decisions (2026-11-16): **everything in a user conversation is recorded in Cassandra;
+PostgreSQL is not used for conversations.** There are two sources of truth and they are never
+mixed: **PostgreSQL for data** (datasets, diseases, features, aliases, statements, evidence,
+rules, releases, review state) and **Cassandra for conversations** (messages, answers,
+interpreted observations and corrections, assessments, summaries, replay bodies). Conversation
+records point at PostgreSQL entities by ID and release version; they never copy or redefine
+them. Today the conversation data is still in PostgreSQL from M3.3; this step moves it.
 
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
-| C1 | Data boundary and data model | Written decision on exactly what moves. Proposed: everything a user says or receives in a session — messages, follow-up answers, interpreted observations and corrections, assessments, summaries, replay bodies — so no conversation content remains in PostgreSQL. Query-first table design: one partition per `(owner_subject, session_id)`, session state as static columns, turns and records as clustering rows; consistency levels; what stays relational (audit events without content) | Owner confirms the boundary; design reviewed against every `AssessmentService` operation | Partial — design drafted in `CASSANDRA_CONVERSATION_STORE.md`; owner to confirm the boundary (D-C1) |
+| C1 | Data boundary and data model | Boundary confirmed by the owner: everything in a conversation moves; PostgreSQL keeps all reference and knowledge data. Design in `CASSANDRA_CONVERSATION_STORE.md`: one partition per `(owner_subject, session_id)`, session state as static columns, turns and records as clustering rows, lightweight-transaction version checks, replay records inside the session batch, consistency levels, what stays relational (audit events without content) | Owner confirmed the boundary on 2026-11-16; every `AssessmentService` operation is mapped in the design | Done |
 | C2 | Cassandra in the local stack and CI | Cassandra service in Compose with health check, keyspace and tables created by versioned, repeatable CQL migrations; driver pinned in `uv.lock`; settings and `.env.example` entries; CI service container | `docker compose up -d cassandra`; migration applies twice without change; driver connects | Not started |
 | C3 | Conversation store interface | A storage port (`ConversationStore`) used by `AssessmentService`, with an in-memory adapter for unit tests, so service logic no longer depends on SQLAlchemy session tables | Existing API, MCP and contract suites pass unchanged on the in-memory adapter | Not started |
 | C4 | Cassandra adapter: transcript | Every user and assistant turn written to Cassandra, content encrypted before it leaves the service; `session_messages` no longer written in PostgreSQL | Transcript round-trips; ciphertext only at rest; nothing new appears in `session_messages` | Not started |
@@ -92,6 +94,7 @@ mappings, statements, releases) and the imported dataset cases. Today the conver
 | C9 | Remove conversation tables from PostgreSQL | Alembic migration dropping `sessions`, `session_messages`, `session_observations`, `session_answers`, `assessments`, `idempotency_keys` and their policies once C4 – C8 pass; data migration or explicit reset of development data | `alembic upgrade head` / `downgrade` round trip; no conversation table left in PostgreSQL | Not started |
 | C10 | REST/MCP parity and contract on Cassandra | Full API, MCP parity and OpenAPI contract suites running against Cassandra in CI | CI green with the Cassandra service | Not started |
 | C11 | Operations | Replication strategy and factor, `LOCAL_QUORUM` reads/writes, repair, snapshot backups and restore drill, capacity estimate per session, metrics | Restore drill recorded in the engineering log | Not started |
+| C12 | Reference integrity across the two stores | Cassandra has no foreign keys to PostgreSQL: the service validates every feature, question and disease ID before writing, each record stores the release versions it was written under, and a scheduled check reports any ID in Cassandra that no longer resolves in PostgreSQL | Check finds a deliberately orphaned ID; a retired entity is reported, not silently dropped | Not started |
 
 Known trade-offs to settle in C1 (stated now so they are not a surprise): Cassandra gives
 per-partition atomicity only, so the idempotency record and the session write are two steps
@@ -123,25 +126,32 @@ replaced by validation in the service.
 
 ## Step L — continuous learning: the product and its models train and evolve
 
-Owner's instruction (2026-11-16): **the product and the model should learn, train themselves
-and evolve.** This step builds an automated learning loop. It is planned inside the rules of
-the handoff this repository treats as its specification: training uses consented data; labels
-come from user corrections and verified outcomes, never from the system's own unverified
-suggestions or from a user merely agreeing with one; and a model reaches clinical serving only
-through evaluation gates (open decision D-L1 below covers how much of the final promotion is
-automatic).
+Owner's decisions (2026-11-16): **the product and the model learn from user conversations,
+retrain and evolve.** What is learned flows one way between the two sources of truth: learning
+reads conversations from Cassandra, and **anything new it discovers about the data — a new
+symptom or feature term, a new alias, a new disease label — is written to PostgreSQL as a new
+record**, because PostgreSQL is the source of truth for data. A **named person approves** before
+a new model's suggestions reach real users in clinical mode; everything before that step
+(capture, retraining, evaluation, shadow and canary trials) is automatic, and fixture/demo mode
+is automatic end to end.
+
+This step stays inside the rules of the handoff this repository treats as its specification:
+training uses consented data; labels come from user corrections and verified outcomes, never
+from the system's own unverified suggestions or from a user merely agreeing with one.
 
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
 | L1 | Learning data contract and consent | Which signals may be learned from and under which consent; training consent stored separately from use consent and off by default; de-identification and retention rules; event schema from the Cassandra conversation log to the learning store | Records without training consent never appear in a training snapshot (test) | Not started |
 | L2 | Feedback capture | Signals the product already produces — "that's right", edits and removals of interpreted observations, not-sure answers, abandoned questions — captured as labelled learning events; explicit result feedback; intake of clinician-verified outcomes (`assessment_feedback`, `clinically_verified`) | Each signal produces one event with provenance; user agreement and verified outcome are distinguishable | Not started |
-| L3 | Vocabulary learning | Phrases the extractor could not match, and mappings users corrected, become proposed aliases / new feature candidates automatically; they enter the review queue and reach serving through a mapping release | Unmatched phrase seen N times appears as a proposal; nothing is served before approval | Not started |
+| L3a | Entity discovery from conversations | From consented sessions in Cassandra: phrases the extractor could not match and mappings users corrected are aggregated into candidates — new symptom/feature term, new alias of an existing feature, new disease label. Normalised with the same lexical rule as the dataset crosswalk; a candidate is raised only above a minimum number of distinct sessions (D-L3). Only the normalised term and counts leave Cassandra: no sentence, session ID or identity | A phrase seen in fewer sessions than the threshold raises nothing; one above it raises exactly one candidate; a candidate row contains no user text beyond the term | Not started |
+| L3b | Write-back to PostgreSQL as new records | Each candidate becomes a **new PostgreSQL record** (`features`, `diseases` or an alias entry) with status `pending`, in one transaction with a provenance row (`entity_discoveries`: support count, first/last seen, discovering model and extractor version, de-duplication decision). Idempotent. A term that already exists (any status) links to the existing record instead of creating a second one. An approved record is never modified by discovery | Rerun creates nothing new; an existing term gains provenance, not a duplicate; approved rows are byte-identical before and after; every discovered record has a provenance row | Not started |
+| L3c | Review, release and use | Discovered records appear in the review workspace with their provenance; approval puts them in a mapping/knowledge release; only then are they served and used by the extractor, and new conversation records refer to them by PostgreSQL ID | A pending discovered entity is never served or used for extraction; after approval and release it is | Not started |
 | L4 | Extraction model learning | Training and evaluation sets built from confirmed and corrected spans; scheduled retraining or prompt revision of the extractor; scored by polarity, time and experiencer against a frozen gold set | New version must beat the current one on the gold set to become a candidate | Not started |
 | L5 | Ranking model learning | Scheduled retraining on leakage-controlled splits (profile clusters from M1.7) plus verified outcomes; calibration on its own partition; champion vs challenger | Reproducible from data hash, seed and config; no shared cluster across splits | Not started |
 | L6 | Question-policy learning | Offline estimates of each question's information value and burden from logged dialogues; policy candidates evaluated offline and in a supervised trial. No unconstrained reinforcement learning on live users | Offline evaluation report; fewer questions for equal or better coverage | Not started |
 | L7 | Automated training pipeline | Scheduler and worker (Redis queue), dataset snapshots by content hash, experiment tracking and a model registry, one command or trigger per run | A run is fully reproducible from the registry entry | Not started |
 | L8 | Automated evaluation gates | Every candidate is scored on frozen test sets, safety metrics (under- and over-triage once labels exist), subgroups and regression thresholds; a failed or missing metric blocks the candidate | A deliberately worse model is rejected automatically | Not started |
-| L9 | Promotion, shadow mode and rollback | Registry stages: candidate → shadow (runs beside the champion, results not shown) → canary → champion; automatic rollback and kill switch; every served result records its model, rule and knowledge versions (already in the contract) | Shadow results logged but never returned; rollback restores the previous version in one step | Not started |
+| L9 | Promotion, shadow mode and rollback | Registry stages: candidate → shadow (runs beside the champion, results not shown) → canary → champion. Automatic up to canary. **Go-live of clinical suggestions requires a recorded approval by a named person** (owner decision E29); fixture/demo mode promotes automatically. Automatic rollback and kill switch; every served result records its model, rule and knowledge versions (already in the contract) | Shadow results logged but never returned; promotion without an approval record is refused in clinical mode; rollback restores the previous version in one step | Not started |
 | L10 | Drift and quality monitoring | Input drift, correction rate, abstention rate, calibration drift and unmatched-phrase rate; thresholds that trigger retraining (L7) | Synthetic drift raises an alert and queues a run | Not started |
 | L11 | Knowledge evolution | Scheduled refresh, retirement and re-ingestion of sources; versioned re-embedding; superseded evidence stops being served | Retired evidence disappears from results; old release can be restored | Not started |
 | L12 | Learning governance | Model and data cards generated per version; audit trail of what data trained what; guard tests that the system's own outputs and unverified agreement are excluded from labels | Guard tests fail if a forbidden label source is added | Not started |

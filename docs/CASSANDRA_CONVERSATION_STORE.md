@@ -1,7 +1,7 @@
 # Conversation store on Apache Cassandra — design for sub-step C1
 
-Status: **proposal for the owner to confirm** (open decision D-C1 in `DECISIONS.md`).
-Nothing in this document is implemented yet; the conversation data is still in PostgreSQL
+Status: **boundary confirmed by the owner on 2026-11-16** (decisions E25, E27, E28 in
+`DECISIONS.md`). Implementation has not started; the conversation data is still in PostgreSQL
 (M3.3). Versions of Cassandra and its Python driver are chosen and pinned in C2, after checking
 the installed packages.
 
@@ -22,11 +22,38 @@ Owner's instruction: user conversations are recorded in Cassandra, not PostgreSQ
 
 Result: after C9 no table in PostgreSQL holds anything a user said or was told.
 
-**The decision to confirm (D-C1).** The table above is the strict reading of the instruction.
-The narrow alternative is to move only the transcript (`session_messages`) and keep the
-structured session state in PostgreSQL. The strict reading is proposed because observations,
-answers and assessments are the conversation in structured form, and because splitting one
-session across two databases would need cross-database consistency that neither can provide.
+**Confirmed.** The owner chose this strict boundary: everything in a conversation moves.
+
+### Two sources of truth
+
+| Store | Source of truth for | Never holds |
+|---|---|---|
+| PostgreSQL | Data: datasets, diseases, features, aliases, statements, evidence, rules, questions, releases, review state | Anything a user said or was told |
+| Cassandra | Conversations: session header, messages, answers, observations and corrections, assessments, summaries, replay bodies | Definitions of entities; it stores their PostgreSQL IDs and the release versions in force |
+
+A conversation record therefore says "feature `fx.signal_alpha` under rules release
+`fixture-rules-0`", never the feature's name or definition. Renaming or retiring an entity
+happens once, in PostgreSQL.
+
+### New entities discovered from conversations go to PostgreSQL
+
+When learning from conversations (step L) finds something the data does not have yet — a
+symptom term nobody mapped, a new alias, a new disease label — it is added to PostgreSQL as a
+**new record**, not kept in Cassandra. The flow is one-way and deliberately careful:
+
+1. **Aggregate in Cassandra's domain.** Only consented sessions; candidates are counted by
+   normalised term across distinct sessions.
+2. **Threshold.** Nothing is raised below a minimum number of distinct sessions (D-L3), which
+   also keeps a single user's wording from becoming a record.
+3. **Strip.** Only the normalised term and counts cross to PostgreSQL. No sentence, session
+   ID or user identity.
+4. **De-duplicate.** The term is normalised exactly like the dataset crosswalk (casefold,
+   trim, collapse whitespace). If it already exists, the existing record gains provenance;
+   no second record is created.
+5. **Insert as `pending`.** A new `features` / `diseases` / alias record plus a provenance row
+   in the same transaction. Approved records are never changed by discovery.
+6. **Review and release.** A reviewer approves; a release publishes; only then is the entity
+   served or used for extraction, and later conversation records refer to it by ID.
 
 ## 2. What changes technically
 
