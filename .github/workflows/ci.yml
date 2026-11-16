@@ -33,7 +33,7 @@ jobs:
       APP_URL: postgresql+psycopg://feeltriva_app:feeltriva_app_ci@localhost:5432/feeltriva_test
       PGPASSWORD: feeltriva_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -73,7 +73,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: apps/web/package.json
