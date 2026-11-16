@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, types, SQLite and PostgreSQL suites)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: feeltriva
+          POSTGRES_PASSWORD: feeltriva_ci
+          POSTGRES_DB: feeltriva_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U feeltriva -d feeltriva_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      OWNER_URL: postgresql+psycopg://feeltriva:feeltriva_ci@localhost:5432/feeltriva_test
+      APP_URL: postgresql+psycopg://feeltriva_app:feeltriva_app_ci@localhost:5432/feeltriva_test
+      PGPASSWORD: feeltriva_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy packages services pipelines
+      - name: Tests on SQLite
+        # Tests marked `archives` need the source ZIPs, which are never committed.
+        run: uv run pytest -m "not archives"
+      - name: Create the least-privilege application role
+        run: psql -h localhost -U feeltriva -d feeltriva_test -c "CREATE ROLE feeltriva_app LOGIN PASSWORD 'feeltriva_app_ci'"
+      - name: Migrations up, down and up again on a disposable database
+        env:
+          MIGRATION_DATABASE_URL: ${{ env.OWNER_URL }}
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Tests on PostgreSQL (row-level security, concurrency)
+        env:
+          TEST_DATABASE_URL: ${{ env.APP_URL }}
+          TEST_MIGRATION_DATABASE_URL: ${{ env.OWNER_URL }}
+        run: uv run pytest -m "not archives"
+      - name: Tracked files must not contain data, archives or environment files
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|\.zip$|\.npz$|\.npy$|\.parquet$|^data/'; then
+            echo "Forbidden file types are tracked" && exit 1
+          fi

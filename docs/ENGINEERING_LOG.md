@@ -8,10 +8,12 @@ command output, not estimated.
 ## Bug index
 
 | Bug | Sub-step | Summary | Status |
-|---|---|---|---|| BUG-001 | M3.3 | Every authenticated endpoint returned 422 `query.who: Field required` | Fixed |
+|---|---|---|---|
+| BUG-001 | M3.3 | Every authenticated endpoint returned 422 `query.who: Field required` | Fixed |
 | BUG-002 | M0.4 | `uv run alembic upgrade head` failed on a checkout that only had `.env` | Fixed |
 | BUG-003 | G1 | GitNexus silently produced no call edges for the 37 KB `service.py` | Fixed |
 | BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
+
 ## Entries
 
 ### M0.1 — Repository scaffold
