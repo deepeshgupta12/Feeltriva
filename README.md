@@ -27,7 +27,74 @@ gets a provisional next step plus a consultation-ready summary.
 | `specs`, `data_audit`, `experiments`, `figures` | Handoff contracts, measured audit and baseline results (unchanged) |
 | `docs` | Product spec, plan, engineering log, decisions |
 
+## Quick start (backend, fixture mode)
+
+Requirements: Docker, [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 if needed).
+
+```bash
+cp .env.example .env                                         # local, non-secret development values
+docker compose -f infra/docker-compose.yml up -d postgres    # PostgreSQL 18 + pgvector on 127.0.0.1:5440
+uv sync                                                      # install locked dependencies
+uv run alembic upgrade head                                  # schema, constraints, row-level security
+uv run python -m feeltriva_api.seed                          # register the synthetic fixture release
+uv run uvicorn feeltriva_api.main:app_factory --factory --port 8000
+```
+
+Then, in another terminal:
+
+```bash
+curl -s localhost:8000/readyz
+# {"status":"ready","database":"up","clinical_mode":false,"release":"fixture-rules-0","synthetic_release":true}
+
+AUTH='Authorization: Bearer dev:local-user'      # mock auth exists only in development/test
+curl -s -X POST localhost:8000/v1/sessions -H "$AUTH" -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: demo-1' -d '{"consent_version":"demo-1","demographics":{"age_years":34}}'
+```
+
+The fixture vocabulary is deliberately nonmedical: try the text `I have alpha but no beta`
+(`escalation marker` triggers the urgent-state preview, `scope marker` the out-of-scope one).
+Interactive API docs are at `http://localhost:8000/docs` in development.
+
+### Tests
+
+```bash
+uv run ruff check . && uv run mypy packages services pipelines
+uv run pytest                                    # SQLite; PostgreSQL-only tests are skipped
+TEST_DATABASE_URL=postgresql+psycopg://feeltriva_app:feeltriva_app_dev@127.0.0.1:5440/feeltriva_test \
+TEST_MIGRATION_DATABASE_URL=postgresql+psycopg://feeltriva:feeltriva_dev@127.0.0.1:5440/feeltriva_test \
+  uv run pytest                                  # same suite plus row-level security and concurrency
+```
+
+### Source data (optional)
+
+The six source archives are not in the repository. Place `archive(11).zip` … `archive(16).zip`
+unchanged in `data/raw/`, then:
+
+```bash
+uv run python -m feeltriva_ingestion verify      # SHA-256 against the manifest + ZIP safety checks
+uv run python -m feeltriva_ingestion audit       # positional audit; must reproduce data_audit/audit.json
+uv run python -m feeltriva_ingestion load        # pending crosswalks and statements into PostgreSQL
+```
+
+### MCP
+
+```bash
+FEELTRIVA_MCP_BEARER_TOKEN=dev:local-user uv run python -m feeltriva_mcp     # stdio transport
+```
+
+The product MCP server exposes the same assessment service as the REST API. It is unrelated to
+GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
+
 ## Progress
+
+| Step | State |
+|---|---|
+| M0 Bootable project and contracts | Backend, migrations, auth, CI done |
+| M1 Reproducible ingestion | Verification, audit and reference load done; row-level case load not started |
+| M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
+| M3 Fixture-mode vertical slice | Service, REST, contract tests and stdio MCP done |
+| M4 – M7 Modelling, retrieval/LLM, pilot, expansion | Not started |
+| G GitNexus code intelligence | Indexed; dependency check documented |
 
 Work follows [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md): steps and sub-steps with
 a verification command and status each. Test results, bugs and resolutions per sub-step are in
