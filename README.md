@@ -93,7 +93,10 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | M1 Reproducible ingestion | Verification, audit and reference load done; row-level case load not started |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests and stdio MCP done |
-| M4 – M7 Modelling, retrieval/LLM, pilot, expansion | Not started |
+| C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
+| M4 – M5 Modelling, retrieval and LLM adapters | Not started |
+| L Continuous learning: automated retraining, evaluation gates, promotion | Planned, not started |
+| M6 – M7 Pilot, expansion | Not started |
 | G GitNexus code intelligence | Indexed; dependency check documented |
 
 Work follows [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md): steps and sub-steps with
