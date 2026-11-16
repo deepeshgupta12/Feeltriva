@@ -312,3 +312,30 @@ including `test_reference_load_is_idempotent_and_everything_is_pending`.
 Narrative text files are registered as source records but not split into statements.
 List-valued fields (archive 12 `symptom_text`, archive 14 `Symptoms`) are not parsed into
 feature candidates.
+
+### M2.1 / M2.2 — Review API and reviewed-only serving
+
+**Implemented** in `services/api/feeltriva_api/review.py` (routes in `main.py`):
+`/internal/v1/review/overview`, `/disease-mappings`, `/feature-mappings` (with
+`conflicts_only`), `/statements` and `POST /decisions`. All require the `reviewer` role from
+the verified token. A decision records who, an obligatory note, the optional status change and
+an audit event. `GET /v1/conditions/{disease_id}` (also the MCP tool
+`get_condition_information`) returns a condition only if the disease is `approved`, and only
+its `approved`, unexpired statements that have at least one source; a retired alias follows
+its redirect.
+
+**Tests run.** `uv run pytest tests/api/test_review.py` → 6 passed, 1 skipped on SQLite; 7
+passed on PostgreSQL. Covered: 401 without a token and 403 without the role on every review
+route; original spelling, column positions and conflict counts are returned; decisions are
+attributed, noted and audited, and a note alone changes no status; invalid targets and
+statuses are rejected; a pending disease is 404 even through a redirect; pending, unsourced
+and expired statements are withheld; approving a statement makes it appear with its source and
+retiring it removes it at once; imported dataset candidates are 404; on PostgreSQL an
+`UPDATE` of a mapping outside a reviewer-scoped transaction changes 0 rows.
+
+**Bugs.** None.
+
+**Not done.** The web reviewer screens still use mock data (M2.4). No disease redirect/merge
+history, immutable release publication or rollback (M2.5). No atomic claim extraction (M2.6).
+Approving a row here does not publish it into a served release; fixture mode serves only the
+synthetic bundle.
