@@ -9,7 +9,6 @@ command output, not estimated.
 
 | Bug | Sub-step | Summary | Status |
 |---|---|---|---|
-
 ## Entries
 
 ### M0.1 — Repository scaffold
@@ -80,3 +79,24 @@ reads, and `review_notes`. `0003` grants the application role the minimum it nee
 
 **Bugs / notes.** Alembic 1.20 warned that `path_separator` was missing from `alembic.ini`;
 added `path_separator = os`.
+
+### M3.1 / M2.3 — Rule engine, answer validation and release bundle
+
+**Implemented** in `packages/clinical`:
+
+- `rules.py`: declarative AST (`and`, `or`, `not`, `present`, `absent`, `missing`, `compare`)
+  evaluated with three-valued logic. A concept nobody mentioned satisfies neither `present`
+  nor `absent`. The validator rejects unknown operators, extra keys, unknown feature or field
+  references, depth above 8 and more than 200 nodes. Rules are data; nothing is executed.
+- `answers.py`: answer-schema validation for yes/no/not-sure, single and multiple choice,
+  number with unit, duration and free text, and the observation each answer implies.
+- `bundle.py`: release bundle model and loader. In clinical mode a bundle that is synthetic, not
+  approved, or contains any unapproved item is refused.
+- `engine.py`: urgency/scope screening and one-at-a-time question selection.
+- `fixtures/fixture_release.json`: synthetic, nonmedical release (`fx.*` concepts, three rules,
+  four questions, two illustrative candidates of which one cites evidence that does not exist).
+
+**Tests run.** `uv run pytest tests/unit/test_rules.py` → 15 passed. Bundle and answer tests
+are in `tests/unit/test_answers_bundle_extractor.py` (committed with M3.3) → 13 passed.
+
+**Bugs.** None.

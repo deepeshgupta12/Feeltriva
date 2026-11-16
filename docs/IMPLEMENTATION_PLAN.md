@@ -47,7 +47,7 @@ nonmedical fixture until a clinical owner approves a real release.
 |---|---|---|---|---|
 | M2.1 | Review API | Reviewer-role endpoints: overview, disease mappings, feature mappings (with repeated-header conflicts), statements; decisions with attributed notes and audit events | `uv run pytest tests/api/test_review.py` | Not started |
 | M2.2 | Reviewed-only serving | Condition information returns approved diseases and approved, unexpired, sourced statements only; pending content is unreachable | `uv run pytest tests/api/test_review.py -k serving` | Not started |
-| M2.3 | Bounded rule and question schemas | Declarative rule AST with three-valued logic, depth and node limits, reference validation; answer-schema validator; bundle loader that refuses unapproved or synthetic content in clinical mode | `uv run pytest tests/unit` | Not started |
+| M2.3 | Bounded rule and question schemas | Declarative rule AST with three-valued logic, depth and node limits, reference validation; answer-schema validator; bundle loader that refuses unapproved or synthetic content in clinical mode | `uv run pytest tests/unit` | Done |
 | M2.4 | Review console wired to the API | The web reviewer screens read and write through the review API instead of mock state | Playwright flow: inspect duplicate column, save note | Not started |
 | M2.5 | Redirects, merge/split history, immutable releases, rollback | Disease redirects with history; publish and roll back mapping and knowledge releases; serving pinned to a release | Release cannot be edited after publish; rollback test | Not started |
 | M2.6 | Atomic statement extraction queue | Narrative statements split into atomic claims with text spans, all `pending` | Every claim has a span and source | Not started |
@@ -56,7 +56,7 @@ nonmedical fixture until a clinical owner approves a real release.
 
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
-| M3.1 | Rule engine, answers and release bundle | `packages/clinical`: rule evaluation, urgency/scope screening, one-at-a-time question selection, answer validation, synthetic nonmedical fixture release | `uv run pytest tests/unit` | Not started |
+| M3.1 | Rule engine, answers and release bundle | `packages/clinical`: rule evaluation, urgency/scope screening, one-at-a-time question selection, answer validation, synthetic nonmedical fixture release | `uv run pytest tests/unit` | Done |
 | M3.2 | Provider boundaries | `packages/llm` extraction interface with a deterministic mock (negation, uncertainty, exact spans, never invents absence); `packages/inference` candidates; `packages/retrieval` evidence | `uv run pytest tests/unit` | Not started |
 | M3.3 | Assessment application service | Sessions, encrypted messages, versioned observations and corrections, idempotent mutations, optimistic concurrency, ownership on every path, state machine, abstention, summary, deletion receipt, redacted audit | `uv run pytest tests/api` (SQLite) and with `TEST_DATABASE_URL` (PostgreSQL) | Not started |
 | M3.4 | REST transport and contract tests | All eight operations in `specs/openapi.json`; responses validated against the contract schemas | `uv run pytest tests/api/test_contract.py` | Not started |

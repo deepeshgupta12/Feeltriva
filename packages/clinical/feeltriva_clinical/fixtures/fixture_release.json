@@ -1,0 +1,108 @@
+{
+  "bundle_id": "fixture-rules",
+  "rules_version": "fixture-rules-0",
+  "knowledge_release_id": "fixture-knowledge",
+  "knowledge_version": "fixture-knowledge-0",
+  "synthetic": true,
+  "status": "pending",
+  "features": [
+    {"feature_id": "fx.signal_alpha", "preferred_name": "Fixture signal alpha (sample)", "aliases": ["alpha"]},
+    {"feature_id": "fx.signal_beta", "preferred_name": "Fixture signal beta (sample)", "aliases": ["beta"]},
+    {"feature_id": "fx.signal_gamma", "preferred_name": "Fixture signal gamma (sample)", "value_type": "category", "aliases": ["gamma"]},
+    {"feature_id": "fx.signal_delta", "preferred_name": "Fixture measurement delta (sample)", "kind": "measurement", "value_type": "number", "aliases": ["delta"]},
+    {"feature_id": "fx.context_duration", "preferred_name": "Fixture duration (sample)", "value_type": "text", "aliases": []},
+    {"feature_id": "fx.escalation_marker", "preferred_name": "Fixture escalation marker (sample)", "aliases": ["escalation marker", "escalation-marker"]},
+    {"feature_id": "fx.scope_marker", "preferred_name": "Fixture scope marker (sample)", "aliases": ["scope marker", "scope-marker"]}
+  ],
+  "rules": [
+    {
+      "rule_id": "fx.rule.escalate",
+      "rule_type": "urgency",
+      "condition_ast": {"op": "present", "feature": "fx.escalation_marker"},
+      "action": {"type": "escalate", "urgency": "urgent", "text": "Urgent-state preview (synthetic fixture). In a released product, approved urgent-care instructions would appear here. This sample text is not medical guidance."},
+      "priority": 10
+    },
+    {
+      "rule_id": "fx.rule.scope_marker",
+      "rule_type": "scope",
+      "condition_ast": {"op": "present", "feature": "fx.scope_marker"},
+      "action": {"type": "exclude_from_scope", "text": "Unsupported-scope preview (synthetic fixture). This check cannot continue for the details provided. Approved navigation text would appear here."},
+      "priority": 20
+    },
+    {
+      "rule_id": "fx.rule.adult_scope",
+      "rule_type": "scope",
+      "condition_ast": {"op": "compare", "field": "demographics.age_years", "cmp": "lt", "value": 18},
+      "action": {"type": "exclude_from_scope", "text": "This check currently supports adult self-assessment only (product scope decision, sample wording). Approved navigation text would appear here."},
+      "priority": 30
+    }
+  ],
+  "questions": [
+    {
+      "question_id": "fx.q.beta",
+      "feature_id": "fx.signal_beta",
+      "wording": "Sample question: is fixture signal beta also present?",
+      "answer_schema": {"type": "yes_no_unsure", "help_text": "Sample explanation: this synthetic question exercises a yes / no / not-sure answer."},
+      "priority": 10
+    },
+    {
+      "question_id": "fx.q.gamma",
+      "feature_id": "fx.signal_gamma",
+      "wording": "Sample question: which option best describes fixture signal gamma?",
+      "answer_schema": {
+        "type": "single_choice",
+        "allow_not_sure": true,
+        "options": [
+          {"value": "option_one", "label": "Sample option one"},
+          {"value": "option_two", "label": "Sample option two"},
+          {"value": "none", "label": "None of these"}
+        ],
+        "help_text": "Sample explanation: this synthetic question exercises a single-choice answer."
+      },
+      "option_presence": {"none": "absent"},
+      "applicability": {"op": "present", "feature": "fx.signal_alpha"},
+      "priority": 20
+    },
+    {
+      "question_id": "fx.q.delta",
+      "feature_id": "fx.signal_delta",
+      "wording": "Sample question: what is the fixture measurement delta?",
+      "answer_schema": {"type": "number", "unit": "sample units", "min": 0, "max": 1000, "allow_not_sure": true},
+      "applicability": {"op": "present", "feature": "fx.signal_beta"},
+      "priority": 30
+    },
+    {
+      "question_id": "fx.q.duration",
+      "feature_id": "fx.context_duration",
+      "wording": "Sample question: how long has fixture signal alpha been present?",
+      "answer_schema": {"type": "duration", "allow_not_sure": true},
+      "applicability": {"op": "present", "feature": "fx.signal_alpha"},
+      "priority": 40
+    }
+  ],
+  "candidates": [
+    {
+      "disease_id": "fx.possibility_a",
+      "name": "Illustrative possibility A",
+      "explanation": "Synthetic fixture explanation used to exercise the result layout. It is not medical content.",
+      "condition_ast": {"op": "and", "args": [{"op": "present", "feature": "fx.signal_alpha"}, {"op": "present", "feature": "fx.signal_beta"}]},
+      "evidence_ids": ["fx.ev.1"]
+    },
+    {
+      "disease_id": "fx.possibility_b",
+      "name": "Illustrative possibility B",
+      "explanation": "Synthetic fixture explanation whose evidence is deliberately missing, so it must be withheld.",
+      "condition_ast": {"op": "and", "args": [{"op": "present", "feature": "fx.signal_alpha"}, {"op": "present", "feature": "fx.signal_gamma"}]},
+      "evidence_ids": ["fx.ev.unavailable"]
+    }
+  ],
+  "evidence": [
+    {"evidence_id": "fx.ev.1", "source_title": "Synthetic fixture source (sample)", "source_url": null, "excerpt": "Sample excerpt used only to exercise citation rendering. Not a medical source."}
+  ],
+  "templates": {
+    "provisional_next_step": "Sample next step (synthetic fixture): review your consultation summary. Approved care guidance is not configured in this environment.",
+    "insufficient_information": "There is not enough reviewed information to suggest an explanation. This is not a sign that everything is fine. You can add details or review your summary.",
+    "confirm_details": "Please confirm or correct the details we understood before continuing.",
+    "system_unavailable": "We couldn't complete this assessment. Nothing has been concluded about your symptoms. Please try again."
+  }
+}
