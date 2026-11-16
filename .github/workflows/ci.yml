@@ -65,3 +65,32 @@ jobs:
           if git ls-files | grep -E '(^|/)\.env$|\.zip$|\.npz$|\.npy$|\.parquet$|^data/'; then
             echo "Forbidden file types are tracked" && exit 1
           fi
+
+  web:
+    name: Web (typecheck, lint, tests, build, generated client)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Unit and component tests
+        run: pnpm test
+      - name: Production build
+        run: pnpm build
+      - name: Generated API client matches specs/openapi.json
+        run: pnpm gen:api && git diff --exit-code src/api/generated

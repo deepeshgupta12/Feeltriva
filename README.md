@@ -55,6 +55,28 @@ The fixture vocabulary is deliberately nonmedical: try the text `I have alpha bu
 (`escalation marker` triggers the urgent-state preview, `scope marker` the out-of-scope one).
 Interactive API docs are at `http://localhost:8000/docs` in development.
 
+## Quick start (web app)
+
+Requirements: Node 22.22 or newer and pnpm.
+
+```bash
+cd apps/web
+pnpm install
+pnpm dev        # http://localhost:5173  design demo: in-memory sample scenarios, no backend needed
+pnpm dev:api    # http://localhost:5174  live mode: every action goes through the API on :8000
+```
+
+In the design demo, **Demo tools** (top right) switches between the ten scenarios and turns on
+the reviewer preview. In live mode, type the fixture vocabulary (`I have alpha but no beta`,
+`escalation marker`). Identity and session state are held in memory only, so reloading the page
+starts fresh by design.
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm smoke      # real Chrome against :5173 — routes, ten scenarios, four viewports
+pnpm e2e:live   # real Chrome against :5174 + the API — intake to deletion through REST
+```
+
 ### Tests
 
 ```bash
@@ -90,10 +112,10 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 
 | Step | State |
 |---|---|
-| M0 Bootable project and contracts | Backend, migrations, auth, CI done |
+| M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
 | M1 Reproducible ingestion | Verification, audit, reference load and row-level case load (1,365,363 cases with duplicate, profile-cluster and split-leakage flags) done; cell-level feature values not loaded |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
-| M3 Fixture-mode vertical slice | Service, REST, contract tests and stdio MCP done |
+| M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
 | M4 – M5 Modelling, retrieval and LLM adapters | Not started |
 | L Continuous learning: automated retraining, evaluation gates, promotion | Planned, not started |

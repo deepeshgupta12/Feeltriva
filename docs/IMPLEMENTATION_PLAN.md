@@ -33,8 +33,8 @@ instruction.
 | M0.4 | Database migrations | `0001` = `specs/schema.sql` statement for statement; `0002` constraints, indexes, reviewer notes; `0003` application role grants and forced row-level security | `uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head` on a disposable database | Done |
 | M0.5 | Auth and configuration guards | Bearer auth: dev-only mock tokens and a JWT/JWKS verifier; settings refuse mock auth, missing encryption key or raw prompt logging outside development; clinical mode off by default | `uv run pytest tests/unit tests/api/test_guards.py` | Done |
 | M0.6 | Health, errors, request IDs | `/healthz`, `/readyz`; one error envelope (`code`, `message`, `retryable`, `request_id`); validation errors never echo input; private responses `no-store` | `curl localhost:8000/readyz`; `uv run pytest tests/api` | Done |
-| M0.7 | Typed frontend API client | Types generated from `specs/openapi.json` into the web app, deterministic regeneration | `pnpm --dir apps/web gen:api && git diff --exit-code apps/web/src/api/generated` | Not started |
-| M0.8 | CI and repository hygiene | GitHub Actions: lint, unit, PostgreSQL suite with migrations, web typecheck/test/build, contract-generation diff; Dependabot; PR and bug templates; security policy | CI run green on the pushed commit | Partial — backend job green on GitHub; web job is added with M3.6 |
+| M0.7 | Typed frontend API client | Types generated from `specs/openapi.json` into the web app, deterministic regeneration | `pnpm --dir apps/web gen:api && git diff --exit-code apps/web/src/api/generated` | Done |
+| M0.8 | CI and repository hygiene | GitHub Actions: lint, unit, PostgreSQL suite with migrations, web typecheck/test/build, contract-generation diff; Dependabot; PR and bug templates; security policy | CI run green on the pushed commit | Done — backend and web jobs (web job added with M3.6) |
 
 ## Step M1 — reproducible ingestion
 
@@ -68,8 +68,8 @@ instruction.
 | M3.3 | Assessment application service | Sessions, encrypted messages, versioned observations and corrections, idempotent mutations, optimistic concurrency, ownership on every path, state machine, abstention, summary, deletion receipt, redacted audit | `uv run pytest tests/api` (SQLite) and with `TEST_DATABASE_URL` (PostgreSQL) | Done |
 | M3.4 | REST transport and contract tests | All eight operations in `specs/openapi.json`; responses validated against the contract schemas | `uv run pytest tests/api/test_contract.py` | Done |
 | M3.5 | Product MCP adapter | MCP tools calling the same service as REST, including `submit_answer` and approved-question validation; REST/MCP parity | `uv run pytest tests/mcp` | Partial — stdio transport only; remote OAuth transport not implemented |
-| M3.6 | Web application | The interface in `docs/06_LOVABLE_FRONTEND_PROMPT.md`: all routes, states and the ten demo scenarios; typed mock and HTTP service adapters | `pnpm --dir apps/web typecheck && pnpm --dir apps/web test && pnpm --dir apps/web build` | Not started |
-| M3.7 | Web against the live API | Browser run of intake → confirm → follow-up → result → correction → summary → delete with the HTTP adapter against FastAPI | Playwright end-to-end run | Not started |
+| M3.6 | Web application | The interface in `docs/06_LOVABLE_FRONTEND_PROMPT.md`: all routes, states and the ten demo scenarios; typed mock and HTTP service adapters | `pnpm --dir apps/web typecheck && pnpm --dir apps/web test && pnpm --dir apps/web build` | Done — built and verified; review findings BUG-007 to BUG-010 open (see log) |
+| M3.7 | Web against the live API | Browser run of intake → confirm → follow-up → result → correction → summary → delete with the HTTP adapter against FastAPI | Playwright end-to-end run | Done — 43/43 live browser checks; not yet part of CI |
 
 ## Step C — user conversations on Apache Cassandra
 

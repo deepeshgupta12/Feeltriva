@@ -1,0 +1,8 @@
+# Design demo. Private routes also set a noindex robots tag at runtime.
+User-agent: *
+Disallow: /assess/
+Disallow: /results/
+Disallow: /summary/
+Disallow: /history
+Disallow: /settings/
+Disallow: /review

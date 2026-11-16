@@ -15,6 +15,10 @@ command output, not estimated.
 | BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
 | BUG-005 | M1.7 | PostgreSQL crashed during the first full case load (one transaction per file) | Mitigated — batched, resumable loader completed the full load; root cause not proven |
 | BUG-006 | M1.7 | Formatter re-wrapped two already-applied migrations | Fixed — reverted before commit |
+| BUG-007 | M3.6 | Web: keyboard focus is not returned to the footer button after its dialog closes | Open |
+| BUG-008 | M3.6 | Web: a duration answer is displayed twice ("3 days · 3 days") | Open |
+| BUG-009 | M3.6 | Web: an explicit "None of these" answer shows the raw option value "none" under the detail | Open |
+| BUG-010 | M3.6 / M3.3 | "Not sure" on multiple-choice and free-text questions is sent in a form the API does not treat as uncertain (latent: no such question in the fixture) | Open |
 
 ## Entries
 
@@ -527,3 +531,83 @@ repeated-header conflicts are recorded per column (M1.3) but not per case. List-
 (archive 12 `symptom_text`, archive 14 `Symptoms`) are stored only inside the row hash, not
 parsed into feature candidates. The real-archive load has no automated test (it needs the
 archives and about 35 minutes); the crafted-archive tests cover the logic in CI.
+
+### M3.6 / M0.7 / M3.7 — Web application, generated client, web against the live API
+
+**How it was built.** A background agent built `apps/web` from
+`docs/06_LOVABLE_FRONTEND_PROMPT.md`. It stopped before sending its final report because the
+account's usage limit was reached, so this entry is an independent review of what it left,
+not the agent's own account.
+
+**Impact analysis.** `apps/web` is a new directory: no existing symbol was modified. Its
+integration point is `specs/openapi.json` (unchanged). Two files were added after the review
+(`scripts/e2e-live.mjs`, a `dev:api` and `e2e:live` script entry). `.github/workflows/ci.yml`
+and `.github/dependabot.yml` are YAML and not covered by the code graph; the root
+`.env.example` gained a second allowed CORS origin.
+
+**What exists.** Vite + React 19 + TypeScript (strict) + Tailwind 4 + react-router, Radix
+dialogs/menus, self-hosted Manrope/Inter. All ten routes of the spec; all twenty named
+components; a typed `AssessmentService` with a mock adapter (in-memory scenarios, fixtures in
+their own folder) and an HTTP adapter; types generated from `specs/openapi.json`; a demo
+toolbar with the ten scenarios and a labelled reviewer preview; print/copy summary; privacy and
+history screens; a 325-line README including its own list of assumptions and known gaps.
+
+**Checks run in this review.**
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | no errors |
+| `pnpm lint` (zero warnings allowed) | no findings |
+| `pnpm test` | 118 passed in 6 files |
+| `pnpm build` | succeeds |
+| `pnpm gen:api`, then compare the generated file | byte-identical (M0.7: deterministic) |
+| `pnpm smoke` — real Chrome, mock mode: routes, ten scenarios, 320/390/768/1440 px, reviewer pages, console errors, overflow | 374 passed, **1 failed** (BUG-007) |
+| `pnpm e2e:live` — real Chrome against the running API (new in this review) | **43 passed, 0 failed** |
+
+Safety review by search and by reading the screens: the only key written to browser storage
+is the navigation-collapsed preference; no emergency or phone number anywhere; no probability,
+percentage or ranking in patient screens; only `example.org` sample links; no testimonial,
+certification or accuracy claim; sample labels on results, exports and the persistent banner;
+result sections in the required order.
+
+**What the live run proves (M3.7).** Through the real REST API in a browser: session creation
+with dev auth; free text extracted by the backend and shown for confirmation; a denial listed
+under "Not present" and nothing unmentioned listed there; all four fixture question types
+answered one at a time; next-question 204 handled as "no more questions"; the provisional
+result rendered from the API response with "Urgency not assessed … does not mean low urgency"
+and no percentage; evidence drawer showing the API's citation; a correction marking the old
+result "needs updating" and the recomputed result dropping the possibility and stating it is
+not reassurance; summary text from the API, export blocked until the review box is ticked;
+deletion receipt showing "scheduled", not "completed"; urgent state from the API pausing
+questions with no invented number; every mutation carrying a unique `Idempotency-Key`; no
+console errors; no health data in storage; and after a reload the API returning 404 to the new
+in-memory identity.
+
+**Bugs and findings.**
+
+- **BUG-007 (open) — focus not restored.** Smoke check "keyboard: focus returns to the footer
+  button" fails: after closing an informational dialog opened from the footer, focus does not
+  return to the button. The spec requires dialogs to restore focus.
+- **BUG-008 (open) — duplicated duration.** A duration answer renders as "3 days · 3 days":
+  the API returns both a `value` and a `duration` string and the detail row prints both.
+- **BUG-009 (open) — raw option value shown.** After "None of these", the detail under "Not
+  present" shows the option's internal value `none`.
+- **BUG-010 (open, latent) — "not sure" formats.** The web app sends `["not_sure"]` for
+  multiple choice and the string `"not_sure"` for free text; the API accepts "not sure" only
+  for yes/no, single choice, number and duration. No fixture question uses those two types, so
+  nothing fails today.
+- **Contract gap, not a bug.** The API contract has no display name for a concept, so the
+  web app shows the user's own phrase when there is one and otherwise a name derived from the
+  identifier ("Signal beta"). A label field needs a contract decision.
+- **By design.** In development the caller identity is generated per page load and kept in
+  memory, so a reload cannot reopen a session. Real authentication is required for that.
+- **First versions of the live test** failed three checks twice; both times the fault was in
+  the test (reading the page before it rendered; treating the expected post-reload 404 as an
+  error), not in the application. The test now waits properly and asserts the reload
+  behaviour.
+
+**Not done / not verified.** Condition pages, history listing and the reviewer console run on
+fixtures (no REST endpoints in the contract; M2.4). No date answer type. Mobile keyboard
+behaviour checked only in desktop Chrome at phone sizes. Screen reader and 200 % zoom not
+tested by hand. `pnpm smoke` and `pnpm e2e:live` are not in CI (they need Chrome and, for the
+live test, a running API and database). The web CI job result is recorded below once it has run.
