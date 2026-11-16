@@ -61,3 +61,22 @@ development defaults for a localhost-only container.
 (`pg_isready` succeeds). MinIO and Redis services were written but **not started or tested**.
 
 **Bugs.** None.
+
+### M0.4 — Database migrations
+
+**Implemented.** `0001` executes the 32 statements of `specs/schema.sql` unchanged (27 tables,
+3 enum types). `0002` adds state/status/urgency check constraints, a partial unique index so an
+observation can be superseded only once, indexes for the service's owner- and session-scoped
+reads, and `review_notes`. `0003` grants the application role the minimum it needs and enables
+**forced** row-level security on `sessions`, its child tables, `idempotency_keys` and
+`audit_events`, plus reviewer-only update policies on mapping and statement tables.
+
+**Checks run** against the Compose PostgreSQL:
+
+- `alembic upgrade head` → `alembic downgrade base` → `alembic upgrade head`: all succeed;
+  `alembic current` = `0003 (head)`.
+- After upgrade: 29 tables in `public` (27 + `review_notes` + `alembic_version`), 15 policies.
+- `feeltriva_app`: `rolsuper = f`, `rolbypassrls = f`.
+
+**Bugs / notes.** Alembic 1.20 warned that `path_separator` was missing from `alembic.ini`;
+added `path_separator = os`.
