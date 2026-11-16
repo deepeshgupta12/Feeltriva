@@ -269,3 +269,46 @@ per-tool scope metadata. Only stdio with an environment-supplied token exists.
 
 **Bugs.** None functional. mypy rejected wrapping a raw stream directly in `TextIOWrapper`;
 the bounded reader is now wrapped in `io.BufferedReader`.
+
+### M1.3 – M1.6 — Reference load (sources, crosswalks, narrative statements), idempotent
+
+**Implemented** in `load.py`. One source row per file, versioned by its archive digest, plus
+one for the 85 archive-13 text files. Under mapping release `mapping-lexical-0` (pending): the
+960 lexical disease candidates and 958 lexical feature candidates from `data_audit/`, their
+source-label and column-position mappings, and the measured conflict for every repeated-header
+column. Archive 13 is joined on its native `disease_id`; the redundant `disease_name` is
+compared with `diseases_main` and a mismatch would be stored as a quality flag. Archive-13
+summaries/causes/symptoms/treatments and archive-16 descriptions become `pending` statements,
+each linked to its source record, row locator and supplied URL. Deterministic IDs and
+`ON CONFLICT DO NOTHING` make reruns no-ops. Nothing is approved, merged or served.
+
+**Runs** against the Compose database:
+
+| Table | First `load` inserted | Second `load` inserted | Total |
+|---|---|---|---|
+| sources | 13 | 0 | 13 |
+| mapping_releases | 1 | 0 | 1 |
+| diseases | 960 | 0 | 960 |
+| disease_mappings | 3,117 | 0 | 3,117 |
+| features | 958 | 0 | 965 (958 + 7 fixture concepts) |
+| feature_mappings | 1,651 | 0 | 1,651 |
+| source_records | 3,037 | 0 | 3,037 |
+| statements | 2,952 | 0 | 2,952 |
+| statement_sources | 2,952 | 0 | 2,952 |
+
+Checked in SQL afterwards: statements by file = 85 descriptions, 714 causes, 712 symptoms, 621
+treatments (archive 13) and 820 descriptions (archive 16); 855 distinct diseases have a
+statement; 74 feature columns carry a repeated header (37 names), all 74 with a non-zero
+disagreement count; 336 archive-13 mappings carry the native ID; 0 rows in any status other
+than `pending`; 0 quality flags raised (no archive-13 name mismatch or unknown native ID).
+
+`uv run pytest` with the PostgreSQL variables → 108 passed (SQLite: 100 passed, 8 skipped),
+including `test_reference_load_is_idempotent_and_everything_is_pending`.
+
+**Bugs.** None.
+
+**Not done (M1.7).** The matrix files' 1.37 million rows are audited but not loaded row by row
+(`dataset_cases`, `case_labels`, `case_features`), and profile-cluster IDs are not persisted.
+Narrative text files are registered as source records but not split into statements.
+List-valued fields (archive 12 `symptom_text`, archive 14 `Symptoms`) are not parsed into
+feature candidates.
