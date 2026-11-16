@@ -182,3 +182,20 @@ another caller → 404; delete → `deletion_scheduled`; CORS preflight from
 
 **Not done in this sub-step.** No rate limiting (429). JWT verification was tested with a
 locally generated key, not against a real identity provider.
+
+### M3.4 — REST transport and contract tests
+
+**Implemented.** `tests/api/test_contract.py` loads `specs/openapi.json` and checks that all
+eight operations are served with the declared `operationId`, and that real responses for
+Session, Question, Assessment (needs_clarification, provisional, urgent_handoff,
+out_of_scope), Summary, DeletionReceipt and Error (400, 401, 404, 409, 422) validate against
+the contract schemas, including formats.
+
+**Tests run.** `uv run pytest tests/api/test_contract.py` → 5 passed.
+
+**Bugs.** Test-only: the first version read `route.operation_id` from every route and failed
+on Starlette's documentation routes (`AttributeError`); it now skips routes without methods
+or operation IDs. No API change was needed for the responses to validate.
+
+**Limits.** 429 is declared in the contract but never returned (no rate limiting yet). The
+contract has no 500; unexpected errors return 500 with the same envelope.
