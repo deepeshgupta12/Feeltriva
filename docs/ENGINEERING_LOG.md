@@ -49,3 +49,15 @@ pytest 9.2.0, ruff 0.17.5, mypy 2.4.1.
   foreign variable).
 - Lint: the first `ruff check` reported only `E501` line-length findings. Resolution: line
   length set to 120 and `E501` left to the formatter.
+
+### M0.3 — Local stack
+
+**Implemented.** `infra/docker-compose.yml`: PostgreSQL 18 with pgvector on `127.0.0.1:5440`;
+MinIO (`storage` profile) and Redis (`worker` profile) defined but optional. An init script
+creates the `feeltriva_app` login and a separate `feeltriva_test` database. Credentials are
+development defaults for a localhost-only container.
+
+**Checks run.** `docker compose -f infra/docker-compose.yml up -d postgres` → container healthy
+(`pg_isready` succeeds). MinIO and Redis services were written but **not started or tested**.
+
+**Bugs.** None.

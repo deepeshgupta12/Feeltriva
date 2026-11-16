@@ -1,0 +1,45 @@
+# Local development stack. Ports are bound to 127.0.0.1 only; credentials are dev defaults.
+# Usage: docker compose -f infra/docker-compose.yml up -d
+name: feeltriva
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: feeltriva
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-feeltriva_dev}
+      POSTGRES_DB: feeltriva
+    ports:
+      - "127.0.0.1:5440:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feeltriva -d feeltriva"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Private S3-compatible object storage for raw archives/manifests (no public buckets).
+  objectstore:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_USER:-feeltriva}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_PASSWORD:-feeltriva_dev_storage}
+    ports:
+      - "127.0.0.1:9010:9000"
+      - "127.0.0.1:9011:9001"
+    volumes:
+      - objectdata:/data
+    profiles: ["storage"]
+
+  # Optional queue/cache for future ingestion and embedding workers. Not session state.
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "127.0.0.1:6390:6379"
+    profiles: ["worker"]
+
+volumes:
+  pgdata:
+  objectdata:
