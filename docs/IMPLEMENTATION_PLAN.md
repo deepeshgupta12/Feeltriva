@@ -21,7 +21,7 @@ nonmedical fixture until a clinical owner approves a real release.
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
 | M0.1 | Repository scaffold | Monorepo layout from `docs/03`; handoff docs, specs, audit crosswalks and experiments copied in unchanged; `.gitignore`, `.env.example`, `CLAUDE.md`; source ZIPs verified and moved to ignored `data/raw/` | `shasum -a 256 data/raw/*.zip` equals `specs/ingestion_manifest.json`; `git check-ignore .env data/raw` | Done |
-| M0.2 | Python toolchain | Python 3.12 pinned, `uv.lock`, ruff / mypy / pytest configuration | `uv sync && uv run ruff check . && uv run pytest tests/unit` | Not started |
+| M0.2 | Python toolchain | Python 3.12 pinned, `uv.lock`, ruff / mypy / pytest configuration | `uv sync && uv run ruff check . && uv run pytest tests/unit` | Done |
 | M0.3 | Local stack | Compose: PostgreSQL 18 + pgvector, optional MinIO and Redis profiles, least-privilege `feeltriva_app` login, separate test database, ports on 127.0.0.1 | `docker compose -f infra/docker-compose.yml up -d postgres` then `pg_isready` | Not started |
 | M0.4 | Database migrations | `0001` = `specs/schema.sql` statement for statement; `0002` constraints, indexes, reviewer notes; `0003` application role grants and forced row-level security | `uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head` on a disposable database | Not started |
 | M0.5 | Auth and configuration guards | Bearer auth: dev-only mock tokens and a JWT/JWKS verifier; settings refuse mock auth, missing encryption key or raw prompt logging outside development; clinical mode off by default | `uv run pytest tests/unit tests/api/test_guards.py` | Not started |

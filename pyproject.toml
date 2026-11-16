@@ -1,0 +1,54 @@
+[project]
+name = "feeltriva"
+version = "0.1.0"
+description = "Feeltriva symptom-assessment and care-navigation backend (fixture mode; clinical mode disabled by default)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "pydantic-settings",
+  "sqlalchemy",
+  "alembic",
+  "psycopg[binary]",
+  "cryptography",
+  "pyjwt[crypto]",
+  "mcp",
+]
+
+[dependency-groups]
+dev = ["pytest", "httpx", "ruff", "mypy", "jsonschema", "anyio"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "packages/clinical/feeltriva_clinical",
+  "packages/llm/feeltriva_llm",
+  "packages/inference/feeltriva_inference",
+  "packages/retrieval/feeltriva_retrieval",
+  "services/api/feeltriva_api",
+  "services/mcp/feeltriva_mcp",
+  "pipelines/ingestion/feeltriva_ingestion",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["postgres: requires a disposable PostgreSQL (TEST_DATABASE_URL)", "archives: requires the six source ZIPs in data/raw"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["experiments", "apps", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008", "E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+mypy_path = "packages/clinical:packages/llm:packages/inference:packages/retrieval:services/api:services/mcp:pipelines/ingestion"
+explicit_package_bases = true

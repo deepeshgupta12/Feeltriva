@@ -30,3 +30,22 @@ agreement. The six source ZIPs were moved, unmodified, from the project root to 
 - Text search of everything staged for personal details or credentials: none found.
 
 **Bugs.** None.
+
+### M0.2 — Python toolchain
+
+**Implemented.** `pyproject.toml` (one distribution; packages mapped to the monorepo paths),
+`.python-version` = 3.12, `uv.lock`. Lint with ruff, types with mypy, tests with pytest.
+Versions resolved on 2026-11-16 and locked: FastAPI 0.163.1, Starlette 1.10.0, Pydantic 2.14.3,
+SQLAlchemy 2.1.8, Alembic 1.20.1, psycopg 3.3.9, cryptography 50.0.2, PyJWT 2.15.1, MCP SDK 2.3.0,
+pytest 9.2.0, ruff 0.17.5, mypy 2.4.1.
+
+**Checks run.** `uv sync` resolves and installs; `uv run ruff check .` → "All checks passed!".
+
+**Bugs / notes.**
+
+- Environment note (not a product bug): the shell had `VIRTUAL_ENV` pointing at another
+  project's environment, so `uv pip list` reported that project's packages. Resolution: always
+  use `uv run …`, which targets this repository's `.venv` (uv prints a warning and ignores the
+  foreign variable).
+- Lint: the first `ruff check` reported only `E501` line-length findings. Resolution: line
+  length set to 120 and `E501` left to the formatter.
