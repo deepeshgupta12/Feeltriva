@@ -38,6 +38,14 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
   status updated in the plan and an entry in `docs/ENGINEERING_LOG.md` (implementation, tests
   actually run with real results, each bug with cause and resolution). New decisions go in
   `docs/DECISIONS.md`. Keep `README.md` current with what really runs.
+- After **every** sub-step, backend or frontend, give the owner (1) an update: what was done,
+  what the impact analysis and tests showed, bugs found and their status; and (2) **the tests
+  the owner should carry out themselves**: exact commands and, for anything visible, the
+  click-by-click steps with what they should see. (Owner's instruction, 2026-11-16.)
+- Keep the backend and frontend running for the owner while working: API on
+  `http://localhost:8000`, web design demo on `http://localhost:5173` (`pnpm dev`), web in
+  live-API mode on `http://localhost:5174` (`pnpm dev:api`). Restart them after changes that
+  need it and say so.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
 
 ### GitNexus impact analysis before ANY code change (mandatory)

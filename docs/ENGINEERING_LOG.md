@@ -610,4 +610,4 @@ in-memory identity.
 fixtures (no REST endpoints in the contract; M2.4). No date answer type. Mobile keyboard
 behaviour checked only in desktop Chrome at phone sizes. Screen reader and 200 % zoom not
 tested by hand. `pnpm smoke` and `pnpm e2e:live` are not in CI (they need Chrome and, for the
-live test, a running API and database). The web CI job result is recorded below once it has run.
+live test, a running API and database). CI run 43866522296 on commit `e9dfbc8`: backend job and the new web job both succeeded.
