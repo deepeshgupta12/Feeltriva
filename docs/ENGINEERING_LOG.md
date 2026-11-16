@@ -225,7 +225,7 @@ errors carrying the same `code` / `message` / `retryable` as REST. Run with
 - Real protocol check: an MCP client over stdio initialised the server, listed the nine tools,
   started and deleted a session. With no token the call returned
   `is_error: true` with `{"code": "unauthenticated", …}`.
-- Full suite after this change: see the count in the next entry's table.
+- Full suite after this change: `uv run pytest` → 78 passed, 7 skipped (SQLite).
 
 **Bugs.** None in the adapter. Note: the SDK's own argument-validation errors echo the
 offending value, so tools take loosely typed arguments and validate them with the API's
@@ -233,3 +233,39 @@ schemas, which report locations only.
 
 **Not done.** Remote (streamable HTTP) transport with OAuth, token-audience validation and
 per-tool scope metadata. Only stdio with an environment-supplied token exists.
+
+### M1.1 / M1.2 — Archive verification, ZIP safety and positional audit
+
+**Implemented** in `pipelines/ingestion/feeltriva_ingestion`:
+
+- `archives.py` — SHA-256 of each archive against `specs/ingestion_manifest.json` before
+  anything is opened; entry validation (absolute paths, `..`, drive letters, NUL bytes,
+  symbolic links, duplicate names, encrypted entries, types other than `.csv`/`.txt`, more than
+  500 entries, an entry over 512 MiB, over 1 GiB total, compression ratio above 200:1 — the
+  largest real ratio is about 91:1); a positional CSV reader that returns plain lists so
+  repeated header names stay separate columns, bounded by each entry's declared size. Nothing
+  is extracted to disk.
+- `audit.py` — one streaming pass per CSV: rows, columns, labels, exact duplicates, repeated
+  profiles excluding patient ID, malformed rows, sex/gender row counts, repeated headers and
+  rows where repeated columns disagree; text-file digests; label overlap between archives;
+  archive-15 train/test shared profiles. `compare()` lists every difference from the manifest
+  and from `data_audit/audit.json`.
+- CLI: `uv run python -m feeltriva_ingestion verify | audit | load`.
+
+**Tests and runs.**
+
+- `uv run python -m feeltriva_ingestion verify` → all six archives "checksum ok"; 1 / 2 / 89 /
+  1 / 2 / 2 entries passed the safety checks (97 = 12 CSV + 85 text).
+- `uv run python -m feeltriva_ingestion audit` → `12 CSV files, 85 text files, 1368315 CSV
+  rows; 960 lexical disease labels; 24s` and **"reproduces manifest and audit.json"** (zero
+  differences). That includes 57,305 and 28,988 exact duplicate rows in archive 12, 27,622
+  shared archive-15 profiles, and 37 repeated header names in archive 16, each with at least
+  one disagreeing row.
+- `uv run pytest tests/ingestion/test_archives.py` → 20 passed (crafted archives: traversal and
+  absolute paths, disallowed types, symlink, 20 MiB-of-zeros bomb, size and count limits,
+  non-ZIP, missing archive, tampered checksum, BOM, repeated headers, duplicate rows, repeated
+  profiles, column conflict, malformed row, non-ASCII label, lexical-only normalisation).
+- `uv run pytest tests/ingestion/test_real_archives.py` → 2 passed, 1 skipped on SQLite.
+
+**Bugs.** None functional. mypy rejected wrapping a raw stream directly in `TextIOWrapper`;
+the bounded reader is now wrapped in `io.BufferedReader`.
