@@ -100,3 +100,18 @@ added `path_separator = os`.
 are in `tests/unit/test_answers_bundle_extractor.py` (committed with M3.3) → 13 passed.
 
 **Bugs.** None.
+
+### M3.2 — Provider boundaries
+
+**Implemented.** `packages/llm`: `Extractor` protocol, `MockExtractor` (whole-word match on
+the supplied vocabulary; `absent` only after an explicit negation cue in the same clause;
+`uncertain` after a hedge; exact character spans; text matching nothing is returned as one
+unmapped, uncertain observation) and `UnavailableExtractor` for outage tests.
+`packages/inference`: `CandidateProvider` protocol and a bundle-backed matcher; no statistical
+model is wired in. `packages/retrieval`: `EvidenceProvider` protocol and a bundle-backed
+lookup that simply does not return unknown IDs. No external provider is called anywhere.
+
+**Tests run.** Extractor cases in `tests/unit/test_answers_bundle_extractor.py` (3 of its 13
+tests); candidate and evidence behaviour is covered through the API flow tests in M3.3.
+
+**Bugs.** None.

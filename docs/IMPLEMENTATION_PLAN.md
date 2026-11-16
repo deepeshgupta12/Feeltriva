@@ -57,7 +57,7 @@ nonmedical fixture until a clinical owner approves a real release.
 | ID | Sub-step | What it delivers | Verify | Status |
 |---|---|---|---|---|
 | M3.1 | Rule engine, answers and release bundle | `packages/clinical`: rule evaluation, urgency/scope screening, one-at-a-time question selection, answer validation, synthetic nonmedical fixture release | `uv run pytest tests/unit` | Done |
-| M3.2 | Provider boundaries | `packages/llm` extraction interface with a deterministic mock (negation, uncertainty, exact spans, never invents absence); `packages/inference` candidates; `packages/retrieval` evidence | `uv run pytest tests/unit` | Not started |
+| M3.2 | Provider boundaries | `packages/llm` extraction interface with a deterministic mock (negation, uncertainty, exact spans, never invents absence); `packages/inference` candidates; `packages/retrieval` evidence | `uv run pytest tests/unit` | Done |
 | M3.3 | Assessment application service | Sessions, encrypted messages, versioned observations and corrections, idempotent mutations, optimistic concurrency, ownership on every path, state machine, abstention, summary, deletion receipt, redacted audit | `uv run pytest tests/api` (SQLite) and with `TEST_DATABASE_URL` (PostgreSQL) | Not started |
 | M3.4 | REST transport and contract tests | All eight operations in `specs/openapi.json`; responses validated against the contract schemas | `uv run pytest tests/api/test_contract.py` | Not started |
 | M3.5 | Product MCP adapter | MCP tools calling the same service as REST, including `submit_answer` and approved-question validation; REST/MCP parity | `uv run pytest tests/mcp` | Not started |
