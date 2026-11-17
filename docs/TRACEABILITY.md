@@ -21,12 +21,12 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M1.8 (2026-11-17).
+Last updated after sub-step M1.9 (2026-11-17).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
-| Data | 32 | 19 | 9 | 0 | 0 |
+| Data | 39 | 14 | 7 | 0 | 0 |
 | Architecture | 11 | 13 | 10 | 0 | 0 |
 | Model training and testing | 5 | 4 | 13 | 2 | 1 |
 | Test and evaluation layers | 0 | 9 | 2 | 0 | 0 |
@@ -34,9 +34,9 @@ Last updated after sub-step M1.8 (2026-11-17).
 | Backlog milestones | 2 | 2 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **77** | **70** | **48** | **4** | **4** |
+| **Total** | **84** | **65** | **46** | **4** | **4** |
 
-Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the remaining ingestion targets (symptom lists, narrative chunks, disease–feature evidence).
+Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the remaining ingestion targets (narrative chunks, disease–feature evidence, object storage).
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -67,7 +67,7 @@ Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. 
 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
-| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Partial | All rows kept as records; feature values of the four matrix files kept (M1.8); no external IDs forced. Symptom text and lists not yet kept | M1.7, M1.8; M1.9 |
+| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Done | Every row kept as a record; feature values of the matrix files (M1.8) and every listed symptom of the list files (M1.9) kept; no external IDs forced | M1.7, M1.8, M1.9 |
 | D1 | Fingerprint ZIPs and files; namespace versions and split names | Done | SHA-256 per archive and file; split names namespaced by archive | M1.1, M1.3, M1.7 |
 | D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
 | D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
@@ -90,7 +90,7 @@ Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. 
 | T3 | 11 `symptom_*`, `rare_symptom_*` → `feature_mappings`, `case_features` | Done | 2,852,472 values loaded | M1.3, M1.8 |
 | T4 | 12 `data.csv` `diseases` | Done | | M1.3, M1.7 |
 | T5 | 12 `data.csv` 377 columns → mappings, `case_features` | Done | 1,316,921 values loaded; zero meaning stays `unknown` | M1.3, M1.8 |
-| T6 | 12 `final_symptoms_to_disease.csv` → labels, records, parsed `case_features` | Partial | Labels and records done; **1,081,459 list items not parsed** | M1.9 |
+| T6 | 12 `final_symptoms_to_disease.csv` → labels, records, parsed `case_features` | Done | 1,081,459 listed items parsed into 283 terms, all linked to existing candidates; rows never aligned with `data.csv` | M1.7, M1.9 |
 | T7 | 13 `id`, `name` → `original_id`, `original_label` | Done | 336 mappings carry the native ID | M1.3 |
 | T8 | 13 `category` → record metadata / review queue | Partial | Kept beside the description statement; not on the record, not queued | M1.10 |
 | T9 | 13 `summary` → `statements(description)` | Done | 85 | M1.4 |
@@ -102,12 +102,12 @@ Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. 
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
 | T16 | 14 `Age` numeric, unit unconfirmed | Done | Unit left empty | M1.7 |
 | T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |
-| T18 | 14 `Symptoms` → raw record, parsed `case_features` | Partial | Only inside the row hash; **125,036 items not parsed** | M1.9 |
-| T19 | 14 `Symptom_Count` → comparison | Missing | Measured once by hand (0 mismatches), not stored or automated | M1.9 |
+| T18 | 14 `Symptoms` → raw record, parsed `case_features` | Done | 125,036 items parsed into 28 terms (25 existing candidates, 3 new pending ones); original row stays in the archive | M1.9 |
+| T19 | 14 `Symptom_Count` → comparison | Done | Compared with the parsed list for all 25,000 rows: 0 mismatches; a mismatch would be flagged on the record. Not stored as a feature | M1.9 |
 | T20 | 14 `Disease` | Done | | M1.7 |
 | T21 | 15 `PATIENT_ID`, `AGE`, `SEX`, `DISEASE` with split | Done | | M1.7 |
 | T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded with the full question text on the mapping. Not yet classified as symptom, history or risk | M1.8; M2.7 |
-| T23 | 15 `SYMPTOM_COUNT` → consistency check | Missing | | M1.9 |
+| T23 | 15 `SYMPTOM_COUNT` → consistency check | Done | Equals the number of affirmed `E_*` columns in all 610,031 rows: 0 mismatches. Not treated as ground truth | M1.9 |
 | T24 | 16 matrix `diseases` | Done | | M1.7 |
 | T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Done | 1,032,212 values loaded; repeated headers kept per position with explicit conflicts | M1.3, M1.8 |
 | T26 | 16 descriptions → statements | Done | 820 | M1.5 |
@@ -119,10 +119,10 @@ Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. 
 |---|---|---|---|
 | R1 | Source → source record | Done | M1.3, M1.7 |
 | R2 | Disease → source aliases, scoped by release | Done | M1.3 |
-| R3 | Feature → positional and list term mappings | Partial (list terms missing) | M1.3; M1.9 |
+| R3 | Feature → positional and list term mappings | Done (1,651 column mappings and 311 list-term mappings) | M1.3, M1.9 |
 | R4 | Source record → imported case | Done | M1.7 |
 | R5 | Case ↔ disease | Done | M1.7 |
-| R6 | Case ↔ feature | Partial (four matrix files done: 14,565,013 values; symptom text and lists missing) | M1.8; M1.9 |
+| R6 | Case ↔ feature | Done (16,013,976 rows: 14,807,481 from matrix files, 1,206,495 from lists) | M1.8, M1.9 |
 | R7 | **Disease ↔ feature evidence** | **Missing** | M1.11 |
 | R8 | Disease → narrative statements | Done | M1.4, M1.5 |
 | R9 | Statement ↔ source record | Done | M1.4, M1.5 |
@@ -216,7 +216,7 @@ Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. 
 
 | Layer | Required | Status | Missing part | Sub-step |
 |---|---|---|---|---|
-| Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Partial | Blank-cell handling and schema drift | M1.1 – M1.7; M1.13 |
+| Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Partial | Blank cells and schema drift are now tested for the matrix loader (M1.8). A drift test across all loaders is still missing | M1.1 – M1.9; M1.13 |
 | Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym, ambiguity and merge tests | M2.5, M2.8 |
 | ML | Split leakage, target leakage, train-only transforms, coverage, calibration isolation, OOD, partial observations, per-source and subgroup | Missing | All | M4 |
 | Rules | Approved fixtures, boundary ages, unknown inputs, contradictions, precedence, missing bundle | Partial | Clinician-approved fixtures | M3.1; M6.2 |
@@ -258,7 +258,7 @@ Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. 
 | Milestone | Acceptance | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
-| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Matrix feature values are loaded (M1.8). Symptom text and lists not parsed; text files not chunked; no disease–feature evidence | M1.9 – M1.13 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Feature values and symptom lists are loaded (M1.8, M1.9). Text files not chunked; no disease–feature evidence; raw archives not in object storage; no completeness command | M1.10 – M1.13 |
 | M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |

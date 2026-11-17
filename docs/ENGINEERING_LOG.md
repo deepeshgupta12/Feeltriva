@@ -755,3 +755,83 @@ mappings.
 (M2.7). The `model_observations` view that turns "no row" into "zero with unknown meaning"
 for training (M4.3). The real-archive load has no automated test (it needs the archives and
 over an hour); the crafted tests cover the logic in CI.
+
+### M1.9 — Symptom text and symptom lists; declared-count checks
+
+**Handoff clauses applied** (checked before writing code):
+
+- `docs/04`: archive 12 `symptom_text` → "parse symptom text into candidates; do not align row
+  numbers to data.csv". Archive 14 `Symptoms` → "parse list/text safely; normalize terms into
+  pending mappings". `Symptom_Count` → "data-quality comparison, not a diagnosis predictor".
+  Archive 15 `SYMPTOM_COUNT` → "consistency check; do not treat … the count as ground truth".
+- `docs/04` and `docs/02`: list-field terms "must be extracted separately and reviewed"; the
+  positional crosswalk "excludes concepts that still need extraction from narrative/list fields".
+- `docs/01` §3 rule 5: normalisation only as a candidate mapping. `docs/05` M1: "symptom-list
+  adapter"; "quality flags for count mismatches".
+
+**Measured first (read-only).** Archive 12 text: 192,715 rows, 1,081,459 items, 283 distinct
+terms, 1 – 12 items per row. Archive 14: 25,000 rows, 125,036 items, 28 terms, 3 – 7 items per
+row. In both: no empty list, no repeated item within a row, no separator other than a comma,
+no spelling variants. All 283 archive-12 terms and 25 of archive 14's already exist as
+lexical feature candidates from the matrix files.
+
+**Impact analysis before editing.** `main` of the ingestion CLI (modified): LOW. `_flush` of
+the feature loader (called only): LOW. `norm_label` (called only): **CRITICAL**, five direct
+callers across every loader; reported to the owner and left unchanged. New: `lists.py`, a
+test file.
+
+**Implemented.** `pipelines/ingestion/feeltriva_ingestion/lists.py` and the command
+`uv run python -m feeltriva_ingestion load-lists [--files …]`.
+
+- Each distinct term becomes a list mapping: a `feature_mappings` row with no column position,
+  the wording as written, `pending`, and "not listed means unknown" recorded on it.
+- Term identity is the same lexical rule as for matrix columns, so a list term and a column
+  with the same words share one candidate. A term matching nothing becomes a new pending
+  candidate; an existing candidate is never modified.
+- Each case gets one `case_features` row per listed term, presence `present`, wording as
+  written. A term that is not listed gets no row and is never `absent`.
+- The declared counts are compared with the parsed values; a mismatch or an empty list is
+  flagged on the source record. The counts are not stored as features.
+
+**Result** (loader output and SQL cross-check, 2026-11-17):
+
+| File | Items in file | Rows stored | Terms | Reusing existing candidates | New candidates | Cases with items |
+|---|---:|---:|---:|---:|---:|---:|
+| Archive 12 `final_symptoms_to_disease.csv` | 1,081,459 | 1,081,459 | 283 | 283 | 0 | 192,715 |
+| Archive 14 `Healthcare.csv` | 125,036 | 125,036 | 28 | 25 | 3 | 25,000 |
+| **Total** | 1,206,495 | **1,206,495** | 311 mappings | | | |
+
+- The three new candidates are "appetite loss", "swelling" and "tremors", all `pending`.
+- Features: 968 (961 lexical candidates + 7 fixture concepts); none approved. Feature mappings:
+  1,962 (1,651 columns + 311 list terms).
+- No row is marked `absent`.
+- Declared counts: archive 14 `Symptom_Count` equals the parsed list in all 25,000 rows;
+  archive 15 `SYMPTOM_COUNT` equals the number of affirmed `E_*` columns in all 610,031 rows.
+  0 mismatches, 0 flags added.
+- Example of the lexical link: the candidate for "shortness of breath" is now reached from
+  archive 11 (`symptom_shortness_of_breath`), archive 12 `data.csv` (`shortness_of_breath`),
+  archive 12 text, archive 14 and archive 16 (two column positions).
+- `case_features` now holds 16,013,976 rows (14,807,481 + 1,206,495). Load time 745 s.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 35 files |
+| `uv run pytest -m "not archives"` (SQLite) | 104 passed, 21 skipped |
+| same on PostgreSQL | 125 passed |
+| `uv run pytest tests/ingestion/test_lists.py` on PostgreSQL | 6 passed |
+| `verify` and `load` re-run (shared entry point) | succeed; 0 rows inserted |
+| `detect_changes` before commit | only `main` of the ingestion CLI among existing symbols |
+
+The six new tests use crafted archives: comma splitting; differing case and spacing linked to
+an existing candidate without changing it; a new term; the same term twice in one list; an
+empty list; a wrong declared count; a malformed row; the matrix declared-count check; rerun;
+missing cases.
+
+**Bugs.** None.
+
+**Not done.** Whether each term is a symptom, sign or something else (M2.7). The original list
+text is reachable through the row locator in the archive, not copied into the database; the
+archives themselves are not yet in object storage (M1.12).

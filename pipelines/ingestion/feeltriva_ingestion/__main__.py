@@ -1,4 +1,4 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists}"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .audit import compare, run_audit
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="feeltriva_ingestion")
-    parser.add_argument("command", choices=["verify", "audit", "load", "load-cases", "load-features"])
+    parser.add_argument("command", choices=["verify", "audit", "load", "load-cases", "load-features", "load-lists"])
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "derived" / "ingestion_audit.json")
     parser.add_argument("--files", nargs="+", help="load-cases / load-features: only these file names (default: all)")
@@ -90,6 +90,27 @@ def main() -> int:
             print(
                 f"{time.monotonic() - started:.0f}s; "
                 + ("consistent with the files and data_audit/audit.json" if not diffs else f"{len(diffs)} differences")
+            )
+            return 1 if diffs else 0
+        if args.command == "load-lists":
+            from .lists import check as check_lists
+            from .lists import load_symptom_lists
+
+            result = load_symptom_lists(
+                args.raw_dir, only=set(args.files) if args.files else None, batch_rows=args.batch_rows or 250_000
+            )
+            for name, counts in result["files"].items():
+                print(f"{name}: {counts}")
+            for name, summary in result["summary"].items():
+                print(f"{name}: stored {summary}")
+            for name, counts in result["matrix_counts"].items():
+                print(f"{name}: declared symptom count check {counts}")
+            diffs = check_lists(result)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + ("consistent with the files" if not diffs else f"{len(diffs)} differences")
             )
             return 1 if diffs else 0
         from .load import load_reference
