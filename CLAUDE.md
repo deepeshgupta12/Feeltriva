@@ -58,10 +58,12 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
   what the impact analysis and tests showed, bugs found and their status; and (2) **the tests
   the owner should carry out themselves**: exact commands and, for anything visible, the
   click-by-click steps with what they should see. (Owner's instruction, 2026-11-16.)
-- Keep the backend and frontend running for the owner while working: API on
-  `http://localhost:8000`, web design demo on `http://localhost:5173` (`pnpm dev`), web in
-  live-API mode on `http://localhost:5174` (`pnpm dev:api`). Restart them after changes that
-  need it and say so.
+- Keep the backend and one frontend running for the owner while working: API on
+  `http://localhost:8000` and the web app on `http://localhost:5173` (`pnpm dev`, design demo
+  with sample data). Do not leave a second web server running: the live-API mode on
+  `http://localhost:5174` (`pnpm dev:api`) is started only when a sub-step needs it or the
+  owner asks, and stopped afterwards (owner's instruction, 2026-11-17). Restart servers after
+  changes that need it and say so.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
 
 ### GitNexus impact analysis before ANY code change (mandatory)
