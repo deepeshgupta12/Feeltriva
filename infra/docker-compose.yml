@@ -4,6 +4,13 @@ name: feeltriva
 services:
   postgres:
     image: pgvector/pgvector:pg18
+    # tini runs as process 1 and reaps orphaned processes. Without it PostgreSQL is process 1,
+    # adopts any orphan (for example a health probe whose shell was killed on timeout) and treats
+    # that orphan exiting with a code other than 0 or 1 as a crash: it then terminates every
+    # connection and restarts. That happened twice during bulk loads (engineering log, BUG-005).
+    init: true
+    # Development settings for bulk dataset loads. Not production tuning.
+    command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_wal_size=2GB", "-c", "checkpoint_timeout=10min", "-c", "maintenance_work_mem=256MB"]
     environment:
       POSTGRES_USER: feeltriva
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-feeltriva_dev}
@@ -14,9 +21,10 @@ services:
       - pgdata:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U feeltriva -d feeltriva"]
-      interval: 5s
-      timeout: 3s
+      # Exec form (no shell to be killed and leave an orphan) and a timeout that tolerates load.
+      test: ["CMD", "pg_isready", "-U", "feeltriva", "-d", "feeltriva", "-t", "5"]
+      interval: 15s
+      timeout: 20s
       retries: 20
 
   # Private S3-compatible object storage for raw archives/manifests (no public buckets).

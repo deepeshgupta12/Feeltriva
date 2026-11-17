@@ -96,7 +96,8 @@ unchanged in `data/raw/`, then:
 uv run python -m feeltriva_ingestion verify      # SHA-256 against the manifest + ZIP safety checks
 uv run python -m feeltriva_ingestion audit       # positional audit; must reproduce data_audit/audit.json
 uv run python -m feeltriva_ingestion load        # pending crosswalks and statements into PostgreSQL
-uv run python -m feeltriva_ingestion load-cases  # 1.37 M case rows in 20,000-row batches (about 35 min, 1.7 GB)
+uv run python -m feeltriva_ingestion load-cases     # 1.37 M case rows in 20,000-row batches (about 35 min, 1.7 GB)
+uv run python -m feeltriva_ingestion load-features  # 14.8 M feature values (zeros are not stored; 15 – 60 min, 3.3 GB)
 ```
 
 ### MCP
@@ -113,7 +114,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | Step | State |
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
-| M1 Reproducible ingestion | Verification, audit, reference load and row-level case load (1,365,363 cases) done. **Not done: per-case feature values (14.6 M), symptom lists, narrative chunks, disease–feature evidence** (M1.8 – M1.13) |
+| M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows and their 14,565,013 feature values done. **Not done: symptom text and lists, narrative chunks, disease–feature evidence** (M1.9 – M1.13) |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
@@ -123,8 +124,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | G GitNexus code intelligence | Indexed; dependency check documented |
 
 Every handoff requirement is traced to its status and sub-step in
-[`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) (203 requirements: 73 done, 72 partial, 46 missing,
-12 awaiting an external decision).
+[`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) (203 requirements; the current count is at the top of that file).
 
 Work follows [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md): steps and sub-steps with
 a verification command and status each. Test results, bugs and resolutions per sub-step are in

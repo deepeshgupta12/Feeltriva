@@ -13,12 +13,13 @@ command output, not estimated.
 | BUG-002 | M0.4 | `uv run alembic upgrade head` failed on a checkout that only had `.env` | Fixed |
 | BUG-003 | G1 | GitNexus silently produced no call edges for the 37 KB `service.py` | Fixed |
 | BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
-| BUG-005 | M1.7 | PostgreSQL crashed during the first full case load (one transaction per file) | Mitigated — batched, resumable loader completed the full load; root cause not proven |
+| BUG-005 | M1.7 / M1.8 | PostgreSQL restarted itself during bulk loads (twice) | Fixed in M1.8 — root cause found: the health check orphaned a probe that PostgreSQL, as process 1, treated as a crashed child |
 | BUG-006 | M1.7 | Formatter re-wrapped two already-applied migrations | Fixed — reverted before commit |
 | BUG-007 | M3.6 | Web: keyboard focus is not returned to the footer button after its dialog closes | Open |
 | BUG-008 | M3.6 | Web: a duration answer is displayed twice ("3 days · 3 days") | Open |
 | BUG-009 | M3.6 | Web: an explicit "None of these" answer shows the raw option value "none" under the detail | Open |
 | BUG-010 | M3.6 / M3.3 | "Not sure" on multiple-choice and free-text questions is sent in a form the API does not treat as uncertain (latent: no such question in the fixture) | Open |
+| BUG-011 | M1.8 | Feature loader refused any file that contains a malformed row | Fixed |
 
 ## Entries
 
@@ -650,3 +651,107 @@ in the plan and that the 13 IDs marked new are present. No code changed, so no t
 re-run for this sub-step.
 
 **Bugs.** None in code. Process failures recorded above.
+
+### M1.8 — Cell-level feature values (`case_features`)
+
+**Handoff clauses applied** (checked before writing code):
+
+- `docs/04`: archive 11 `symptom_*`, archive 12 `data.csv` columns, archive 15 `E_*`, archive
+  16 positions → `case_features`; "preserve column position"; "zero semantics unresolved";
+  "duplicate headings remain separate mappings and conflicting values remain explicit".
+- `docs/01` §2: "A blank matrix value, an imported zero and an explicit denial are different
+  concepts." §3 rule 6: never OR contradictory values.
+- `docs/02`: all 37 repeated headers disagree somewhere; "keep each column position".
+- `specs/ingestion_manifest.json`: `zero_semantics: unknown_pending_review`,
+  `duplicate_columns: retain_positional_and_flag_conflicts`.
+- `specs/schema.sql`: `case_features(case_id, mapping_id, raw_value, normalized_value,
+  presence, conflict)`.
+
+**Impact analysis before editing.** `main` of the ingestion CLI (modified): LOW, one caller.
+`_raw_cursor`, `_hash`, `case_files` (called only): LOW. `read_csv_positional`, `source_id`
+(called only): HIGH, reported to the owner and left unchanged. New: `features.py`, a test
+file. Infra: `infra/docker-compose.yml`.
+
+**Implemented.** `pipelines/ingestion/feeltriva_ingestion/features.py` and the command
+`uv run python -m feeltriva_ingestion load-features [--files …] [--batch-rows N]`.
+
+- Measured first (read-only): the four matrix files hold 371,234,666 cells and every one is
+  `0` or `1`; 14,565,013 are `1`.
+- A `1` is stored as a row: raw value `1`, presence `present` (the source row affirms that
+  column), normalised `true`.
+- A `0` is **not** stored and never becomes `absent`. For a registered column, no row means
+  the source cell was `0`; what that means stays `zero_semantics = unknown` on the mapping.
+- A blank would be stored as `not_asked`; any other value verbatim as `uncertain`. Neither
+  occurs in the supplied files; both are covered by tests.
+- Repeated headers (archive 16): one row per position. Where the positions of a header
+  disagree for a case, every position of that header is stored for that case, zeros included,
+  with `conflict = true` and presence `uncertain`.
+- The load stops if a column header no longer matches its registered mapping (schema drift).
+- Idempotent; resumable; batches of 250,000 values.
+
+`presence = present` says only that the source affirms the column. Whether a column is a
+symptom, a history item or a risk factor is still unclassified (M2.7).
+
+**Result** (final SQL cross-check, 2026-11-17):
+
+| File | Rows stored | Value `1` | Zero side of a conflict | Conflict rows | Marked `absent` |
+|---|---:|---:|---:|---:|---:|
+| Archive 11 matrix | 2,852,472 | 2,852,472 | 0 | 0 | 0 |
+| Archive 12 `data.csv` | 1,316,921 | 1,316,921 | 0 | 0 | 0 |
+| Archive 15 `test.csv` | 2,093,631 | 2,093,631 | 0 | 0 | 0 |
+| Archive 15 `train.csv` | 7,269,777 | 7,269,777 | 0 | 0 | 0 |
+| Archive 16 matrix | 1,274,680 | 1,032,212 | 242,468 | 484,936 | 0 |
+| **Total** | **14,807,481** | **14,565,013** | 242,468 | 484,936 | **0** |
+
+- Value-`1` rows per file equal the non-zero cells counted while reading each file, and the
+  total equals the independent read-only measurement (14,565,013).
+- Archive 16: 37 headers have conflicts and the number of conflicting cases per header equals
+  `data_audit/audit.json` for all 37; the six named in `docs/02` match exactly (vomiting
+  22,272, cough 19,052, headache 18,996, nausea 18,946, back pain 18,588, fever 16,829).
+- Database size is now 5,028 MB (`case_features` 3,299 MB).
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 34 files |
+| `uv run pytest -m "not archives"` (SQLite) | 104 passed, 15 skipped |
+| same on PostgreSQL | 119 passed |
+| `uv run pytest tests/ingestion/test_features.py` on PostgreSQL | 4 passed |
+| `uv run python -m feeltriva_ingestion verify` / `load` / `load-cases --files Healthcare.csv` (regression of the shared entry point) | all succeed; reruns insert 0 rows |
+| `detect_changes` before commit | only `main` of the ingestion CLI among existing symbols |
+
+The four new tests use a crafted matrix: an affirmed cell; a zero that must not appear; an
+all-zero row; a repeated header that agrees; one that disagrees (both sides kept and
+flagged); a blank; a non-binary value; a malformed row; rerun; schema drift; missing cases or
+mappings.
+
+**Bugs.**
+
+- **BUG-005 — root cause found and fixed.** PostgreSQL restarted itself twice under load
+  (first in M1.7, again here after 53 minutes of loading, followed by ten hours of log replay
+  while the machine slept). The log shows the same sequence both times: a health probe's
+  connection breaks, `untracked child process … exited with exit code 2`, then "terminating
+  any other active server processes". *Cause:* the Compose health check ran `pg_isready`
+  through a shell with a 3-second timeout. Under load the probe was slow, Docker killed the
+  shell, and the orphaned `pg_isready` was adopted by process 1 in the container, which was
+  PostgreSQL itself. PostgreSQL treats an unknown child that exits with a code other than 0 or
+  1 as a crash and restarts the whole database; `pg_isready` exits with 2 when the server does
+  not answer in time. *Resolution:* `init: true` (an init process is now process 1 and reaps
+  orphans); health check in exec form with a 20-second timeout and 15-second interval.
+  *Verified:* process 1 is `docker-init`; an orphan made to exit with code 2 inside the
+  container left the postmaster start time unchanged; the remaining 10.7 million rows then
+  loaded in one run with zero restarts. The earlier entry's guess of "resource starvation" was
+  wrong as the cause: load only made the probe slow enough to trigger the defect.
+- **BUG-011 — loader refused a file with a malformed row.** *Found by* the crafted test before
+  any real data was loaded. *Cause:* the precondition compared the number of cases with the
+  number of rows, but a malformed row is kept as a record without a case. *Resolution:* the
+  precondition counts source records. *Verified:* the four tests pass.
+- Timing: archive 16 loaded in 99 s; the other three files took an hour because the machine
+  was short of memory (swap nearly full) with a cold database cache.
+
+**Not done.** Symptom text and symptom lists (M1.9). Classification of each column's meaning
+(M2.7). The `model_observations` view that turns "no row" into "zero with unknown meaning"
+for training (M4.3). The real-archive load has no automated test (it needs the archives and
+over an hour); the crafted tests cover the logic in CI.

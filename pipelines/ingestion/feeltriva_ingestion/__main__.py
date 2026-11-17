@@ -1,4 +1,4 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features}"""
 
 from __future__ import annotations
 
@@ -14,11 +14,16 @@ from .audit import compare, run_audit
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="feeltriva_ingestion")
-    parser.add_argument("command", choices=["verify", "audit", "load", "load-cases"])
+    parser.add_argument("command", choices=["verify", "audit", "load", "load-cases", "load-features"])
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "derived" / "ingestion_audit.json")
-    parser.add_argument("--files", nargs="+", help="load-cases: only these file names (default: all case files)")
-    parser.add_argument("--batch-rows", type=int, default=20_000, help="load-cases: rows per transaction")
+    parser.add_argument("--files", nargs="+", help="load-cases / load-features: only these file names (default: all)")
+    parser.add_argument(
+        "--batch-rows",
+        type=int,
+        default=None,
+        help="rows per transaction (default 20,000 cases / 250,000 feature values)",
+    )
     args = parser.parse_args()
     started = time.monotonic()
     try:
@@ -45,7 +50,9 @@ def main() -> int:
         if args.command == "load-cases":
             from .cases import compare_with_manifest, load_cases
 
-            result = load_cases(args.raw_dir, only=set(args.files) if args.files else None, batch_rows=args.batch_rows)
+            result = load_cases(
+                args.raw_dir, only=set(args.files) if args.files else None, batch_rows=args.batch_rows or 20_000
+            )
             for name, counts in result["files"].items():
                 print(
                     f"{name}: read {counts['rows_read']}, inserted {counts['records_inserted']} records / "
@@ -60,6 +67,29 @@ def main() -> int:
             print(
                 f"{time.monotonic() - started:.0f}s; "
                 + ("matches manifest" if not diffs else f"{len(diffs)} differences")
+            )
+            return 1 if diffs else 0
+        if args.command == "load-features":
+            import json as _json
+
+            from .audit import REFERENCE_AUDIT
+            from .features import check, load_case_features
+
+            result = load_case_features(
+                args.raw_dir, only=set(args.files) if args.files else None, batch_rows=args.batch_rows or 250_000
+            )
+            for name, counts in result["files"].items():
+                print(f"{name}: {counts}")
+            for name, summary in result["summary"].items():
+                by_header = summary.pop("conflict_cases_by_header")
+                print(f"{name}: stored {summary}; headers with conflicts: {len(by_header)}")
+                summary["conflict_cases_by_header"] = by_header
+            diffs = check(result, _json.loads(REFERENCE_AUDIT.read_text(encoding="utf-8"))["files"])
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + ("consistent with the files and data_audit/audit.json" if not diffs else f"{len(diffs)} differences")
             )
             return 1 if diffs else 0
         from .load import load_reference

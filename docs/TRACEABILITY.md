@@ -13,26 +13,30 @@ Status words:
 - **Missing** — nothing exists yet.
 - **External** — cannot be completed by engineering alone; needs the owner, a clinician or a
   legal/data decision.
+- **Decided** — the requirement was a decision and the owner has made it; nothing is built for
+  it (see `DECISIONS.md`).
 
 "Fixture" means it works with the synthetic, nonmedical release only. Sub-step IDs refer to
 `IMPLEMENTATION_PLAN.md`; IDs marked *new* were added by this trace.
 
 ## Summary
 
-| Area | Done | Partial | Missing | External |
-|---|---:|---:|---:|---:|
-| Functional requirements | 7 | 10 | 1 | 0 |
-| Data | 28 | 22 | 10 | 0 |
-| Architecture | 11 | 13 | 9 | 1 |
-| Model training and testing | 5 | 3 | 13 | 4 |
-| Test and evaluation layers | 0 | 9 | 2 | 0 |
-| Contracts and repository | 10 | 6 | 4 | 0 |
-| Backlog milestones | 2 | 2 | 4 | 1 |
-| Frontend prompt | 9 | 6 | 0 | 0 |
-| Other requirements | 1 | 1 | 3 | 6 |
-| **Total** | **73** | **72** | **46** | **12** |
+Last updated after sub-step M1.8 (2026-11-17).
 
-Of 203 traced requirements, 73 are done. The largest missing blocks are the per-case feature values and evidence (section 2), model training and testing (section 4) and retrieval / language-model work (sections 3 and 5).
+| Area | Done | Partial | Missing | External | Decided |
+|---|---:|---:|---:|---:|---:|
+| Functional requirements | 7 | 10 | 1 | 0 | 0 |
+| Data | 32 | 19 | 9 | 0 | 0 |
+| Architecture | 11 | 13 | 10 | 0 | 0 |
+| Model training and testing | 5 | 4 | 13 | 2 | 1 |
+| Test and evaluation layers | 0 | 9 | 2 | 0 | 0 |
+| Contracts and repository | 10 | 6 | 4 | 0 | 0 |
+| Backlog milestones | 2 | 2 | 5 | 0 | 0 |
+| Frontend prompt | 9 | 6 | 0 | 0 | 0 |
+| Other requirements | 1 | 1 | 4 | 2 | 3 |
+| **Total** | **77** | **70** | **48** | **4** | **4** |
+
+Of 203 traced requirements, 77 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the remaining ingestion targets (symptom lists, narrative chunks, disease–feature evidence).
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -63,13 +67,13 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
-| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Partial | All rows kept as records; no external IDs forced. Feature values not yet kept | M1.7; M1.8 |
+| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Partial | All rows kept as records; feature values of the four matrix files kept (M1.8); no external IDs forced. Symptom text and lists not yet kept | M1.7, M1.8; M1.9 |
 | D1 | Fingerprint ZIPs and files; namespace versions and split names | Done | SHA-256 per archive and file; split names namespaced by archive | M1.1, M1.3, M1.7 |
 | D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
 | D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
 | D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Partial | Lexical groups done (960). No synonym suggestions are produced | M1.3; **M2.8 new**, M2.5 |
 | D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | Candidates done. Every feature is still kind `other` | M1.3; M2.7 |
-| D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Partial | Each position kept with its measured conflict count. Conflict per case not stored | M1.3; M1.8 |
+| D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
@@ -83,9 +87,9 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 |---|---|---|---|---|
 | T1 | All files → `sources`, `source_records`, original byte object retained | Partial | 13 sources, 1,368,400 records. Original objects not in storage | M1.3, M1.7; M1.12 |
 | T2 | 11 `disease` → mappings, `case_labels` | Done | | M1.3, M1.7 |
-| T3 | 11 `symptom_*`, `rare_symptom_*` → `feature_mappings`, `case_features` | Partial | Mappings done; **2,852,472 values not loaded** | M1.8 |
+| T3 | 11 `symptom_*`, `rare_symptom_*` → `feature_mappings`, `case_features` | Done | 2,852,472 values loaded | M1.3, M1.8 |
 | T4 | 12 `data.csv` `diseases` | Done | | M1.3, M1.7 |
-| T5 | 12 `data.csv` 377 columns → mappings, `case_features` | Partial | Mappings done; **1,316,921 values not loaded** | M1.8 |
+| T5 | 12 `data.csv` 377 columns → mappings, `case_features` | Done | 1,316,921 values loaded; zero meaning stays `unknown` | M1.3, M1.8 |
 | T6 | 12 `final_symptoms_to_disease.csv` → labels, records, parsed `case_features` | Partial | Labels and records done; **1,081,459 list items not parsed** | M1.9 |
 | T7 | 13 `id`, `name` → `original_id`, `original_label` | Done | 336 mappings carry the native ID | M1.3 |
 | T8 | 13 `category` → record metadata / review queue | Partial | Kept beside the description statement; not on the record, not queued | M1.10 |
@@ -102,10 +106,10 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | T19 | 14 `Symptom_Count` → comparison | Missing | Measured once by hand (0 mismatches), not stored or automated | M1.9 |
 | T20 | 14 `Disease` | Done | | M1.7 |
 | T21 | 15 `PATIENT_ID`, `AGE`, `SEX`, `DISEASE` with split | Done | | M1.7 |
-| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | Mappings done; **9,363,408 values not loaded**; unclassified | M1.8, M2.7 |
+| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded with the full question text on the mapping. Not yet classified as symptom, history or risk | M1.8; M2.7 |
 | T23 | 15 `SYMPTOM_COUNT` → consistency check | Missing | | M1.9 |
 | T24 | 16 matrix `diseases` | Done | | M1.7 |
-| T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Partial | Mappings and column-level conflicts done; **1,032,212 values not loaded** | M1.8 |
+| T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Done | 1,032,212 values loaded; repeated headers kept per position with explicit conflicts | M1.3, M1.8 |
 | T26 | 16 descriptions → statements | Done | 820 | M1.5 |
 | T27 | 16 `Source`, `Source_URL`, `Retrieved_Date`, `Canonical_Query` | Done | Kept with each statement source | M1.5 |
 
@@ -118,7 +122,7 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | R3 | Feature → positional and list term mappings | Partial (list terms missing) | M1.3; M1.9 |
 | R4 | Source record → imported case | Done | M1.7 |
 | R5 | Case ↔ disease | Done | M1.7 |
-| R6 | **Case ↔ feature** | **Missing** | M1.8, M1.9 |
+| R6 | Case ↔ feature | Partial (four matrix files done: 14,565,013 values; symptom text and lists missing) | M1.8; M1.9 |
 | R7 | **Disease ↔ feature evidence** | **Missing** | M1.11 |
 | R8 | Disease → narrative statements | Done | M1.4, M1.5 |
 | R9 | Statement ↔ source record | Done | M1.4, M1.5 |
@@ -174,7 +178,7 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | S4 | Encrypt transport, database storage, raw data, backups | Partial | Free text encrypted before storage. No TLS, disk or backup encryption (deployment) | M3.3; M0.10, M6.4 |
 | S5 | Provider tracing off by default; provider terms documented before sending health text | Partial | No provider is called. Terms not documented | M5.1 |
 | S6 | No training on assessment data without separate consent | Partial | Nothing is trained on. Consent model not built | L1 |
-| S7 | Retention chosen and tested through backup expiry; no promise of instant erasure | External | Receipt wording is honest; no retention period decided | C8, M6.4 |
+| S7 | Retention chosen and tested through backup expiry; no promise of instant erasure | Missing | Decided by the owner: 30 days (E33). Not built; receipt wording is already honest | C8, M6.4 |
 | S8 | Prompt injection cannot override rules or expose another session | Missing | No LLM in the loop yet; no fixtures | M5.4 |
 | S9 | Incident response and access audit trails | Partial | Audit events exist. No incident plan | **M6.6 new** |
 
@@ -183,7 +187,7 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
 | E0 | Supplied baseline preserved as a reproducible benchmark and rejected for serving | Partial | Results stored and checked against the figures; not re-run here; not wired into serving | M4.1 |
-| E1 | Confirm rights, provenance, label origin, populations, feature meanings | External | Unknown for all six archives | M4.2 |
+| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Owner states the data are real and original (E30) and that feature meanings are to be derived from the data (E34). No written provenance; label origin unknown (D-O1) | M2.7, M4.2 |
 | E2 | Review mappings; exact and near-duplicate clusters; group by identity where available | Partial | Exact and profile clusters done | M1.7; M2.5, M4.3 |
 | E3 | Archive 15 original test kept untouched; overlap audited; contaminated result reported separately | Partial | Overlap audited and flagged (27,910 shared profiles) | M1.7; M4.3 |
 | E4 | Train, validation, separate calibration and untouched test; transforms fitted on training only; clusters kept together | Missing | | M4.3, M4.4 |
@@ -191,12 +195,12 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | E5 | Leave-source-out and external clinician-adjudicated tests | Missing / External | | M4.5 (widened), M6.2 |
 | E6 | Selection on validation only; calibration and abstention on their own partition; freeze before final test | Missing | | M4.5 |
 | E7 | Class support and cluster-bootstrap confidence intervals; sparse slices marked inconclusive | Missing | Baseline has none | M4.5 |
-| E8 | Urgency evaluated separately with adjudicated labels | External | Disease labels must not stand in for urgency | M6.2, M6.3 |
+| E8 | Urgency evaluated separately with adjudicated labels | External | No urgency labels exist. Urgency rules will be drafted by the assistant on the owner's instruction (E39), which is not the same as adjudicated labels | M2.10, M6.2 |
 | N1 | Next experiment: verify zero semantics and label origins | Missing | | M2.7, M4.2 |
 | N2 | Next: inspect feature relationships and source artefacts (accuracy rises when features are hidden; falls with more data) | Missing | | M4.2 |
 | N3 | Next: regularised linear baseline and boosted challenger on controlled splits | Missing | | M4.4 |
 | N4 | Next: evaluate missingness explicitly | Missing | | M4.5 |
-| N5 | Next: separately adjudicated external case set | External | | M6.2 |
+| N5 | Next: separately adjudicated external case set | External | Owner will supply it; split once into training and held-out parts (E35) | M4.3, M6.2 |
 | N6 | Next: calibrate and test abstention on dedicated partitions; study error families before adding complexity | Missing | | M4.5, M4.6 |
 | Plots | Learning curves, confusion matrix, per-class precision/recall/support, reliability, risk-coverage, by source/age/sex/missingness, under/over-triage, retrieval recall/nDCG, latency/cost; unavailable shown as unavailable | Missing | Only the handoff's baseline charts exist | M4.6, M5.5, M6.3 |
 | G1 | Gate: zero detected split overlap | Missing | | M4.3 |
@@ -205,7 +209,7 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | G4 | Gate: ownership tests pass; stale versions rejected; incomplete never reassurance | Done | | M3.3 |
 | G5 | Gate: unapproved rules cannot run in clinical mode | Done | Refused at load time; tested | M3.1 |
 | G6 | Gate: no secrets or raw sessions in public artefacts | Done | Ignore rules, CI check, secret scanning | M0.8 |
-| G7 | Clinical gates: named owner, representative cases, protocol, thresholds | External | | M6 |
+| G7 | Clinical gates: named owner, representative cases, protocol, thresholds | Decided | Owner decision E36: no clinical gates or thresholds, a single release. The evaluation is still shown to the owner before go-live (E40) | M6.3, M6.7 |
 | Self-learning | Product and models learn and evolve (owner, 2026-11-16) | Missing | Planned | L |
 
 ## 5. Test and evaluation layers (`docs/01` §8)
@@ -254,12 +258,12 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | Milestone | Acceptance | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
-| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | "Preserve original values": feature values and list fields not loaded; text files not chunked | M1.8 – M1.13 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Matrix feature values are loaded (M1.8). Symptom text and lists not parsed; text files not chunked; no disease–feature evidence | M1.9 – M1.13 |
 | M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |
 | M5 | Missing evidence abstains; explanation cannot change urgency or add a candidate; no private text in telemetry | Missing | All (abstention on missing evidence is done) | M5 |
-| M6 | Documented release decision with evidence and residual risks | External | All | M6 |
+| M6 | Documented release decision with evidence and residual risks | Missing | Reshaped by owner decisions E36, E37, E45: one go-live decision by the owner; not going live for now | M6.1 – M6.7 |
 | M7 | Each expansion with its own contract, consent, scope, evaluation, rollback | Missing | | M7 |
 | Cost | Cost worksheet per session and per month | Missing | | M6.5 |
 
@@ -287,16 +291,16 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 
 | Ref | Requirement | Status | Sub-step |
 |---|---|---|---|
-| O1 | Named clinical owner, intended-use statement, regulatory assessment, incident reporting | External | M6.1, M6.6 |
-| O2 | Dataset rights, provenance, real-or-synthetic determination | External | M4.2 |
-| O3 | Target population, supported conditions, languages | External | M6.1 |
-| O4 | Consent, retention, deletion, residency, provider data handling | External | L1, C8, M5.1, M6.4 |
-| O5 | Gold clinical test set, urgency labels, adverse-event review | External | M6.2 |
+| O1 | Named clinical owner, intended-use statement, regulatory assessment, incident reporting | External | Intended users decided (adults in India, English, E31). Nobody medically responsible is named (D-C2); harm reports are reviewed by the owner (E44) | M6.1, M6.6 |
+| O2 | Dataset rights, provenance, real-or-synthetic determination | Decided | Owner: real, original data (E30). No written record supplied | M4.2 |
+| O3 | Target population, supported conditions, languages | Decided | Owner: adults in India, English (E31). Supported conditions follow from the data | M6.1 |
+| O4 | Consent, retention, deletion, residency, provider data handling | Missing | Decided by the owner, not built: consent capture (E32), 30-day retention (E33), Claude API as provider (E46), own Cassandra in this repository (E47) | M3.16, C8, M5.1, C2 |
+| O5 | Gold clinical test set, urgency labels, adverse-event review | External | Owner agrees and will supply reference cases; harm reports reviewed by the owner (E44). Urgency labels do not exist | M6.2, M6.6 |
 | O6 | Accessibility, understandable uncertainty, unsupported-user behaviour | Partial | M3.15 |
 | O7 | Cost model, observability, rollback, release gates, operational ownership | Missing | M0.9, M6.5, L9 |
 | O8 | Outcome feedback separating clinician-confirmed outcomes from user agreement | Missing | L2 |
 | O9 | Business incentives must not bias suggestions or urgency | Done (no referral or commercial feature exists) | — |
-| O10 | Name, domain, trademark clearance; security threat modelling | External / Missing | M6.6 |
+| O10 | Name, domain, trademark clearance; security threat modelling | Decided | Owner: the name is Feeltriva and no clearance check will be done (E43). Threat model not written | M6.6 |
 | O11 | GitNexus package pinned rather than an unpinned download | Missing | **G6 new** |
 
 ## 10. Owner's instructions after the handoff
@@ -310,6 +314,14 @@ Of 203 traced requirements, 73 are done. The largest missing blocks are the per-
 | U5 | One sub-step, commit and push, report with tests for the owner, then wait for go-ahead | In force | `CLAUDE.md` |
 | U6 | Backend and frontend kept running for the owner | In force | — |
 | U7 | Repository public on the owner's GitHub with description, topics, CI | Done | M0.8 |
+| U8 | Consent taken from users (E32) | Missing | M3.16 |
+| U9 | Conversations kept 30 days (E33) | Missing | C8 |
+| U10 | Feature meanings derived from the supplied data (E34) | Missing | M2.7 |
+| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Missing | M2.10 |
+| U12 | Claude API as the language model (E46) | Missing | M5.1 |
+| U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
+| U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |
+| U15 | External cases are also used for training, split once (E35) | Missing | M4.3 |
 
 ## 11. Sub-steps added by this trace
 
