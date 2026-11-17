@@ -1346,3 +1346,8 @@ limits of the graph.
 - A full run takes about six minutes, eight when other work uses the database.
 - The check says the data is loaded as the mapping table requires. It says nothing about
   clinical correctness: every mapping, statement, chunk and proposal is still `pending`.
+
+**Committed and indexed.** Code and documents committed as `1a104cc` and pushed; CI passed on
+both jobs (backend, web). The code graph was re-indexed at `1a104cc`: 4,713 nodes, 9,519 edges,
+272 flows, status up-to-date. This paragraph was added in a following documents-only commit,
+after which the index was refreshed again.
