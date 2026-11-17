@@ -85,7 +85,8 @@ def _load_file(
         )
         mappings = {int(i): (mapping_id, term) for i, mapping_id, term in cur.fetchall()}
         # Every row of the file is a source record; a malformed row is a record without a case.
-        cur.execute("SELECT count(*) FROM source_records WHERE source_id = %s", (sid,))
+        # Whole-file records (no row number) are provenance for aggregates and are not rows.
+        cur.execute("SELECT count(*) FROM source_records WHERE source_id = %s AND row_number IS NOT NULL", (sid,))
         records = cur.fetchone()[0]
     if not mappings:
         raise SystemExit(f"no column mappings for {archive}/{file}; run `load` (reference data) first")

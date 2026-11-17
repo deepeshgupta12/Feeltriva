@@ -20,6 +20,7 @@ command output, not estimated.
 | BUG-009 | M3.6 | Web: an explicit "None of these" answer shows the raw option value "none" under the detail | Open |
 | BUG-010 | M3.6 / M3.3 | "Not sure" on multiple-choice and free-text questions is sent in a form the API does not treat as uncertain (latent: no such question in the fixture) | Open |
 | BUG-011 | M1.8 | Feature loader refused any file that contains a malformed row | Fixed |
+| BUG-012 | M1.11 | Large aggregate failed: PostgreSQL could not resize a shared memory segment | Fixed |
 
 ## Entries
 
@@ -925,3 +926,133 @@ fixed before commit.
 **Not done.** The chunks are not reviewed and not split into atomic claims (M2.6). No
 embeddings and no approved-release filter for serving (M5.2). The review search exists as a
 command, not yet as a screen or API endpoint (M2.4).
+
+### M1.11 — Proposed disease–feature evidence
+
+**Handoff clauses applied** (checked before writing code):
+
+- `docs/04`: archive 13 `symptoms.csv` → "proposed disease_feature_evidence: narrative claim
+  first; extract atomic feature relations into review queue". Relationships: "Disease ↔
+  feature evidence … with source record or statement provenance".
+- `figures/data-relationships.png`: "These are different relationships; co-occurrence alone
+  is not clinical proof."
+- `docs/04` exports: "source-stratified occurrence counts may be produced with denominators and
+  unknowns, clearly identified as sample counts. Dataset composition, synthetic sampling and
+  duplicates can dominate those proportions." `docs/01` and `CLAUDE.md`: never call dataset
+  frequencies prevalence. `docs/01` §5: no information gain manufactured from unvalidated counts.
+- `specs/schema.sql`: every row needs a statement or a record; `frequency` between 0 and 1
+  with `frequency_denominator`.
+
+**Measured first (read-only).** 712 archive-13 symptom statements (82 diseases, 88,022
+characters); 961 lexical feature candidates, of which 223 are archive-15 questionnaire items
+that never occur in prose. Predicted: 586 mentions, 575 statement–feature pairs, 468 distinct
+disease–feature pairs; 1,961 source–disease combinations for the counts.
+
+**Impact analysis before editing.**
+
+| Symbol | Action | Risk | Callers |
+|---|---|---|---|
+| `main` (ingestion CLI) | modified: `load-evidence` | LOW | 1 |
+| `summarise` (cases.py) | modified: count row-level records only | LOW | `load_cases` |
+| `_load_file` (features.py) | modified: same clause in its precondition | LOW | `load_case_features` |
+| `_require_loaded` (lists.py) | modified: same clause | **HIGH** | `_load_list_file`, `check_declared_counts` |
+
+The HIGH result was reported to the owner before editing with the plan for both callers. The
+change was needed because a co-occurrence count comes from a whole file, the schema requires a
+record as provenance, and the new whole-file record must not be counted as a data row.
+`detect_changes` before commit listed exactly these four functions.
+
+**Implemented.** `pipelines/ingestion/feeltriva_ingestion/evidence.py` and the command
+`uv run python -m feeltriva_ingestion load-evidence`. Two kinds of proposal, kept apart:
+
+- `narrative_lexical_mention` — a known feature term occurs in a symptom statement about a
+  disease. Whole phrases only, case-insensitive, the longest term wins (so "chest pain" does
+  not also propose "pain" for the same words). Provenance is the statement; the text span, the
+  matched wording, the number of mentions and whether a negation cue appears earlier in the
+  same sentence are stored. A mention is recorded as a mention, not as "the disease has it".
+- `dataset_cooccurrence` — within one source file, the number of cases with a disease label
+  that also have the feature affirmed, with the number of cases with that label as the
+  denominator. Stored beside it: the distinct profiles and the exact-duplicate rows behind the
+  denominator, the cases with conflicting column values, and explicit markers that it is a
+  sample count, not prevalence, and that sources are not pooled. Provenance is a whole-file
+  record of that source. A feature reached through several columns of one file is counted once
+  per case. Pairs that never occur get no row.
+
+Everything is `pending`. Nothing is served and nothing is used for ranking.
+
+**Result** (2026-11-17, 783 s):
+
+| Kind | Rows | Distinct disease–feature pairs | Not pending | Without provenance |
+|---|---:|---:|---:|---:|
+| Narrative mentions | 575 | 468 | 0 | 0 |
+| Per-source co-occurrence | 21,484 | 14,010 | 0 | 0 |
+| **Total** | **22,059** | | 0 | 0 |
+
+| Source file | Pairs | Sum of "cases with feature" | Affirmed feature rows (independent count) |
+|---|---:|---:|---:|
+| Archive 11 matrix | 6,310 | 2,852,472 | 2,852,472 |
+| Archive 12 `data.csv` | 5,321 | 1,316,921 | 1,316,921 |
+| Archive 12 symptom text | 2,627 | 1,081,459 | 1,081,459 |
+| Archive 14 lists | 840 | 125,036 | 125,036 |
+| Archive 15 `test.csv` | 881 | 2,093,631 | 2,093,631 |
+| Archive 15 `train.csv` | 882 | 7,269,777 | 7,269,777 |
+| Archive 16 matrix | 4,623 | 789,744 | 789,744 |
+
+- For every file the co-occurrence counts add up exactly to the affirmed feature rows loaded in
+  M1.8 and M1.9, counted by a separate query with no label join.
+- Direct check of one pair: in archive 14, 164 of the 858 cases labelled "allergy" have
+  "fever" affirmed (counted row by row); the stored proposal says 164 of 858.
+- Narrative: 283 of the 712 statements mention at least one known term; the measurement was
+  reproduced exactly (586 mentions, 575 proposals, 468 pairs). Most proposed: fever 37,
+  vomiting 24, weight loss 21, nausea 20, fatigue 20.
+- The same disease–feature pair appears once per source where it occurs (21,484 rows for
+  14,010 pairs); the sources are never added together.
+- New data facts: in archive 16, 114 columns share a lexical feature with another column of
+  the same file (the 74 repeated-header columns plus 40 whose different header strings
+  normalise to the same term); 1,636 pairs were recounted per distinct case. No archive-16
+  case has the same feature affirmed in two columns without a conflict.
+
+**Limits to read with these numbers.**
+
+- The negation flag only says a cue such as "no", "not" or "without" occurs earlier in the
+  sentence. It fired for 11 proposals, including "Without treatment, symptoms – particularly
+  the fever – can …", where fever is not negated. It is a hint for the reviewer, not a
+  judgement.
+- A mention under a disease is not a claim that the disease causes the feature.
+- The co-occurrence shares describe the files. With unreviewed sampling and duplicates they say
+  nothing reliable about real frequency; archive 12 `data.csv` alone has 57,305 duplicate rows.
+- Feature meaning is still unclassified, so a "feature" may be a history or risk question
+  (archive 15), not a symptom.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 37 files |
+| `uv run pytest -m "not archives"` (SQLite) | 109 passed, 27 skipped |
+| same on PostgreSQL | 136 passed |
+| `uv run pytest tests/ingestion/test_evidence.py` on PostgreSQL | 6 passed |
+| `load-cases --files Healthcare.csv` on real data, with a whole-file record present | 25,000 records, "matches manifest" |
+| `detect_changes` before commit | the four declared functions only |
+
+The six new tests: longest term wins and whole words only; negation cue per sentence;
+co-occurrence with a repeated column, a conflict and an exact duplicate (0.75, 0.5 and 1.0
+with denominators 4, 4 and 1); narrative proposals tied to the symptom statement only, with
+spans; rerun inserts nothing and the three modified loaders still accept the file; every row
+pending with provenance.
+
+**Bugs.**
+
+- **BUG-012 — shared memory.** The first real run failed after 1 min 49 s with
+  `could not resize shared memory segment … No space left on device (parallel worker)`. It ran
+  in one transaction, so nothing was written and the server did not restart. *Cause:* Docker
+  gives a container 64 MB of `/dev/shm` by default; PostgreSQL parallel queries build their
+  shared hash tables there. *Resolution:* `shm_size: "2gb"` on the PostgreSQL service.
+  *Verified:* `/dev/shm` reports 2.0 G; the same run then completed in 783 s.
+- Test-only: one new test hard-coded a character position that I had counted wrong (53
+  instead of 54); the code was right. The test now computes the position.
+
+**Not done.** Proposals are not reviewed and not split into atomic claims (M2.6). No approved
+view of edges (M2.9). Mentions were extracted from archive 13's symptom statements only, as
+the mapping table specifies; descriptions, causes and the 3,651 text chunks were not scanned.

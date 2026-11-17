@@ -60,7 +60,8 @@ def list_files(manifest: Manifest) -> list[dict[str, Any]]:
 
 
 def _require_loaded(cur: Any, sid: str, label: str, expected_rows: int) -> None:
-    cur.execute("SELECT count(*) FROM source_records WHERE source_id = %s", (sid,))
+    # Row-level records only: a whole-file record (no row number) is provenance, not a row.
+    cur.execute("SELECT count(*) FROM source_records WHERE source_id = %s AND row_number IS NOT NULL", (sid,))
     records = cur.fetchone()[0]
     if records != expected_rows:
         raise SystemExit(

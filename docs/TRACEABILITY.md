@@ -21,12 +21,12 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M1.10 (2026-11-17).
+Last updated after sub-step M1.11 (2026-11-17).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
-| Data | 43 | 11 | 6 | 0 | 0 |
+| Data | 45 | 10 | 5 | 0 | 0 |
 | Architecture | 11 | 14 | 9 | 0 | 0 |
 | Model training and testing | 5 | 4 | 13 | 2 | 1 |
 | Test and evaluation layers | 0 | 9 | 2 | 0 | 0 |
@@ -34,9 +34,9 @@ Last updated after sub-step M1.10 (2026-11-17).
 | Backlog milestones | 2 | 2 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **88** | **63** | **44** | **4** | **4** |
+| **Total** | **90** | **62** | **43** | **4** | **4** |
 
-Of 203 traced requirements, 88 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the remaining ingestion targets (disease–feature evidence, object storage, completeness check).
+Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -96,7 +96,7 @@ Of 203 traced requirements, 88 are done and 4 were closed by an owner decision. 
 | T9 | 13 `summary` → `statements(description)` | Done | 85 | M1.4 |
 | T10 | 13 `word_count`, `url` → raw metadata, `source_url` | Done | URL kept; `word_count` recorded beside the description statement and on each chunk; it equals the measured word count of the body in all 85 files | M1.4, M1.10 |
 | T11 | 13 `causes.csv` joined on native ID, name checked | Done | 714; no mismatch | M1.4 |
-| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; **no evidence proposals** | M1.4; M1.11 |
+| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Done | 712 statements; 575 pending proposals where a known feature term is mentioned, each tied to its statement with the text span. A mention is not an assertion; atomic claims are M2.6 | M1.4, M1.11; M2.6 |
 | T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
 | T14 | 13 text files → records; chunks after review with offsets | Done | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served | M1.3, M1.10 |
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
@@ -123,7 +123,7 @@ Of 203 traced requirements, 88 are done and 4 were closed by an owner decision. 
 | R4 | Source record → imported case | Done | M1.7 |
 | R5 | Case ↔ disease | Done | M1.7 |
 | R6 | Case ↔ feature | Done (16,013,976 rows: 14,807,481 from matrix files, 1,206,495 from lists) | M1.8, M1.9 |
-| R7 | **Disease ↔ feature evidence** | **Missing** | M1.11 |
+| R7 | Disease ↔ feature evidence | Done as pending proposals (22,059 rows: 575 narrative mentions, 21,484 per-source co-occurrence counts with denominators; none approved) | M1.11; M2.5, M2.9 |
 | R8 | Disease → narrative statements | Done | M1.4, M1.5 |
 | R9 | Statement ↔ source record | Done | M1.4, M1.5 |
 | R10 | Knowledge release → evidence chunks | Done (pending release `knowledge-import-0` with 3,651 chunks; no approved release exists) | M1.10; M2.5 |
@@ -135,7 +135,7 @@ Of 203 traced requirements, 88 are done and 4 were closed by an owner decision. 
 | Ref | Export / view | Status | Sub-step |
 |---|---|---|---|
 | X1 | `reviewed_disease_catalog` | Missing | **M2.9 new** |
-| X2 | `reviewed_disease_feature_edges` | Missing | M1.11; **M2.9 new** |
+| X2 | `reviewed_disease_feature_edges` | Missing (proposals exist since M1.11; the approved-only view does not) | M1.11; **M2.9 new** |
 | X3 | `reviewed_care_statements` | Partial (condition endpoint returns approved, sourced statements) | M2.2; **M2.9 new** |
 | X4 | `model_cases` | Missing | M4.3 |
 | X5 | `model_observations` (unknown is not false) | Missing | M1.8; M4.3 |
@@ -258,7 +258,7 @@ Of 203 traced requirements, 88 are done and 4 were closed by an owner decision. 
 | Milestone | Acceptance | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
-| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Feature values, symptom lists and narrative chunks are loaded (M1.8 – M1.10). No disease–feature evidence; raw archives not in object storage; no completeness command | M1.11 – M1.13 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Feature values, symptom lists, narrative chunks and evidence proposals are loaded (M1.8 – M1.11). Raw archives not in object storage; no completeness command | M1.12, M1.13 |
 | M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |

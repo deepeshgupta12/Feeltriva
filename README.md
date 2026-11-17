@@ -101,6 +101,7 @@ uv run python -m feeltriva_ingestion load-features  # 14.8 M feature values (zer
 uv run python -m feeltriva_ingestion load-lists     # 1.2 M listed symptoms + declared-count checks (about 12 min)
 uv run python -m feeltriva_ingestion load-chunks    # 85 narrative files -> 3,651 pending chunks (seconds)
 uv run python -m feeltriva_ingestion search-text "night cough wheezing"   # review search over pending text
+uv run python -m feeltriva_ingestion load-evidence  # pending disease–feature proposals (about 13 min)
 ```
 
 ### MCP
@@ -117,7 +118,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | Step | State |
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
-| M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows and 3,651 narrative chunks (pending, full-text searchable) done. **Not done: disease–feature evidence, object storage, completeness check** (M1.11 – M1.13) |
+| M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks and 22,059 pending disease–feature evidence proposals done. **Not done: raw archives in object storage, completeness check** (M1.12, M1.13) |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |

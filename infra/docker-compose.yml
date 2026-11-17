@@ -9,6 +9,10 @@ services:
     # that orphan exiting with a code other than 0 or 1 as a crash: it then terminates every
     # connection and restarts. That happened twice during bulk loads (engineering log, BUG-005).
     init: true
+    # Docker's default /dev/shm is 64 MB. PostgreSQL parallel queries allocate their shared hash
+    # tables there, and a large aggregate fails with "could not resize shared memory segment ...
+    # No space left on device" (engineering log, BUG-012).
+    shm_size: "2gb"
     # Development settings for bulk dataset loads. Not production tuning.
     command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_wal_size=2GB", "-c", "checkpoint_timeout=10min", "-c", "maintenance_work_mem=256MB"]
     environment:

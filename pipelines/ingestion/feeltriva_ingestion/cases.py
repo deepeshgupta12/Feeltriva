@@ -277,7 +277,8 @@ def summarise(cur: Any, sid: str) -> dict[str, int]:
                   count(*) FILTER (WHERE c.duplicate_status = 'repeated_profile'),
                   count(*) FILTER (WHERE r.quality_flags @> %s::jsonb),
                   count(*) FILTER (WHERE r.quality_flags @> '["malformed_row"]'::jsonb)
-           FROM source_records r LEFT JOIN dataset_cases c USING (record_id) WHERE r.source_id = %s""",
+           FROM source_records r LEFT JOIN dataset_cases c USING (record_id)
+           WHERE r.source_id = %s AND r.row_number IS NOT NULL""",
         (json.dumps([SPLIT_FLAG]), sid),
     )
     keys = (

@@ -1,4 +1,4 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|load-evidence}"""
 
 from __future__ import annotations
 
@@ -16,7 +16,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="feeltriva_ingestion")
     parser.add_argument(
         "command",
-        choices=["verify", "audit", "load", "load-cases", "load-features", "load-lists", "load-chunks", "search-text"],
+        choices=[
+            "verify",
+            "audit",
+            "load",
+            "load-cases",
+            "load-features",
+            "load-lists",
+            "load-chunks",
+            "search-text",
+            "load-evidence",
+        ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
@@ -148,6 +158,28 @@ def main() -> int:
                 )
             print(f"{len(hits)} result(s)")
             return 0
+        if args.command == "load-evidence":
+            from .evidence import check as check_evidence
+            from .evidence import load_evidence
+
+            result = load_evidence()
+            print(f"narrative mentions: {result['narrative']}")
+            cooccurrence = result["cooccurrence"]
+            print(
+                f"co-occurrence: inserted {cooccurrence['proposals_inserted']}, "
+                f"recounted for repeated columns {cooccurrence['pairs_recounted_for_repeated_columns']}"
+            )
+            for name, source in cooccurrence["per_source"].items():
+                print(f"  {name}: {source}")
+            print(f"stored: {result['stored']}")
+            diffs = check_evidence(result)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + ("consistent; every row is a pending proposal" if not diffs else f"{len(diffs)} differences")
+            )
+            return 1 if diffs else 0
         from .load import load_reference
 
         for table, (inserted, total) in load_reference(args.raw_dir).items():
