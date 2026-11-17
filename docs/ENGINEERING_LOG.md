@@ -835,3 +835,93 @@ missing cases.
 **Not done.** Whether each term is a symptom, sign or something else (M2.7). The original list
 text is reachable through the row locator in the archive, not copied into the database; the
 archives themselves are not yet in object storage (M1.12).
+
+### M1.10 — Narrative text files as pending, searchable knowledge chunks
+
+**Handoff clauses applied** (checked before writing code):
+
+- `docs/04`: archive 13 text files → "source_records; statements/evidence_chunks after review.
+  Preserve text, URL, extraction version, character offsets and attribution". `category` →
+  "preserve original; do not trust as an approved taxonomy". `word_count` → "a source
+  attribute, not an evidence score".
+- `docs/01` §6: "chunk along clinical section boundaries … text offsets … maintain parent
+  document links"; raw dataset text kept apart from reviewed clinical references.
+- `specs/schema.sql`: `evidence_chunks` requires a knowledge release and a record or
+  statement; `search_vector` with a GIN index. `docs/05` M2: pending content cannot be served.
+
+**Measured first (read-only).** All 85 files start with a `Disease` / `Category` / `URL`
+header that agrees exactly with `diseases_main.csv`; file names map one-to-one to disease
+names. Bodies use wiki-style headings (3,143 in total, 8 to 69 per file, four levels). The
+`word_count` column equals the number of words in the body for all 85 files. Total 3,881,305
+characters; one paragraph in four is longer than 1,500 characters.
+
+**Impact analysis before editing.** `main` of the ingestion CLI (modified): LOW. `verify_all`
+(called only): **CRITICAL**, six direct callers. `disease_candidate_id` and `source_id`
+(called only): HIGH. All three reported to the owner and left unchanged. New: `chunks.py`, a
+test file. No migration: the table and its search index exist since `0001`.
+
+**Implemented.** `pipelines/ingestion/feeltriva_ingestion/chunks.py` and two commands:
+`load-chunks` and `search-text "<words>"`.
+
+- A chunk is a run of whole paragraphs inside one section, at most 2,000 characters; a longer
+  paragraph is cut at sentence ends. Heading lines are metadata (the section path), not chunk
+  text. Offsets are character positions in the file as stored, so the slice of the file at
+  `[char_start, char_end)` is exactly the chunk.
+- Each chunk records: file, document SHA-256, extraction version `sections-1`, offsets, section
+  path and level, the disease label with its lexical candidate ID and native ID, the source
+  URL, the category as supplied under the name `source_category_unreviewed`, declared and
+  measured word counts, and whether the section is a reference list.
+- All chunks belong to knowledge release `knowledge-import-0`, status `pending`, with a
+  full-text vector (`english`). The load refuses a file whose digest differs from the manifest.
+- The disease table's 85 records are flagged `source_category_unreviewed`, and `word_count` is
+  recorded beside each description statement.
+- `search-text` is a review tool: it searches pending text on purpose, says so in its output,
+  and hides reference-list sections by default. Nothing in the patient-facing service reads
+  `evidence_chunks`.
+
+**Result** (2026-11-17):
+
+| Measure | Value |
+|---|---:|
+| Files chunked | 85 of 85 |
+| Chunks | 3,651 (12 to 75 per file) |
+| Characters in chunks | 3,771,105 |
+| Body characters in no chunk | 0 |
+| Longest chunk | 2,000 characters |
+| Chunks in reference-list sections | 123 |
+| Chunks with a search vector | 3,651 |
+| Knowledge releases not `pending` | 0 |
+| Header, digest or word-count mismatches | 0 |
+
+- Independent check: every one of the 3,651 stored chunks was re-read from the original
+  archive using its stored offsets; all 3,651 were identical.
+- Search check: `search-text "night cough wheezing"` returns asthma, section "Signs and
+  symptoms", with the release shown as pending.
+- The category anomaly named in the handoff is preserved, not corrected: asthma's chunks carry
+  `source_category_unreviewed = "Mental Health"`.
+- Load takes 9 seconds; a rerun inserts and flags nothing.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 36 files |
+| `uv run pytest -m "not archives"` (SQLite) | 107 passed, 23 skipped |
+| same on PostgreSQL | 130 passed |
+| `uv run pytest tests/ingestion/test_chunks.py` on PostgreSQL, with archives | 6 passed |
+| `verify` and `load` re-run (shared entry point) | succeed; 0 rows inserted |
+| `detect_changes` before commit | only `main` of the ingestion CLI among existing symbols |
+
+The six new tests: section paths and sibling headings; offsets reproduce the text with Windows
+line endings; a long paragraph cut at sentence ends; empty sections; reference lists marked;
+a file without the header refused; all 85 real files fully covered; storage as pending with
+search vectors; search hides reference lists unless asked; rerun; a tampered file and missing
+records refused.
+
+**Bugs.** None in the application. One lint finding in a new test (`zip` without `strict`),
+fixed before commit.
+
+**Not done.** The chunks are not reviewed and not split into atomic claims (M2.6). No
+embeddings and no approved-release filter for serving (M5.2). The review search exists as a
+command, not yet as a screen or API endpoint (M2.4).

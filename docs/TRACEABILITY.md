@@ -21,22 +21,22 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M1.9 (2026-11-17).
+Last updated after sub-step M1.10 (2026-11-17).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
-| Data | 39 | 14 | 7 | 0 | 0 |
-| Architecture | 11 | 13 | 10 | 0 | 0 |
+| Data | 43 | 11 | 6 | 0 | 0 |
+| Architecture | 11 | 14 | 9 | 0 | 0 |
 | Model training and testing | 5 | 4 | 13 | 2 | 1 |
 | Test and evaluation layers | 0 | 9 | 2 | 0 | 0 |
 | Contracts and repository | 10 | 6 | 4 | 0 | 0 |
 | Backlog milestones | 2 | 2 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **84** | **65** | **46** | **4** | **4** |
+| **Total** | **88** | **63** | **44** | **4** | **4** |
 
-Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the remaining ingestion targets (narrative chunks, disease–feature evidence, object storage).
+Of 203 traced requirements, 88 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the remaining ingestion targets (disease–feature evidence, object storage, completeness check).
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -92,13 +92,13 @@ Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. 
 | T5 | 12 `data.csv` 377 columns → mappings, `case_features` | Done | 1,316,921 values loaded; zero meaning stays `unknown` | M1.3, M1.8 |
 | T6 | 12 `final_symptoms_to_disease.csv` → labels, records, parsed `case_features` | Done | 1,081,459 listed items parsed into 283 terms, all linked to existing candidates; rows never aligned with `data.csv` | M1.7, M1.9 |
 | T7 | 13 `id`, `name` → `original_id`, `original_label` | Done | 336 mappings carry the native ID | M1.3 |
-| T8 | 13 `category` → record metadata / review queue | Partial | Kept beside the description statement; not on the record, not queued | M1.10 |
+| T8 | 13 `category` → record metadata / review queue | Done | Kept as supplied on every chunk as `source_category_unreviewed` and beside the description statement; the 85 disease-table records are flagged for review. Example: asthma is still labelled "Mental Health" | M1.10 |
 | T9 | 13 `summary` → `statements(description)` | Done | 85 | M1.4 |
-| T10 | 13 `word_count`, `url` → raw metadata, `source_url` | Partial | URL kept; `word_count` not stored | M1.10 |
+| T10 | 13 `word_count`, `url` → raw metadata, `source_url` | Done | URL kept; `word_count` recorded beside the description statement and on each chunk; it equals the measured word count of the body in all 85 files | M1.4, M1.10 |
 | T11 | 13 `causes.csv` joined on native ID, name checked | Done | 714; no mismatch | M1.4 |
 | T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; **no evidence proposals** | M1.4; M1.11 |
 | T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
-| T14 | 13 text files → records; chunks after review with offsets | Partial | 85 registered by hash; **text not chunked** | M1.10 |
+| T14 | 13 text files → records; chunks after review with offsets | Done | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served | M1.3, M1.10 |
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
 | T16 | 14 `Age` numeric, unit unconfirmed | Done | Unit left empty | M1.7 |
 | T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |
@@ -126,7 +126,7 @@ Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. 
 | R7 | **Disease ↔ feature evidence** | **Missing** | M1.11 |
 | R8 | Disease → narrative statements | Done | M1.4, M1.5 |
 | R9 | Statement ↔ source record | Done | M1.4, M1.5 |
-| R10 | Knowledge release → evidence chunks | Missing | M1.10 |
+| R10 | Knowledge release → evidence chunks | Done (pending release `knowledge-import-0` with 3,651 chunks; no approved release exists) | M1.10; M2.5 |
 | R11 | Session → observations, answers, assessments | Done (moving to Cassandra) | M3.3; C |
 | R12 | Assessment → model, rules, knowledge releases | Partial (IDs recorded; no real releases) | M3.3; M2.5, L9 |
 
@@ -139,7 +139,7 @@ Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. 
 | X3 | `reviewed_care_statements` | Partial (condition endpoint returns approved, sourced statements) | M2.2; **M2.9 new** |
 | X4 | `model_cases` | Missing | M4.3 |
 | X5 | `model_observations` (unknown is not false) | Missing | M1.8; M4.3 |
-| X6 | `retrieval_corpus` | Missing | M1.10; M5.2 |
+| X6 | `retrieval_corpus` | Missing (chunks exist with full-text vectors; the approved-only export does not) | M1.10; M5.2 |
 | X7 | `session_summary` | Done | M3.3 |
 | X8 | No combined male/female prevalence export | Done (none exists) | — |
 
@@ -150,7 +150,7 @@ Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. 
 | A1 | Frontend: React + TypeScript, accessible primitives | Done | Built here, not by Lovable (E22) | M3.6 |
 | A2 | API: Python 3.12, FastAPI, Pydantic, SQLAlchemy, Alembic | Done | | M0, M3.3 |
 | A3 | Explicit state machine | Done | | M3.3 |
-| A4 | PostgreSQL + **pgvector** + **full-text search** | Partial | PostgreSQL in use. Vector extension not enabled; no search vectors | M1.10, M5.2 |
+| A4 | PostgreSQL + **pgvector** + **full-text search** | Partial | PostgreSQL in use; full-text search vectors now populated for the narrative chunks (M1.10). Vector extension not enabled; no embeddings | M1.10; M5.2 |
 | A5 | Private object storage with versioning and encrypted backups | Missing | MinIO defined in Compose, never started | M1.12 |
 | A6 | Redis + worker queue for ingestion, embeddings, training, reports | Missing | Redis defined, never started; loaders run as commands | L7 |
 | A7 | Provider-neutral AI gateway, Anthropic adapter first | Partial | Interface and mock only | M5.1 |
@@ -171,7 +171,7 @@ Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. 
 | P8 | Pipeline 8: compose with cited evidence; validate every cited ID and scope | Partial | Citation existence validated; no composed explanation | M3.3; M5.1, M5.3 |
 | P9 | Pipeline 9: check no contradiction with urgency/action; fall back to reviewed template | Missing | No generated explanation yet, so nothing to check | M5.3 |
 | P10 | Pipeline 10: persist assessment version and redacted audit | Done | | M3.3 |
-| RAG | Chunking by clinical section, filters, hybrid retrieval, rerank, one bounded hop, claim-to-evidence IDs, abstain without context | Missing | | M1.10, M5.2, M5.3 |
+| RAG | Chunking by clinical section, filters, hybrid retrieval, rerank, one bounded hop, claim-to-evidence IDs, abstain without context | Partial | Section-bounded chunks with offsets, disease IDs, source URL and parent-document link exist (M1.10), with a review-only full-text search. No filters by approved release, no vectors, reranking, graph hop or claim validation | M1.10; M5.2, M5.3 |
 | S1 | Ownership checks on every read, write, export | Done | Service + forced row-level security; tested | M3.3, M0.4 |
 | S2 | Remote MCP: OAuth, audience validation, least-privilege scopes | Missing | | **M3.11 new** |
 | S3 | Tool arguments untrusted; no SQL, shell or URL fetch | Done | | M3.5 |
@@ -258,7 +258,7 @@ Of 203 traced requirements, 84 are done and 4 were closed by an owner decision. 
 | Milestone | Acceptance | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
-| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Feature values and symptom lists are loaded (M1.8, M1.9). Text files not chunked; no disease–feature evidence; raw archives not in object storage; no completeness command | M1.10 – M1.13 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Feature values, symptom lists and narrative chunks are loaded (M1.8 – M1.10). No disease–feature evidence; raw archives not in object storage; no completeness command | M1.11 – M1.13 |
 | M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |

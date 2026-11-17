@@ -1,4 +1,4 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text}"""
 
 from __future__ import annotations
 
@@ -14,7 +14,11 @@ from .audit import compare, run_audit
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="feeltriva_ingestion")
-    parser.add_argument("command", choices=["verify", "audit", "load", "load-cases", "load-features", "load-lists"])
+    parser.add_argument(
+        "command",
+        choices=["verify", "audit", "load", "load-cases", "load-features", "load-lists", "load-chunks", "search-text"],
+    )
+    parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "derived" / "ingestion_audit.json")
     parser.add_argument("--files", nargs="+", help="load-cases / load-features: only these file names (default: all)")
@@ -113,6 +117,37 @@ def main() -> int:
                 + ("consistent with the files" if not diffs else f"{len(diffs)} differences")
             )
             return 1 if diffs else 0
+        if args.command == "load-chunks":
+            from .archives import load_manifest
+            from .chunks import TEXT_ARCHIVE, load_chunks
+            from .chunks import check as check_chunks
+
+            totals = load_chunks(args.raw_dir)
+            print({k: v for k, v in totals.items() if not isinstance(v, list)})
+            expected = sum(1 for entry in load_manifest().text_files if entry["archive"] == TEXT_ARCHIVE)
+            diffs = check_chunks(totals, expected)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + ("consistent with the files and the manifest" if not diffs else f"{len(diffs)} differences")
+            )
+            return 1 if diffs else 0
+        if args.command == "search-text":
+            from .chunks import search_chunks
+
+            if not args.query:
+                parser.error('search-text needs a query, for example: search-text "night cough wheezing"')
+            hits = search_chunks(None, args.query)
+            print("Review search over PENDING imported text. Not served to users; not reviewed medical content.")
+            for hit in hits:
+                section = " > ".join(hit["section_path"]) or "(lead)"
+                print(
+                    f"[{hit['rank']}] {hit['disease']} | {section} | release {hit['release_status']} "
+                    f"| chars {hit['char_start']}-{hit['char_end']}\n    {hit['snippet']}"
+                )
+            print(f"{len(hits)} result(s)")
+            return 0
         from .load import load_reference
 
         for table, (inserted, total) in load_reference(args.raw_dir).items():
