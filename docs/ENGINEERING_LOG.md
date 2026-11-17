@@ -21,6 +21,8 @@ command output, not estimated.
 | BUG-010 | M3.6 / M3.3 | "Not sure" on multiple-choice and free-text questions is sent in a form the API does not treat as uncertain (latent: no such question in the fixture) | Open |
 | BUG-011 | M1.8 | Feature loader refused any file that contains a malformed row | Fixed |
 | BUG-012 | M1.11 | Large aggregate failed: PostgreSQL could not resize a shared memory segment | Fixed |
+| BUG-013 | M0.3 / M1.12 | The Compose `objectstore` service named an image that cannot be pulled | Fixed |
+| BUG-014 | M1.12 | New `store-archives` command was not registered in the CLI | Fixed before commit |
 
 ## Entries
 
@@ -1056,3 +1058,100 @@ pending with provenance.
 **Not done.** Proposals are not reviewed and not split into atomic claims (M2.6). No approved
 view of edges (M2.9). Mentions were extracted from archive 13's symptom statements only, as
 the mapping table specifies; descriptions, causes and the 3,651 text chunks were not scanned.
+
+### M1.12 — Raw archives in private object storage
+
+**Handoff clauses applied** (checked before writing code):
+
+- `docs/01` §4: four storage zones, the first being "raw immutable objects".
+- `docs/01` §6: "Object storage: S3-compatible private buckets, versioning and encrypted
+  backups. Raw ZIPs, manifests, model artifacts; no public medical files."
+- `docs/04`: every file → "retain the original byte object". `docs/03`: "keep artifacts/data
+  outside tracked source; store URI/checksum manifests in the repo". `docs/05` M0: Compose
+  with "private object storage"; M1: "register immutable source versions".
+
+**Checked before designing.** The Compose file from M0.3 named `minio/minio`. Pulling it
+failed: "repository does not exist". It is not on Quay either. Images that can be pulled
+today: SeaweedFS, Garage, versitygw, RustFS. versitygw v1.11.0 (built 2026-11-06, 35 MB) was
+read from its own `--help` output and then proven in a throwaway container with real
+requests: versioning could be enabled; two writes to one key kept two versions and the first
+came back byte-identical; anonymous requests and a wrong secret returned 403; the only access
+grant was the owner's. The probe container and its volumes were removed afterwards.
+
+**Impact analysis before editing.** `main` of the ingestion CLI (modified): LOW.
+`sha256_file` and `verify_all` (called only): **CRITICAL**; reported to the owner and left
+unchanged. Not covered by the code graph: `infra/docker-compose.yml`, `pyproject.toml` /
+`uv.lock` (new dependency `boto3` 1.44.4), a new migration, `.env.example`.
+
+**Implemented.**
+
+- `infra/docker-compose.yml`: the `objectstore` service is now versitygw, pinned by digest,
+  on `127.0.0.1:9010`, with a data volume and a versions volume and a health check. Start it
+  with `docker compose -f infra/docker-compose.yml --profile storage up -d objectstore`.
+- Migration `0005`: table `source_archives` (archive name, SHA-256, size, bucket, key, version,
+  URI, stored and verified times). The API's database role has no access to it.
+- `pipelines/ingestion/feeltriva_ingestion/objectstore.py` and the command
+  `uv run python -m feeltriva_ingestion store-archives`. It checks the local files against
+  the manifest first; creates the bucket and turns versioning on; stores each archive under a
+  key that contains its SHA-256; refuses to overwrite a key that holds other bytes; downloads
+  every stored archive again and hashes it; requests each object with no credentials and
+  fails if that succeeds; stores a copy of the ingestion manifest; registers each archive.
+- Source records keep their logical locator (`zip://<archive>#<member>:row=N`); the registry
+  maps the archive name to the stored object, so 1.37 million rows did not need rewriting.
+
+**Result** (2026-11-17, 2 s):
+
+| Archive | Bytes | Stored and re-read | Anonymous request |
+|---|---:|---|---|
+| `archive(11).zip` | 2,400,742 | verified | HTTP 403 |
+| `archive(12).zip` | 3,927,259 | verified | HTTP 403 |
+| `archive(13).zip` | 1,544,071 | verified | HTTP 403 |
+| `archive(14).zip` | 373,982 | verified | HTTP 403 |
+| `archive(15).zip` | 17,195,290 | verified | HTTP 403 |
+| `archive(16).zip` | 2,925,505 | verified | HTTP 403 |
+| **Total** | **28,366,849** | 6 of 6 | |
+
+- Independent check that uses none of this code: `sha256sum` run inside the storage container
+  on the six stored files gives exactly the six digests of `specs/ingestion_manifest.json`.
+- A rerun reports "already stored" for all six with the same version IDs and uploads nothing.
+- Bucket versioning is `Enabled`; an anonymous listing of the bucket returns 403.
+- The registry holds 6 rows, all with a verification time; `feeltriva_app` cannot read it.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 38 files |
+| `uv run pytest -m "not archives"` (SQLite) | 114 passed, 28 skipped |
+| same on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT` set | 142 passed |
+| `uv run pytest tests/ingestion/test_objectstore.py` with the real store | 6 passed |
+| Migration `upgrade head` → `downgrade base` → `upgrade head` on a scratch database | 29 tables → 0 → 29; main database untouched |
+| `verify` and `search-text` re-run (shared entry point) | succeed |
+| `detect_changes` before commit | only `main` of the ingestion CLI among existing symbols |
+
+The six tests: content-addressed keys; bucket creation with versioning; store, confirm
+without re-upload, refuse to overwrite other content, reject altered bytes on read-back;
+what an unauthenticated client receives; missing configuration refused; and against the real
+store: byte-for-byte retrieval, a rerun writing no new version, tampering from outside the
+loader detected while versioning still holds the original, and the registry row.
+
+**Bugs.**
+
+- **BUG-013 — unusable image in Compose.** The object store service written in M0.3 was
+  never started, and its image no longer exists. *Found by* pulling it at the start of this
+  sub-step. *Resolution:* replaced by versitygw (decision E48). *Lesson recorded:* a service
+  that has never been started is not delivered; M0.3's log entry had said so, but the plan
+  row was marked Done.
+- **BUG-014 — command not registered.** The first real run printed "invalid choice:
+  'store-archives'": my edit to the list of commands had not matched because the formatter
+  had re-wrapped that list. Nothing ran. *Resolution:* added the entry; *verified* by the
+  real run above.
+- Process slip, no effect on data: my first migration round-trip command never created the
+  scratch database because of a shell quoting error, so that run proved nothing. It was
+  repeated correctly; the result above is from the repeat.
+
+**Not done.** No backups of the object store and no encryption at rest (deployment, M0.10 and
+M6.4). The object store is not part of CI: the unit tests run there with an in-memory
+stand-in, and the real-store test runs locally. The Redis service in the same Compose file is
+still unstarted and unverified.

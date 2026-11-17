@@ -31,18 +31,26 @@ services:
       timeout: 20s
       retries: 20
 
-  # Private S3-compatible object storage for raw archives/manifests (no public buckets).
+  # Private S3-compatible object storage for the raw source archives (no public buckets).
+  # versitygw serves a directory over the S3 API with object versioning. It replaces MinIO,
+  # whose container images are no longer published (engineering log, BUG-013). The image is
+  # pinned by digest (v1.11.0). Start it with: --profile storage up -d objectstore
   objectstore:
-    image: minio/minio
-    command: server /data --console-address ":9001"
+    image: versity/versitygw@sha256:8319a530d08d537426e2f855bae5280709795dc73a3f0c347973ef915d6343c5
+    command: ["--port", ":7070", "posix", "--versioning-dir", "/versions", "/data"]
     environment:
-      MINIO_ROOT_USER: ${OBJECT_STORAGE_USER:-feeltriva}
-      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_PASSWORD:-feeltriva_dev_storage}
+      ROOT_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-feeltriva}
+      ROOT_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-feeltriva_dev_storage}
     ports:
-      - "127.0.0.1:9010:9000"
-      - "127.0.0.1:9011:9001"
+      - "127.0.0.1:9010:7070"
     volumes:
       - objectdata:/data
+      - objectversions:/versions
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "7070"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     profiles: ["storage"]
 
   # Optional queue/cache for future ingestion and embedding workers. Not session state.
@@ -55,3 +63,4 @@ services:
 volumes:
   pgdata:
   objectdata:
+  objectversions:

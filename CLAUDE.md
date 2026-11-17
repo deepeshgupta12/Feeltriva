@@ -110,6 +110,7 @@ Known limits of the graph in this repository (measured, see the engineering log,
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres      # local PostgreSQL on 127.0.0.1:5440
+docker compose -f infra/docker-compose.yml --profile storage up -d objectstore   # object store on 127.0.0.1:9010
 uv sync                                                        # Python 3.12 environment from uv.lock
 uv run alembic upgrade head                                    # migrations (MIGRATION_DATABASE_URL)
 uv run python -m feeltriva_api.seed                            # register the fixture release rows

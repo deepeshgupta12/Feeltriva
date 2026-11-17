@@ -14,6 +14,7 @@ dependencies = [
   "cryptography",
   "pyjwt[crypto]",
   "mcp",
+  "boto3>=1.44.4",
 ]
 
 [dependency-groups]

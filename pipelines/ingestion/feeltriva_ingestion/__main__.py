@@ -1,4 +1,4 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|load-evidence}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|load-evidence|store-archives}"""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ def main() -> int:
             "load-chunks",
             "search-text",
             "load-evidence",
+            "store-archives",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -178,6 +179,36 @@ def main() -> int:
             print(
                 f"{time.monotonic() - started:.0f}s; "
                 + ("consistent; every row is a pending proposal" if not diffs else f"{len(diffs)} differences")
+            )
+            return 1 if diffs else 0
+        if args.command == "store-archives":
+            from .objectstore import ObjectStoreError, store_archives
+            from .objectstore import check as check_store
+
+            try:
+                result = store_archives(args.raw_dir)
+            except ObjectStoreError as exc:
+                print(f"ERROR {exc}", file=sys.stderr)
+                return 2
+            print(f"bucket: {result['bucket']}")
+            for name, stored in result["archives"].items():
+                print(
+                    f"{name}: {'uploaded' if stored['uploaded'] else 'already stored'}, "
+                    f"{stored['size_bytes']} bytes, re-read and verified, version {stored['version_id']}, "
+                    f"anonymous request -> HTTP {stored['anonymous_http_status']}"
+                )
+            print(f"manifest copy: {'uploaded' if result['manifest']['uploaded'] else 'already stored'}")
+            print(f"registry: {result['registry']}")
+            diffs = check_store(result)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "all archives stored unchanged in a private, versioned bucket"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
             )
             return 1 if diffs else 0
         from .load import load_reference

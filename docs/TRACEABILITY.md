@@ -21,22 +21,22 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M1.11 (2026-11-17).
+Last updated after sub-step M1.12 (2026-11-17).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
-| Data | 45 | 10 | 5 | 0 | 0 |
-| Architecture | 11 | 14 | 9 | 0 | 0 |
+| Data | 46 | 9 | 5 | 0 | 0 |
+| Architecture | 11 | 15 | 8 | 0 | 0 |
 | Model training and testing | 5 | 4 | 13 | 2 | 1 |
 | Test and evaluation layers | 0 | 9 | 2 | 0 | 0 |
 | Contracts and repository | 10 | 6 | 4 | 0 | 0 |
 | Backlog milestones | 2 | 2 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **90** | **62** | **43** | **4** | **4** |
+| **Total** | **91** | **62** | **42** | **4** | **4** |
 
-Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
+Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -79,13 +79,13 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
 | D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping release, hashes, audit. No split manifest, no publishing | M1.2, M1.3; M4.3, M2.5 |
 | Demog. | Sex/gender counts are row counts, never combined as priors; identity, case ID, clinical sex context and gender identity kept separate | Done | Stored as supplied with the original field name; counts equal the handoff | M1.7 |
-| Zones | Four storage zones: raw immutable objects, normalised relational data, reviewed serving knowledge, private session data | Partial | Relational and session zones exist. Raw objects are not in object storage; no reviewed serving knowledge | M1.12, M2.5; C |
+| Zones | Four storage zones: raw immutable objects, normalised relational data, reviewed serving knowledge, private session data | Partial | Raw objects (M1.12), relational data and session data exist. No reviewed serving knowledge yet | M1.12; M2.5; C |
 
 ### 2.2 Source-to-target mapping table (`docs/04`)
 
 | Ref | Source field → target | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
-| T1 | All files → `sources`, `source_records`, original byte object retained | Partial | 13 sources, 1,368,400 records. Original objects not in storage | M1.3, M1.7; M1.12 |
+| T1 | All files → `sources`, `source_records`, original byte object retained | Done | 13 sources and every row as a record; the six original ZIPs are stored unchanged in a private, versioned bucket and registered with their SHA-256 in `source_archives` | M1.3, M1.7, M1.12 |
 | T2 | 11 `disease` → mappings, `case_labels` | Done | | M1.3, M1.7 |
 | T3 | 11 `symptom_*`, `rare_symptom_*` → `feature_mappings`, `case_features` | Done | 2,852,472 values loaded | M1.3, M1.8 |
 | T4 | 12 `data.csv` `diseases` | Done | | M1.3, M1.7 |
@@ -151,7 +151,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | A2 | API: Python 3.12, FastAPI, Pydantic, SQLAlchemy, Alembic | Done | | M0, M3.3 |
 | A3 | Explicit state machine | Done | | M3.3 |
 | A4 | PostgreSQL + **pgvector** + **full-text search** | Partial | PostgreSQL in use; full-text search vectors now populated for the narrative chunks (M1.10). Vector extension not enabled; no embeddings | M1.10; M5.2 |
-| A5 | Private object storage with versioning and encrypted backups | Missing | MinIO defined in Compose, never started | M1.12 |
+| A5 | Private object storage with versioning and encrypted backups | Partial | Private, versioned S3-compatible bucket running in the local stack and holding the six archives (versitygw, decision E48). No backups and no encryption at rest configured | M1.12; M0.10, M6.4 |
 | A6 | Redis + worker queue for ingestion, embeddings, training, reports | Missing | Redis defined, never started; loaders run as commands | L7 |
 | A7 | Provider-neutral AI gateway, Anthropic adapter first | Partial | Interface and mock only | M5.1 |
 | A8 | ML: scikit-learn and gradient boosting for validated experiments | Missing | | M4.4 |
@@ -258,7 +258,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | Milestone | Acceptance | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
-| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Feature values, symptom lists, narrative chunks and evidence proposals are loaded (M1.8 – M1.11). Raw archives not in object storage; no completeness command | M1.12, M1.13 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Everything is loaded and the raw archives are in object storage (M1.8 – M1.12). No single completeness command yet | M1.13 |
 | M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |
