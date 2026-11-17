@@ -31,7 +31,7 @@ from typing import Any
 from feeltriva_api.settings import Settings
 from sqlalchemy import Engine, create_engine
 
-from .archives import RAW_DIR, Manifest, load_manifest, read_csv_positional, verify_all
+from .archives import RAW_DIR, Manifest, load_manifest, read_csv_positional, require_layouts, verify_all
 from .audit import DISEASE_HEADERS, norm_label
 from .load import disease_candidate_id, source_id
 
@@ -311,6 +311,7 @@ def load_cases(
     manifest = manifest or load_manifest()
     verify_all(raw_dir, manifest)
     targets = [f for f in case_files(manifest) if only is None or f["file"] in only]
+    require_layouts(raw_dir, targets, (DISEASE_HEADERS,))  # a file whose columns changed is refused up front
     engine = create_engine(database_url)
     result: dict[str, Any] = {"files": {}, "summary": {}}
     for entry in targets:

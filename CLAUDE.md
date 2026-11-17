@@ -104,6 +104,11 @@ Known limits of the graph in this repository (measured, see the engineering log,
   (inherited methods called across package roots), and tests reach the service over HTTP, so
   they never appear as callers. Any change to a public `AssessmentService` method therefore
   also requires reading `services/mcp/feeltriva_mcp/server.py` and running `tests/mcp`.
+- `detect_changes` maps diff hunks to the line ranges of the last index, so code inserted in the
+  middle of a file makes every function below it look "touched" (measured in M1.13: `_h`,
+  `source_id` and `read_csv_positional` were listed although their bodies were identical). Add new
+  module-level code at the end of a file, and confirm any unexpected "touched" symbol against
+  `git diff` before accepting or dismissing it.
 - The index is local (`.gitnexus/` is ignored). Never run `gitnexus wiki` or publish the index.
 
 ### Commands
@@ -119,7 +124,12 @@ uv run ruff check . && uv run pytest                           # lint + tests on
 TEST_DATABASE_URL=postgresql+psycopg://feeltriva_app:feeltriva_app_dev@127.0.0.1:5440/feeltriva_test \
 TEST_MIGRATION_DATABASE_URL=postgresql+psycopg://feeltriva:feeltriva_dev@127.0.0.1:5440/feeltriva_test \
   uv run pytest                                                # same suite + RLS/concurrency on PostgreSQL
+uv run python -m feeltriva_ingestion completeness              # read-only: loaded data vs the handoff mapping table
 ```
+
+Run the PostgreSQL suite **without** `-m "not archives"` at least once per sub-step when the
+archives are in `data/raw/`: the real-archive tests were skipped that way from M1.7 to M1.12 and a
+failing one went unnoticed (BUG-015).
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

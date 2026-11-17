@@ -28,8 +28,8 @@ from typing import Any
 from feeltriva_api.settings import Settings
 from sqlalchemy import Engine, create_engine
 
-from .archives import RAW_DIR, Manifest, load_manifest, read_csv_positional, verify_all
-from .audit import norm_label
+from .archives import RAW_DIR, Manifest, load_manifest, read_csv_positional, require_layouts, verify_all
+from .audit import DISEASE_HEADERS, norm_label
 from .cases import _hash, _raw_cursor, case_files
 from .features import _flush
 from .load import RELEASE_ID, source_id
@@ -270,6 +270,7 @@ def load_symptom_lists(
     engine = create_engine(database_url)
     result: dict[str, Any] = {"files": {}, "summary": {}, "matrix_counts": {}}
     lists = [f for f in list_files(manifest) if only is None or f["file"] in only]
+    require_layouts(raw_dir, lists, (DISEASE_HEADERS, LIST_HEADERS))  # changed columns are refused up front
     for entry in lists:
         key = f"{entry['archive']}/{entry['file']}"
         result["files"][key] = _load_list_file(

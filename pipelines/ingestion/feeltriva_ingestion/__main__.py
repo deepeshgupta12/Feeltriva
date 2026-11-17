@@ -1,4 +1,5 @@
-"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|load-evidence|store-archives}"""
+"""CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
+load-evidence|store-archives|completeness}"""
 
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ def main() -> int:
             "search-text",
             "load-evidence",
             "store-archives",
+            "completeness",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -211,6 +213,32 @@ def main() -> int:
                 )
             )
             return 1 if diffs else 0
+        if args.command == "completeness":
+            from .completeness import OK, render, run_completeness
+
+            report = run_completeness(
+                args.raw_dir, progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True)
+            )
+            mismatches, deferred = report.mismatches, report.deferred
+            lines = [render(report), ""]
+            lines.extend(f"later    T{c.row} {c.measure}: {c.loaded} ({c.expected})" for c in deferred)
+            lines.extend(f"MISMATCH T{c.row} {c.measure}: expected {c.expected}, loaded {c.loaded}" for c in mismatches)
+            lines.append(
+                f"{len(report.checks)} checks over the {len(report.table)} rows of the mapping table and the M1 "
+                f"acceptance criteria: {sum(1 for c in report.checks if c.status == OK)} ok, {len(mismatches)} "
+                f"mismatches, {len(deferred)} left to a later sub-step; {time.monotonic() - started:.0f}s"
+            )
+            lines.append(
+                "Read-only. Idempotent reruns are covered by the test suite, not by this command. Everything "
+                "checked here is still pending review: this is a loading check, not clinical validation."
+            )
+            text = "\n".join(lines)
+            print(text)
+            out = args.out.with_name("ingestion_completeness.txt")
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text + "\n", encoding="utf-8")
+            print(f"report: {out}")
+            return 1 if mismatches else 0
         from .load import load_reference
 
         for table, (inserted, total) in load_reference(args.raw_dir).items():

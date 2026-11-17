@@ -21,22 +21,22 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M1.12 (2026-11-17).
+Last updated after sub-step M1.13 (2026-11-17).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
-| Data | 46 | 9 | 5 | 0 | 0 |
+| Data | 43 | 12 | 5 | 0 | 0 |
 | Architecture | 11 | 15 | 8 | 0 | 0 |
 | Model training and testing | 5 | 4 | 13 | 2 | 1 |
-| Test and evaluation layers | 0 | 9 | 2 | 0 | 0 |
+| Test and evaluation layers | 1 | 8 | 2 | 0 | 0 |
 | Contracts and repository | 10 | 6 | 4 | 0 | 0 |
-| Backlog milestones | 2 | 2 | 5 | 0 | 0 |
+| Backlog milestones | 3 | 1 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **91** | **62** | **42** | **4** | **4** |
+| **Total** | **90** | **63** | **42** | **4** | **4** |
 
-Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
+Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. (M1.13 completed two requirements and moved three data rows, T12, T14 and T16, from Done back to Partial: the completeness check showed that each still has work owned by a later sub-step.) The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -96,11 +96,11 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | T9 | 13 `summary` → `statements(description)` | Done | 85 | M1.4 |
 | T10 | 13 `word_count`, `url` → raw metadata, `source_url` | Done | URL kept; `word_count` recorded beside the description statement and on each chunk; it equals the measured word count of the body in all 85 files | M1.4, M1.10 |
 | T11 | 13 `causes.csv` joined on native ID, name checked | Done | 714; no mismatch | M1.4 |
-| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Done | 712 statements; 575 pending proposals where a known feature term is mentioned, each tied to its statement with the text span. A mention is not an assertion; atomic claims are M2.6 | M1.4, M1.11; M2.6 |
+| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; 575 pending proposals where a known feature term is mentioned, each tied to its statement with the text span. A mention is not an assertion. **Missing:** the mapping table asks for atomic feature relations in the review queue; splitting statements into atomic claims is M2.6 | M1.4, M1.11; M2.6 |
 | T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
-| T14 | 13 text files → records; chunks after review with offsets | Done | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served | M1.3, M1.10 |
+| T14 | 13 text files → records; statements and chunks after review, with offsets | Partial | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served. **Missing:** statements extracted from the text files (M2.6) and the review itself (M2.5) | M1.3, M1.10; M2.6, M2.5 |
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
-| T16 | 14 `Age` numeric, unit unconfirmed | Done | Unit left empty | M1.7 |
+| T16 | 14 `Age` numeric; unit to be confirmed before clinical use | Partial | Value kept exactly as supplied; unit left empty. **Missing:** the unit is not confirmed. No sub-step owned this until M1.13 found the gap; it is now part of M2.7 | M1.7; M2.7 |
 | T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |
 | T18 | 14 `Symptoms` → raw record, parsed `case_features` | Done | 125,036 items parsed into 28 terms (25 existing candidates, 3 new pending ones); original row stays in the archive | M1.9 |
 | T19 | 14 `Symptom_Count` → comparison | Done | Compared with the parsed list for all 25,000 rows: 0 mismatches; a mismatch would be flagged on the record. Not stored as a feature | M1.9 |
@@ -216,7 +216,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 
 | Layer | Required | Status | Missing part | Sub-step |
 |---|---|---|---|---|
-| Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Partial | Blank cells and schema drift are now tested for the matrix loader (M1.8). A drift test across all loaders is still missing | M1.1 – M1.9; M1.13 |
+| Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Done | Every loader that reads columns now refuses a file whose columns changed, before writing anything (`tests/ingestion/test_schema_drift.py`); text outside ASCII is covered in the archive, list and narrative tests | M1.1 – M1.13 |
 | Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym, ambiguity and merge tests | M2.5, M2.8 |
 | ML | Split leakage, target leakage, train-only transforms, coverage, calibration isolation, OOD, partial observations, per-source and subgroup | Missing | All | M4 |
 | Rules | Approved fixtures, boundary ages, unknown inputs, contradictions, precedence, missing bundle | Partial | Clinician-approved fixtures | M3.1; M6.2 |
@@ -258,7 +258,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | Milestone | Acceptance | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
-| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Partial | Everything is loaded and the raw archives are in object storage (M1.8 – M1.12). No single completeness command yet | M1.13 |
+| M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Done | `uv run python -m feeltriva_ingestion completeness` checks four of the five criteria against the files and the audit (235 checks, 0 mismatches). Idempotent reruns cannot be checked by a read-only command; each loader's tests rerun it and expect no change | M1.1 – M1.13 |
 | M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |

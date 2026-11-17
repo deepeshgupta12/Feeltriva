@@ -23,6 +23,8 @@ command output, not estimated.
 | BUG-012 | M1.11 | Large aggregate failed: PostgreSQL could not resize a shared memory segment | Fixed |
 | BUG-013 | M0.3 / M1.12 | The Compose `objectstore` service named an image that cannot be pulled | Fixed |
 | BUG-014 | M1.12 | New `store-archives` command was not registered in the CLI | Fixed before commit |
+| BUG-015 | M1.3 / M1.13 | The real-archive reference-load test failed on the persistent PostgreSQL test database; unnoticed from M1.7 to M1.12 because PostgreSQL runs excluded the real-archive tests | Fixed |
+| BUG-016 | M1.3, M1.7, M1.9 / M1.13 | Loaders did not refuse a file whose columns had changed: the case loader loaded it, the list and reference loaders stopped with an unexplained error | Fixed |
 
 ## Entries
 
@@ -1155,3 +1157,192 @@ loader detected while versioning still holds the original, and the registry row.
 M6.4). The object store is not part of CI: the unit tests run there with an in-memory
 stand-in, and the real-store test runs locally. The Redis service in the same Compose file is
 still unstarted and unverified.
+
+
+### M1.13 — Ingestion completeness check; loaders refuse changed columns
+
+**Handoff clauses applied** (checked before writing code):
+
+- `docs/04`, "Source fields and exact target mapping": 27 rows, traced as T1 – T27 in
+  `TRACEABILITY.md`. The check walks all of them.
+- `docs/05` M1: "build quality flags for count mismatches, invalid joins and schema changes";
+  acceptance: "all 12 CSVs and 85 text files accounted for; counts and duplicate findings
+  reproduce; repeated runs are idempotent; archive-16 conflicts are retained; original
+  archive-15 split is recorded and flagged".
+- `docs/01` §8, ingestion tests: "... idempotent rerun, schema drift".
+- Project rules: an imported zero is never stored as "absent"; case IDs are never merged across
+  archives or splits; nothing is approved without a reviewer; counts are sample counts of
+  rows, never prevalence.
+
+**Impact analysis before editing.**
+
+| Symbol | Action | Risk | Direct callers |
+|---|---|---|---|
+| `main` (ingestion CLI) | modified: new `completeness` command | LOW | 1 |
+| `load_cases`, `load_symptom_lists`, `load_reference` | modified: layout pre-flight | LOW each | `main` |
+| `_load_file` (cases), `_load_list_file` | analysed, then left unchanged | LOW | their loader |
+| `read_csv_positional` | called only | **CRITICAL** (6 direct callers) | reported to the owner; unchanged |
+| `_raw_cursor` | called only | **CRITICAL** (14 direct callers) | reported to the owner; unchanged |
+| `test_reference_load_is_idempotent_and_everything_is_pending` | modified (BUG-015) | LOW | none |
+
+**Implemented.**
+
+- `uv run python -m feeltriva_ingestion completeness` (modules `completeness.py`,
+  `completeness_rows.py`, `completeness_cases.py`, `verify_files.py`, each below the 32 KB
+  limit of the code graph). It runs in a READ ONLY transaction.
+- The rows of the mapping table are read from `docs/04_DATA_MAPPING.md` at run time. If the
+  table no longer has the 27 rows the check was written for, that is reported. A row with no
+  check is reported as a mismatch.
+- Where the expected value comes from is printed on every line: the manifest, `audit.json`,
+  the crosswalk files, a number stated in the mapping table (377, 223 and 654 positions), a
+  rule (for example "0 values marked absent"), or the source file itself.
+- "The file itself" means an independent recount. Each of the 12 CSV files is read once from
+  its archive and, in the same pass, the stored rows are streamed from the database in row
+  order and compared one by one: content hash, row locator, split, patient ID, age,
+  demographic field and value, label and its lexical candidate, cluster ID. Feature values
+  are counted per column from the file and compared with one grouped query over
+  `case_features` (16 million rows, about two minutes). List items are compared per term.
+  Statements are compared row by row with their text, type, disease, URL and attribution
+  fields. Every stored chunk must equal the text of its file at the stored offsets. The
+  co-occurrence proposals are recounted from the files per label and feature and compared
+  pair by pair, with their denominators and frequencies.
+- The recount does not reuse the loaders' counting code. It does use their ID and hash
+  functions, because those define what "the same row" and "the same profile" mean.
+- Work that the mapping table asks for but a later sub-step owns is printed as `later` with
+  that sub-step. It is never counted as passed (decision E49).
+- Every loader that reads columns now refuses a file whose columns changed, before writing
+  anything (`require_layout` in `archives.py`; decision E50).
+
+**Result of the real run** (2026-11-17, 7 min 38 s; 5 min 35 s when nothing else uses the database, exit status 0):
+235 checks: **228 ok, 0 mismatches, 7 `later`**. The full output is written to
+`data/derived/ingestion_completeness.txt` (not in Git). Headline values, expected = loaded:
+
+| Row(s) | What was compared | Value |
+|---|---|---:|
+| T1 | Archives registered, and their stored bytes re-read from the object store | 6 / 6 |
+| T1 | Source versions with the file's SHA-256 | 13 |
+| T1 | Row records in 12 CSV files; every file's exact-unique row count equals the manifest | 1,368,315 |
+| T1 | Rows whose stored content hash differs from the file | 0 |
+| T1 | Columns with a target (feature mapping or named field) | 1,693 |
+| T2, T4, T6, T20, T21, T24 | Cases whose label and lexical candidate equal the file | 1,365,363 |
+| T3 | Archive 11 feature values (174 positions) | 2,852,472 |
+| T5 | Archive 12 `data.csv` feature values (377 positions) | 1,316,921 |
+| T6 | Archive 12 listed items (283 terms) | 1,081,459 |
+| T7 – T10 | Archive 13 disease table: native IDs, categories, summaries, word counts, URLs | 85 each |
+| T11 – T13 | Cause / symptom / treatment statements, each joined by native ID | 714 / 712 / 621 |
+| T12 | Proposals where a feature term is mentioned in a symptom statement | 575 |
+| T13 | Evidence proposals derived from a treatment statement | 0 |
+| T14 | Text files; chunks; chunks whose offsets reproduce their text | 85; 3,651; 3,651 |
+| T15 – T17 | Archive 14 patient IDs, ages, gender values equal to the file | 25,000 each |
+| T17 | Gender value counts (sample counts) | Female 8,336, Male 8,271, Other 8,393 |
+| T18 | Archive 14 listed items (28 terms) | 125,036 |
+| T19, T23 | Rows whose declared symptom count differs from the parsed values | 0 |
+| T21 | Archive 15 cases with ID, age, sex, label and split equal to the file | 134,529 + 475,502 |
+| T21 | Profiles (label included) present in both original splits | 27,622 |
+| T21 | Rows flagged as sharing a profile across the split | 85,357 |
+| T22 | Archive 15 feature values (223 positions per file; `test.csv` + `train.csv`) | 2,093,631 + 7,269,777 |
+| T25 | Archive 16 feature values (654 positions), conflicts included | 1,274,680 |
+| T25 | Repeated headings; conflict rows stored | 37; 484,936 |
+| T26, T27 | Archive 16 descriptions; `Source`, `Source_URL`, `Retrieved_Date`, `Canonical_Query` retained | 820 each |
+| M1 acceptance | Repeated profiles over the case files; files equal to the audit | 166,259; 7 of 7 |
+| M1 acceptance | Rows in exact-duplicate groups marked on the case | 146,966 |
+| M1 acceptance | Lexical disease candidates; archive pairs with the audit's overlap | 960; 15 of 15 |
+| M1 acceptance | Co-occurrence proposals; proposals differing from the files | 21,484; 0 |
+| M1 acceptance | Feature values attached to a case of another source file | 0 |
+| M1 acceptance | Imported items already marked approved | 0 |
+
+The seven `later` lines:
+
+| Row | Left to a later sub-step | Now | Sub-step |
+|---|---|---|---|
+| T12 | Statements split into atomic, reviewable feature relations | not started | M2.6 |
+| T14 | Statements extracted from the text files after review | 0 statements | M2.6 |
+| T16 | Age unit confirmed (archive 14) | not confirmed; unit left empty | M2.7 |
+| T21 | Age unit confirmed (archive 15 `test.csv`, `train.csv`): 2 lines | not confirmed; unit left empty | M2.7 |
+| T22 | Feature positions classified as symptom, history, risk, measurement or other (`test.csv`, `train.csv`): 2 lines | 0 of 223 | M2.7 |
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 42 files |
+| `uv run pytest -m "not archives"` (SQLite) | 121 passed, 38 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 165 passed |
+| same with `-m "not archives"` | 159 passed |
+| `uv run pytest tests/ingestion/test_completeness.py tests/ingestion/test_schema_drift.py` | 19 passed |
+| `uv run python -m feeltriva_ingestion completeness` | exit 0; 228 ok, 0 mismatches, 7 later (three runs, same result) |
+| `detect_changes` before commit | `main`, `load_cases`, `load_symptom_lists`, `load_reference`, one test; new files |
+
+What the 19 new tests prove:
+
+- The check walks the 27 rows of the handoff table; a renamed or removed row is reported.
+- Crafted archives loaded by the real loaders pass. Then the stored data is damaged inside a
+  transaction that is rolled back, and the check must report it. 28 kinds of damage to case
+  data are each reported (a changed patient ID, age, gender, label, split, content hash; a
+  renumbered record; a deleted feature value; a value marked absent; a conflict flag removed;
+  a mapping marked approved; a renamed heading; a feature value attached to a case of another
+  file; removed quality flags; a changed cluster ID or duplicate status; a changed or deleted
+  co-occurrence proposal; a deleted label mapping; a label origin that is not "unknown").
+  Five kinds of damage to narrative statements and two to text chunks are reported as well.
+- A crafted file that stands in for archive 15 has 3 feature positions; the check holds it to
+  the 223 the mapping table states and reports the difference.
+- Changed columns: the case loader refuses an added column, a removed column and a renamed
+  label column; the list loader refuses a file without its list column; the reference loader
+  refuses a real file whose registered layout differs. In each case nothing is written.
+
+**Bugs.**
+
+- **BUG-015 — a failing test that nobody ran.** `test_reference_load_is_idempotent_and_
+  everything_is_pending` counted rows by ID prefix (`src_`, `rec_`, ...). The crafted tests
+  added since M1.7 create rows with the same prefixes in the persistent test database (375
+  sources where the test expected 13). *Found by* running the PostgreSQL suite without
+  `-m "not archives"` in this sub-step. *Cause of the delay:* from M1.7 to M1.12 I ran, and gave
+  the owner, the PostgreSQL command with `-m "not archives"`, which skips this test; CI has no
+  archives, so it skips it too. The M1.8 – M1.12 entries above say "142 passed" and similar for
+  that filtered run only. *Resolution:* the test now counts only rows that belong to the 13
+  sources the loader registers. *Process change:* `CLAUDE.md` now requires the unfiltered
+  PostgreSQL run in every sub-step. *Verified:* 165 passed, real archives included.
+- **BUG-016 — loaders accepted or crashed on changed columns.** *Found by* writing the drift
+  test the handoff asks for. A case file with an extra column was loaded by `load-cases` (only
+  `load-features` refused it later, leaving cases without features). A file without its label
+  or list column stopped with a bare `StopIteration`, and the reference loader with a
+  `KeyError`. No real file is affected: all 12 have their registered columns (T1 above).
+  *Resolution:* `require_layout` compares the number of columns with the manifest and looks for
+  the columns each loader reads by name, before anything is written; the CLI prints the message
+  and exits with status 2. *Verified* by `tests/ingestion/test_schema_drift.py`.
+- Slips during development, none committed: the first version of `completeness_rows.py` was
+  32.6 KB, above the size the code graph can parse, and was split in two; one test expected a
+  crafted file to pass a line that correctly failed (the 223 positions above).
+
+**Tool limit found.** `detect_changes` first listed `read_csv_positional`, `_h` and `source_id`
+as touched and rated the change critical. Their bodies were identical to the last commit
+(compared as syntax trees): I had inserted new code above them, and the tool maps the diff to
+the line ranges of the old index. I moved the new code to the end of the file; the second
+`detect_changes` listed only the intended symbols. Recorded in `CLAUDE.md` under the known
+limits of the graph.
+
+**Corrections to the plan and the trace.**
+
+- **A requirement without a sub-step.** T16 says the age unit must be confirmed before clinical
+  use. Nothing in the plan owned that. It is now part of M2.7.
+- **Three rows moved from Done to Partial** in `TRACEABILITY.md`: T12 (atomic feature relations,
+  M2.6), T14 (statements from the text files and the review itself, M2.6 and M2.5) and T16 (age
+  unit, M2.7). I had marked them Done with a note about what was left; a row with work left is
+  Partial. Two requirements were completed by this sub-step (the ingestion test layer and the
+  M1 acceptance criteria). Net: 90 done (was 91), 63 partial (was 62).
+
+**Not done, and limits.**
+
+- Idempotent reruns are not checked by the command, because it is read-only. Each loader's
+  tests rerun it and expect no change.
+- Two expected values are recomputed with the same code the loader used, not independently:
+  the number of chunks (re-chunking the files) and the 575 narrative mentions (the same phrase
+  matcher over the stored statements). What is independent for the chunks is that each stored
+  offset reproduces its text from the file.
+- The full command is not part of CI: it needs the six archives and the loaded database.
+  CI runs the parts that need neither (7 tests); the damage tests need PostgreSQL and run
+  locally.
+- A full run takes about six minutes, eight when other work uses the database.
+- The check says the data is loaded as the mapping table requires. It says nothing about
+  clinical correctness: every mapping, statement, chunk and proposal is still `pending`.

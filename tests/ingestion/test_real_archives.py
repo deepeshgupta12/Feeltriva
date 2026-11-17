@@ -44,7 +44,7 @@ def test_reference_load_is_idempotent_and_everything_is_pending(owner_db):
         Statement,
         StatementSource,
     )
-    from feeltriva_ingestion.load import load_reference
+    from feeltriva_ingestion.load import load_reference, source_id
     from sqlalchemy import func, select
 
     url = os.environ["TEST_MIGRATION_DATABASE_URL"]
@@ -52,23 +52,27 @@ def test_reference_load_is_idempotent_and_everything_is_pending(owner_db):
     second = load_reference(database_url=url)
     assert all(inserted == 0 for inserted, _ in second.values()), second  # rerun changes nothing
 
-    # The test database persists and other tests add their own synthetic rows, so count only
-    # what the loader creates: its IDs are deterministic and prefixed.
-    loaded = {
-        Source: ("source_id", "src_"),
-        SourceRecord: ("record_id", "rec_"),
-        Disease: ("disease_id", "dis_"),
-        DiseaseMapping: ("mapping_id", "dm_"),
-        FeatureMapping: ("mapping_id", "fm_"),
-        Statement: ("statement_id", "st_"),
-        StatementSource: ("statement_id", "st_"),
-    }
+    # The test database persists and other tests add their own synthetic rows (with the same ID
+    # prefixes, because they use the same ID functions), so count only what belongs to the sources
+    # this loader registers.
     manifest = load_manifest()
+    real = [source_id(f["archive"], f["file"]) for f in manifest.files] + [source_id("archive(13).zip", "*.txt")]
+    records = select(SourceRecord.record_id).where(SourceRecord.source_id.in_(real))
+    loaded = {
+        Source: Source.source_id.in_(real),
+        SourceRecord: SourceRecord.source_id.in_(real),
+        Disease: Disease.disease_id.in_(select(DiseaseMapping.disease_id).where(DiseaseMapping.source_id.in_(real))),
+        DiseaseMapping: DiseaseMapping.source_id.in_(real),
+        FeatureMapping: FeatureMapping.source_id.in_(real),
+        Statement: Statement.statement_id.in_(
+            select(StatementSource.statement_id).where(StatementSource.record_id.in_(records))
+        ),
+        StatementSource: StatementSource.record_id.in_(records),
+    }
     with owner_db.transaction(None) as tx:
 
         def scoped(model):
-            column, prefix = loaded[model]
-            return getattr(model, column).like(prefix.replace("_", r"\_") + "%", escape="\\")
+            return loaded[model]
 
         totals = {
             m.__tablename__: tx.execute(select(func.count()).select_from(m).where(scoped(m))).scalar_one()

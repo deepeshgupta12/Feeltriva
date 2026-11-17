@@ -133,3 +133,45 @@ class _Bounded(io.RawIOBase):
             raise ArchiveError("entry produced more data than its declared size")
         buffer[: len(chunk)] = chunk
         return len(chunk)
+
+
+# Columns each narrative adapter reads by name. A file without them has drifted from its layout.
+ADAPTER_COLUMNS = {
+    "disease_metadata": ("id", "name", "category", "summary", "word_count", "url"),
+    "narrative": ("disease_id", "disease_name"),
+    "disease_description": ("Disease", "Description", "Source", "Source_URL", "Retrieved_Date", "Canonical_Query"),
+}
+
+
+def require_layout(
+    header: list[str],
+    entry: dict,
+    any_of: tuple[tuple[str, ...], ...] = (),
+    named: tuple[str, ...] = (),
+) -> None:
+    """Stop when a file's columns are not the registered ones (source schema drift).
+
+    `expected_columns` comes from the manifest. `any_of` lists, per needed column, the header
+    names (lower case) a loader accepts for it; `named` are exact names a loader reads."""
+    label = f"{entry['archive']}/{entry['file']}"
+    expected = entry.get("expected_columns")
+    if expected is not None and len(header) != expected:
+        raise ArchiveError(
+            f"{label}: the file has {len(header)} columns but {expected} are registered in the manifest "
+            "(source schema drift); nothing was loaded"
+        )
+    lowered = {column.lower() for column in header}
+    missing = [" / ".join(names) for names in any_of if not lowered & set(names)]
+    missing += [name for name in named if name not in header]
+    if missing:
+        raise ArchiveError(
+            f"{label}: column(s) {', '.join(missing)} not found in the file (source schema drift); nothing was loaded"
+        )
+
+
+def require_layouts(raw_dir: Path, entries: list[dict], any_of: tuple[tuple[str, ...], ...] = ()) -> None:
+    """Pre-flight for a loader: every file must have its registered columns before anything is written."""
+    for entry in entries:
+        with zipfile.ZipFile(raw_dir / entry["archive"]) as archive:
+            header, _ = read_csv_positional(archive, entry["file"])
+        require_layout(header, entry, any_of)

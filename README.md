@@ -87,6 +87,10 @@ TEST_MIGRATION_DATABASE_URL=postgresql+psycopg://feeltriva:feeltriva_dev@127.0.0
   uv run pytest                                  # same suite plus row-level security and concurrency
 ```
 
+With the six archives in `data/raw/` the second command also runs the tests that read the real
+files (about one minute longer). Add `TEST_OBJECT_STORAGE_ENDPOINT=http://127.0.0.1:9010` to
+include the test against the running object store.
+
 ### Source data (optional)
 
 The six source archives are not in the repository. Place `archive(11).zip` … `archive(16).zip`
@@ -104,7 +108,13 @@ uv run python -m feeltriva_ingestion search-text "night cough wheezing"   # revi
 uv run python -m feeltriva_ingestion load-evidence  # pending disease–feature proposals (about 13 min)
 docker compose -f infra/docker-compose.yml --profile storage up -d objectstore   # private S3-compatible store on 127.0.0.1:9010
 uv run python -m feeltriva_ingestion store-archives # the six ZIPs, unchanged, verified, in a versioned bucket (seconds)
+uv run python -m feeltriva_ingestion completeness   # read-only check of everything above against the handoff's mapping table (6 – 8 min)
 ```
+
+`completeness` prints, for each of the 27 rows of the source-to-target table in
+`docs/04_DATA_MAPPING.md`, the loaded value next to the expected one and exits with status 1 on
+any mismatch. It confirms that the data is loaded as the handoff requires. It is not a clinical
+check: everything it looks at is still pending review.
 
 ### MCP
 
@@ -120,7 +130,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 | Step | State |
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
-| M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks, 22,059 pending evidence proposals, and the six raw archives in a private, versioned object store done. **Not done: the single completeness check** (M1.13) |
+| M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks, 22,059 pending evidence proposals, the six raw archives in a private, versioned object store, and a completeness check of all of it against the handoff's mapping table (235 checks, 0 mismatches) done. Everything loaded is still `pending` review |
 | M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |

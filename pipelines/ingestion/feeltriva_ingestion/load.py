@@ -31,7 +31,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Connection
 
-from .archives import RAW_DIR, ROOT, load_manifest, read_csv_positional, verify_all
+from .archives import ADAPTER_COLUMNS, RAW_DIR, ROOT, load_manifest, read_csv_positional, require_layout, verify_all
 from .audit import REFERENCE_AUDIT, norm_label
 
 AUDIT_DIR = ROOT / "data_audit"
@@ -74,6 +74,13 @@ def load_reference(raw_dir: Path = RAW_DIR, database_url: str | None = None) -> 
         raise SystemExit("MIGRATION_DATABASE_URL (or DATABASE_URL) is required")
     manifest = load_manifest()
     verify_all(raw_dir, manifest)
+    for entry in manifest.files:  # a file whose columns changed is refused before anything is written
+        with zipfile.ZipFile(raw_dir / entry["archive"]) as archive_file:
+            header, _ = read_csv_positional(archive_file, entry["file"])
+        named = ADAPTER_COLUMNS.get(entry.get("adapter", ""), ())
+        if entry["file"] in NARRATIVE:
+            named = (*named, NARRATIVE[entry["file"]][1])
+        require_layout(header, entry, named=named)
     reference = json.loads(REFERENCE_AUDIT.read_text(encoding="utf-8"))
     conflicts = {(f["archive"], f["file"]): f["duplicate_column_disagreement_rows"] for f in reference["files"]}
     models = [
