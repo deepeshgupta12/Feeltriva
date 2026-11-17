@@ -54,6 +54,7 @@ data decisions that are still open. The open items come from the handoff's own r
 | E44 | **Harm review (owner, 2026-11-17): reports of bad advice are reviewed by the owner personally for now.** Reference cases with a doctor's answer are agreed in principle | Owner decision. Planned in M6.2 / M6.6: a report channel in the product and a log of every report and the action taken | Cases supplied; another reviewer named |
 | E45 | **Scope (owner, 2026-11-17): the product is not going live for now, and is built complete end to end with nothing from the handoff left out** | Owner decision. Every item in `TRACEABILITY.md` is to be built; where conversations are hosted is decided at go-live | Go-live |
 | E46 | **Language model (owner, 2026-11-17): the Claude API is used.** User text is sent to Anthropic for extraction and explanation once that is built and configured | Owner decision on the outside-provider question. M5.1 implements the Anthropic adapter; it needs an API key from the owner; the consent text (M3.16) must tell users their text is processed by an outside provider | Key supplied at M5.1 |
+| E47 | **Conversation hosting (owner, 2026-11-17): Cassandra is built into this product repository and run as part of the product's own stack**, not a managed service from another company | Owner decision; closes D-R1. Step C defines the Cassandra service, keyspace, schema migrations and configuration in `infra/` of this repository; conversations live wherever that stack is deployed | A deployment location is chosen |
 
 ## Open decisions (owner needed)
 
@@ -68,6 +69,5 @@ data decisions that are still open. The open items come from the handoff's own r
 | D-L2 Training consent | Handoff: separate from use consent and off by default; nothing is learned from a session without it. The owner wants learning from user conversations, so the consent wording and default need an explicit decision | L1 |
 | D-L3 Entity-discovery threshold and reviewer | Proposed: a candidate is raised only after it appears in a minimum number of distinct consented sessions (number to be set), and a named reviewer approves it | L3a |
 | D-C2 Clinical owner | Nobody medically responsible has been named. With E36 (no gates) and E39 (urgency rules drafted by the assistant) there is currently no clinician anywhere in the path to real users | Before clinical mode |
-| D-R1 Where conversations are hosted | Deferred by the owner until the product goes live (E45) | Go-live |
 | D-O1 Label origin | How the disease labels in the archives were assigned (clinician diagnosis, self-report, other); cannot be derived from the files | M4.2 |
 | Software licence for this repository | None chosen (all rights reserved by default) | Sharing the code |
