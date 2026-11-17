@@ -1478,3 +1478,8 @@ are to be used (decision E51); planned as the new sub-step M2.11. The owner supp
 API key (stored in the local `.env`, not in Git) and the LOINC 2.83 release (in `data/raw/`,
 not in Git). Neither was used in M2.7.
 
+**Committed and indexed.** Committed as `1f4b4e9` and pushed; CI passed on both jobs (backend,
+web). The code graph was re-indexed at `1f4b4e9` and reports up-to-date. For M2.11: the WHO ICD
+API key is in the local `.env` as `ICD_API_CLIENT_ID` and `ICD_API_CLIENT_SECRET`; the LOINC
+release is `data/raw/Loinc_2.83.zip`. Both are outside Git. This paragraph was added in a
+following documents-only commit, after which the index was refreshed again.
