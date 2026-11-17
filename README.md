@@ -109,6 +109,7 @@ uv run python -m feeltriva_ingestion load-evidence  # pending disease–feature 
 docker compose -f infra/docker-compose.yml --profile storage up -d objectstore   # private S3-compatible store on 127.0.0.1:9010
 uv run python -m feeltriva_ingestion store-archives # the six ZIPs, unchanged, verified, in a versioned bucket (seconds)
 uv run python -m feeltriva_ingestion completeness   # read-only check of everything above against the handoff's mapping table (6 – 8 min)
+uv run python -m feeltriva_ingestion derive-meanings # proposed kind and zero meaning per column, pending review (about 20 s)
 ```
 
 `completeness` prints, for each of the 27 rows of the source-to-target table in
@@ -131,7 +132,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
 | M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks, 22,059 pending evidence proposals, the six raw archives in a private, versioned object store, and a completeness check of all of it against the handoff's mapping table (235 checks, 0 mismatches) done. Everything loaded is still `pending` review |
-| M2 Reviewable knowledge model | Review API and reviewed-only serving done; release publishing and review UI wiring not started |
+| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); 51 questionnaire headings are undecided and listed for the owner. Standard vocabulary links (ICD-11, LOINC, SNOMED CT), release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
 | M4 – M5 Modelling, retrieval and LLM adapters | Not started |

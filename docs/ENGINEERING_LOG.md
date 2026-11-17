@@ -1351,3 +1351,130 @@ limits of the graph.
 both jobs (backend, web). The code graph was re-indexed at `1a104cc`: 4,713 nodes, 9,519 edges,
 272 flows, status up-to-date. This paragraph was added in a following documents-only commit,
 after which the index was refreshed again.
+
+### M2.7 — Feature meanings derived from the data
+
+**Handoff clauses and owner decisions applied** (checked before writing code):
+
+- `docs/01` §4: "E_* questions must be classified by clinical meaning. Do not treat a history
+  question as an active symptom." "A blank matrix value, an imported zero and an explicit denial
+  are different concepts. Never infer absence from silence."
+- `docs/01` §3: archive 15's "feature dictionary distinguishes symptoms, history and risk factors".
+- `docs/02`: the baseline read a zero as a negative "for this experiment only"; next step
+  "verify zero semantics".
+- `docs/04`: T22 "classify symptom/history/risk/measurement/other"; T16 "confirm unit from source
+  documentation before clinical use"; T5 "zero semantics unresolved".
+- Owner decisions E34 (derive meanings from the supplied data) and E41 (list what the data
+  cannot settle).
+
+**Impact analysis before editing.**
+
+| Symbol | Action | Risk |
+|---|---|---|
+| `main` (ingestion CLI) | modified: new `derive-meanings` command | LOW |
+| `_features` (completeness check) | modified: one line and one label | LOW |
+| `case_file_rows`, `_reference` (completeness check) | **HIGH**; reported to the owner and **not modified** | unchanged |
+| `read_csv_positional`, `_raw_cursor` | called only | CRITICAL, unchanged |
+
+**What the files themselves show** (measured before designing; counts are rows in files):
+
+- **Archive 12 holds the same cases twice.** All 192,715 rows of `final_symptoms_to_disease.csv`
+  (254 labels) exist one for one in `data.csv` with the same label and the same set of affirmed
+  terms. The list file can only name what is affirmed, so a zero in `data.csv` is a term that
+  was not listed. The two files must count as one set of cases when data is split (M4.3).
+- **15 archive-15 columns are not yes/no answers.** `E_204` (travel) is 1 in all 610,031 rows.
+  Six pain-detail columns (`E_54` – `E_59`) are 1 in exactly the same 476,586 rows, which is
+  6,235 more rows than the yes/no question "do you have pain somewhere" (`E_53`). Six rash
+  columns are 1 in the same 119,013 rows. For these a 1 says only that an answer was recorded;
+  the answer itself is not in the file.
+- **The archive-15 question text is cut off in the file** after about five words
+  ("have you ever had a"). The full question list was not supplied.
+- **Ages are whole numbers**, 1 to 90 in archive 14 and 0 to 109 in archive 15.
+- Archive 16: 48 columns are never affirmed; its columns do not split into separate blocks.
+
+**Implemented.**
+
+- `meanings.py`: the rules, with no file or database access. Kind: an ordered list of eight
+  wording rules (relatives, exposure or lifestyle, a body measure, the past, a known condition,
+  treatment, then three symptom rules), a rule for a question that names a term which at least
+  two other archives present as a symptom, and the source's own statement (a `symptom_` column
+  prefix, a `Symptoms` list column, a file named for symptoms). "Do you have ..." alone settles
+  nothing, because it also introduces diagnoses. Zero: five evidence rules; none can yield a
+  denial. Age unit: proposed only when whole numbers span a human lifetime.
+- `meanings_load.py` and the command `uv run python -m feeltriva_ingestion derive-meanings`
+  (about 20 s). One pass over each case file. Proposals are stored on the mapping
+  (`transformation.meaning`, `zero_semantics`), the kind on the feature, the age range with the
+  proposed unit on the source (`population`). Every status stays `pending`. Rows a reviewer has
+  already decided are left alone. `dataset_cases.age_unit` is not written.
+- The existing review API already returns `zero_semantics` and the whole `transformation` for
+  each feature mapping, so a reviewer sees every proposal without an API change.
+- Generated review files: `docs/review/feature_meanings.md` (summary, the non-yes/no columns,
+  the age unit, the undecided list) and `docs/review/feature_meaning_proposals.csv` (all 1,962).
+- Completeness check: the line about zero meanings now checks "pending, and never a denial";
+  the two `later` lines now name what is actually left (the owner's review and approval).
+
+**Result of the real run** (2026-11-17, 22 s; a second run changed 0 rows):
+
+| File | symptom | history | exposure or lifestyle | measurement | undecided |
+|---|---:|---:|---:|---:|---:|
+| 11 (174 columns) | 174 | 0 | 0 | 0 | 0 |
+| 12 `data.csv` (377) | 374 | 0 | 3 | 0 | 0 |
+| 12 list file (283 terms) | 280 | 0 | 3 | 0 | 0 |
+| 14 list file (28 terms) | 28 | 0 | 0 | 0 | 0 |
+| 15 `test.csv` and `train.csv` (223 each) | 74 | 72 | 25 | 1 | **51** |
+| 16 (654) | 645 | 2 | 7 | 0 | 0 |
+
+| Meaning of zero | Mappings |
+|---|---:|
+| not recorded (list terms, and `data.csv`, whose cases exist as lists) | 688 |
+| no answer recorded (the 15 non-yes/no columns, in two files) | 30 |
+| no evidence either way (archives 11, 16 and the other archive-15 columns) | 1,244 |
+| a denial | 0 |
+
+1,962 mappings carry a proposal with a basis; 910 of 961 feature candidates got a kind and 51
+stay `other`; 0 items are approved. Age unit proposed: years, for both age columns.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` | All checks passed |
+| `uv run mypy packages services pipelines` | no issues in 44 files |
+| `uv run pytest -m "not archives"` (SQLite) | 155 passed, 40 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 201 passed |
+| `uv run pytest tests/unit/test_meaning_rules.py tests/ingestion/test_meanings.py` | 36 passed |
+| `uv run python -m feeltriva_ingestion derive-meanings`, twice | first run 1,962 mappings changed; second run 0 |
+| `uv run python -m feeltriva_ingestion completeness` | exit 0; 235 checks, 228 ok, 0 mismatches, 7 later (10 min 38 s while tests ran) |
+| `detect_changes` before commit | `main`, `_features`, one test; `roles_of` listed but identical to the last commit (code added above it) |
+
+What the 36 tests prove: 26 real headings classify as intended, including every kind of history
+question; a cut-off question is reported as cut off; a term is a symptom only when its source
+says so; wording overrides a source that calls everything a symptom; no rule before the symptom
+rules can propose a symptom and none proposes a sign; no combination of evidence makes a zero
+a denial; the age unit is proposed only for a range that singles it out; two files count as the
+same cases only when every case matches. On crafted archives in PostgreSQL: proposals are
+stored pending with their basis, the unit is not written to cases, a rerun changes nothing,
+and a reviewer's decision on a mapping or a feature is never overwritten.
+
+**Bugs.** None in committed code. Slips during development, caught by running: the first rule
+draft read "exercise dyspnea" as a habit and "do you ever temporarily stop" as the past, and
+matched "have you had a cold" to a symptom through a term only one archive uses; all three
+were corrected and are covered by tests. Two test files had the same name in different folders,
+which stops pytest; one was renamed.
+
+**Limits, stated plainly.**
+
+- The kinds are a reading of headings by rules I wrote. They are proposals, not clinical facts.
+  The rules catch wording; they do not know medicine. For example "obesity" and "recent
+  pregnancy" in archive 16 stay symptoms because their source calls them symptoms and their
+  wording has no marker.
+- 51 archive-15 headings are undecided, most because the question is cut off in the file.
+- For 1,244 columns the data cannot say what a zero means. The owner's decision D-Z1 covers it.
+- The value-pattern rules need the file to show the pattern; a non-yes/no question that
+  happens not to be answered as a block and has no "what/where/how" wording is not detected.
+
+**Raised by the owner during this sub-step.** Standard vocabularies ICD-11, LOINC and SNOMED CT
+are to be used (decision E51); planned as the new sub-step M2.11. The owner supplied a WHO ICD
+API key (stored in the local `.env`, not in Git) and the LOINC 2.83 release (in `data/raw/`,
+not in Git). Neither was used in M2.7.
+

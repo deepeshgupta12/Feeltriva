@@ -60,7 +60,9 @@ ROLE_ROWS: dict[tuple[str, str], dict[str, int]] = {
     (A16, "disease_description"): {"mappings": 26, "statement": 26, "provenance": 27},
 }
 TEXT_ROW = 14
-ATOMIC_CLAIMS, FEATURE_MEANINGS = "M2.6", "M2.7"
+ATOMIC_CLAIMS = "M2.6"
+# M2.7 stored proposals; what is left is the owner's review of them and the approval workflow.
+FEATURE_MEANINGS = "the owner's review of the M2.7 proposals (approval: M2.5)"
 
 
 def roles_of(entry: dict[str, Any]) -> dict[str, int]:
@@ -159,9 +161,9 @@ def _features(report: Report, world: dict[str, Any], key: tuple[str, str], info:
     )
     report.check(
         row,
-        "mappings still pending with the meaning of zero unresolved",
+        "mappings still pending review, none reading a zero as a denial",
         len(mapped),
-        sum(1 for mapping in mapped.values() if mapping["zero"] == "unknown" and mapping["status"] == "pending"),
+        sum(1 for mapping in mapped.values() if mapping["zero"] != "absent" and mapping["status"] == "pending"),
         "manifest",
     )
     report.check(
@@ -209,7 +211,7 @@ def _features(report: Report, world: dict[str, Any], key: tuple[str, str], info:
         report.later(
             row,
             "feature positions classified as symptom, history, risk, measurement or other",
-            f"{classified} of {len(mapped)}",
+            f"{classified} of {len(mapped)} have a proposed kind; none is approved",
             FEATURE_MEANINGS,
         )
 

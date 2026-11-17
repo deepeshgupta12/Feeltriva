@@ -21,20 +21,20 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M1.13 (2026-11-17).
+Last updated after sub-step M2.7 (2026-11-17).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
 | Data | 43 | 12 | 5 | 0 | 0 |
 | Architecture | 11 | 15 | 8 | 0 | 0 |
-| Model training and testing | 5 | 4 | 13 | 2 | 1 |
+| Model training and testing | 5 | 5 | 12 | 2 | 1 |
 | Test and evaluation layers | 1 | 8 | 2 | 0 | 0 |
 | Contracts and repository | 10 | 6 | 4 | 0 | 0 |
 | Backlog milestones | 3 | 1 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **90** | **63** | **42** | **4** | **4** |
+| **Total** | **90** | **64** | **41** | **4** | **4** |
 
 Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. (M1.13 completed two requirements and moved three data rows, T12, T14 and T16, from Done back to Partial: the completeness check showed that each still has work owned by a later sub-step.) The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
 
@@ -72,7 +72,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
 | D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
 | D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Partial | Lexical groups done (960). No synonym suggestions are produced | M1.3; **M2.8 new**, M2.5 |
-| D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | Candidates done. Every feature is still kind `other` | M1.3; M2.7 |
+| D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | Proposed kinds stored for 172 of the 223 `E_*` questions (72 history, 25 exposure or lifestyle, 1 measurement, 74 symptom); the rules for relatives, the past, diagnoses, treatment and exposure run before any symptom rule. **Missing:** 51 headings the wording cannot settle (listed in `docs/review/feature_meanings.md`); nothing is approved | M1.3, M2.7; owner review, M2.5 |
 | D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
@@ -100,13 +100,13 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
 | T14 | 13 text files → records; statements and chunks after review, with offsets | Partial | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served. **Missing:** statements extracted from the text files (M2.6) and the review itself (M2.5) | M1.3, M1.10; M2.6, M2.5 |
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
-| T16 | 14 `Age` numeric; unit to be confirmed before clinical use | Partial | Value kept exactly as supplied; unit left empty. **Missing:** the unit is not confirmed. No sub-step owned this until M1.13 found the gap; it is now part of M2.7 | M1.7; M2.7 |
+| T16 | 14 `Age` numeric; unit to be confirmed before clinical use | Partial | Value kept exactly as supplied; unit left empty on the cases. A proposed unit (years) with its basis is stored on the source (M2.7). **Missing:** the owner's confirmation; no source documentation states the unit | M1.7, M2.7; owner review, M2.5 |
 | T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |
 | T18 | 14 `Symptoms` → raw record, parsed `case_features` | Done | 125,036 items parsed into 28 terms (25 existing candidates, 3 new pending ones); original row stays in the archive | M1.9 |
 | T19 | 14 `Symptom_Count` → comparison | Done | Compared with the parsed list for all 25,000 rows: 0 mismatches; a mismatch would be flagged on the record. Not stored as a feature | M1.9 |
 | T20 | 14 `Disease` | Done | | M1.7 |
 | T21 | 15 `PATIENT_ID`, `AGE`, `SEX`, `DISEASE` with split | Done | | M1.7 |
-| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded with the full question text on the mapping. Not yet classified as symptom, history or risk | M1.8; M2.7 |
+| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded. 172 of 223 questions have a proposed kind. **Missing:** 51 undecided headings; approval. The source file stores each question cut off after a few words and 15 columns as "an answer was recorded" only, so the handoff's "full question text and raw value" cannot be met from the supplied file | M1.8, M2.7; owner review, M2.5 |
 | T23 | 15 `SYMPTOM_COUNT` → consistency check | Done | Equals the number of affirmed `E_*` columns in all 610,031 rows: 0 mismatches. Not treated as ground truth | M1.9 |
 | T24 | 16 matrix `diseases` | Done | | M1.7 |
 | T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Done | 1,032,212 values loaded; repeated headers kept per position with explicit conflicts | M1.3, M1.8 |
@@ -187,7 +187,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
 | E0 | Supplied baseline preserved as a reproducible benchmark and rejected for serving | Partial | Results stored and checked against the figures; not re-run here; not wired into serving | M4.1 |
-| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Owner states the data are real and original (E30) and that feature meanings are to be derived from the data (E34). No written provenance; label origin unknown (D-O1) | M2.7, M4.2 |
+| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Owner states the data are real and original (E30). Feature meanings are proposed from the data (M2.7), pending the owner's review. No written provenance; label origin unknown (D-O1) | M2.7, M4.2 |
 | E2 | Review mappings; exact and near-duplicate clusters; group by identity where available | Partial | Exact and profile clusters done | M1.7; M2.5, M4.3 |
 | E3 | Archive 15 original test kept untouched; overlap audited; contaminated result reported separately | Partial | Overlap audited and flagged (27,910 shared profiles) | M1.7; M4.3 |
 | E4 | Train, validation, separate calibration and untouched test; transforms fitted on training only; clusters kept together | Missing | | M4.3, M4.4 |
@@ -196,7 +196,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | E6 | Selection on validation only; calibration and abstention on their own partition; freeze before final test | Missing | | M4.5 |
 | E7 | Class support and cluster-bootstrap confidence intervals; sparse slices marked inconclusive | Missing | Baseline has none | M4.5 |
 | E8 | Urgency evaluated separately with adjudicated labels | External | No urgency labels exist. Urgency rules will be drafted by the assistant on the owner's instruction (E39), which is not the same as adjudicated labels | M2.10, M6.2 |
-| N1 | Next experiment: verify zero semantics and label origins | Missing | | M2.7, M4.2 |
+| N1 | Next experiment: verify zero semantics and label origins | Partial | Zero meaning examined in M2.7: no file records a denial; archive 12 zeros are terms not listed; 15 archive-15 columns are not yes/no answers; no evidence either way for 1,244 columns. Label origin still unknown | M2.7, M4.2 |
 | N2 | Next: inspect feature relationships and source artefacts (accuracy rises when features are hidden; falls with more data) | Missing | | M4.2 |
 | N3 | Next: regularised linear baseline and boosted challenger on controlled splits | Missing | | M4.4 |
 | N4 | Next: evaluate missingness explicitly | Missing | | M4.5 |
@@ -316,12 +316,13 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | U7 | Repository public on the owner's GitHub with description, topics, CI | Done | M0.8 |
 | U8 | Consent taken from users (E32) | Missing | M3.16 |
 | U9 | Conversations kept 30 days (E33) | Missing | C8 |
-| U10 | Feature meanings derived from the supplied data (E34) | Missing | M2.7 |
+| U10 | Feature meanings derived from the supplied data (E34) | Done as proposals; 51 headings listed for the owner | M2.7 |
 | U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Missing | M2.10 |
 | U12 | Claude API as the language model (E46) | Missing | M5.1 |
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |
 | U15 | External cases are also used for training, split once (E35) | Missing | M4.3 |
+| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Missing | M2.11 |
 
 ## 11. Sub-steps added by this trace
 

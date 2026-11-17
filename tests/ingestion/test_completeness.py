@@ -341,6 +341,7 @@ def test_every_kind_of_damage_to_loaded_cases_is_reported(matrix, owner_db):
             f"UPDATE case_features SET conflict = false WHERE mapping_id = '{dup}'"
         ),
         "mappings still pending": f"UPDATE feature_mappings SET status = 'approved' WHERE mapping_id = '{f1}'",
+        "none reading a zero as a denial": f"UPDATE feature_mappings SET zero_semantics = 'absent' WHERE mapping_id = '{f1}'",
         "already marked approved": f"UPDATE feature_mappings SET status = 'approved' WHERE mapping_id = '{f1}'",
         "headings found at their registered position": (
             f"UPDATE feature_mappings SET original_term = 'renamed' WHERE mapping_id = '{f1}'"

@@ -1,5 +1,5 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness}"""
+load-evidence|store-archives|completeness|derive-meanings}"""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ def main() -> int:
             "load-evidence",
             "store-archives",
             "completeness",
+            "derive-meanings",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -239,6 +240,36 @@ def main() -> int:
             out.write_text(text + "\n", encoding="utf-8")
             print(f"report: {out}")
             return 1 if mismatches else 0
+        if args.command == "derive-meanings":
+            from .meanings_load import check as check_meanings
+            from .meanings_load import derive_meanings, summarise, write_review
+
+            result = derive_meanings(args.raw_dir)
+            summary = summarise(result)
+            for (name, kind), n in sorted(summary["kinds"].items()):
+                print(f"kind  {name}: {kind} {n}")
+            for (name, zero), n in sorted(summary["zeros"].items()):
+                print(f"zero  {name}: {zero} {n}")
+            for file, twin in result["twins"].items():
+                print(f"same cases: {twin['rows']} rows of {twin['list_file']} exist one for one in {file}")
+            for sid, population in result["populations"].items():
+                if "age" in population:
+                    age = population["age"]
+                    print(
+                        f"age   {result['sources'][sid]}: {age['minimum']:g} to {age['maximum']:g}, "
+                        f"proposed unit {age['unit_proposed']}"
+                    )
+            print(f"changed: {result['changed']}; stored: {result['stored']}")
+            for path in write_review(result):
+                print(f"review file: {path}")
+            diffs = check_meanings(result)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + ("every proposal has a basis and is pending review" if not diffs else f"{len(diffs)} differences")
+            )
+            return 1 if diffs else 0
         from .load import load_reference
 
         for table, (inserted, total) in load_reference(args.raw_dir).items():
