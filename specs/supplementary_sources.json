@@ -38,6 +38,33 @@
       "licence": "LOINC License 5.8 (LoincLicense_5.8.txt inside the release)",
       "notice": "This material contains content from LOINC (http://loinc.org). LOINC is copyright © Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at http://loinc.org/license. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.",
       "supplied": "by the owner on 2026-11-17"
+    },
+    {
+      "name": "hp.json",
+      "sha256": "a7b3a012e7b4007a35a7cf8da35f2373b54cc16907f80d13d62470d31f833501",
+      "size_bytes": 21915519,
+      "kind": "hpo_release",
+      "title": "Human Phenotype Ontology",
+      "version": "2026-09-01",
+      "version_address": "http://purl.obolibrary.org/obo/hp/releases/2026-09-01/hp.json",
+      "licence": "HPO licence (https://human-phenotype-ontology.github.io/license.html): free to use with credit to the HPO Consortium, the version shown, the content and its relationships unchanged, and a statement that the product uses HPO",
+      "notice": "This product is using the Human Phenotype Ontology (release 2026-09-01). Find out more at http://www.human-phenotype-ontology.org.",
+      "supplied": "by the owner on 2026-11-18",
+      "used_for": "candidate links from disease labels and named terms (M2.14); identifiers of other vocabularies inside the file are not read",
+      "citation": "Sebastian Köhler, Sandra C Doelken, Christopher J. Mungall, Sebastian Bauer, Helen V. Firth, et al., The Human Phenotype Ontology project: linking molecular biology and disease through phenotype data, Nucl. Acids Res. (1 January 2014) 42 (D1): D966-D974, doi:10.1093/nar/gkt1026"
+    },
+    {
+      "name": "mondo.owl",
+      "sha256": "bcb279667af4ee0da10fbf0007703bbe75f862298af593384d21353bbe300937",
+      "size_bytes": 255163272,
+      "kind": "mondo_release",
+      "title": "Mondo Disease Ontology",
+      "version": "2026-11-03",
+      "version_address": "http://purl.obolibrary.org/obo/mondo/releases/2026-11-03/mondo.owl",
+      "licence": "CC BY 4.0",
+      "citation": "Mondo: integrating disease terminology across communities, Genetics, https://doi.org/10.1093/genetics/iyaf215",
+      "supplied": "by the owner on 2026-11-18",
+      "used_for": "candidate links from disease labels and named terms (M2.14); identifiers of other vocabularies inside the file are not read"
     }
   ]
 }

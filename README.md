@@ -112,12 +112,15 @@ uv run python -m feeltriva_ingestion completeness   # read-only check of everyth
 uv run python -m feeltriva_ingestion load-release    # trace archive 15 to its source release; store the publisher's question dictionary (about 30 s)
 uv run python -m feeltriva_ingestion derive-meanings # proposed kind and zero meaning per column, pending review (about 20 s)
 uv run python -m feeltriva_ingestion link-vocabularies # candidate ICD-11 and LOINC codes (first run about 40 min; later runs seconds)
+uv run python -m feeltriva_ingestion link-ontologies   # candidate HPO and MONDO terms from two local files; nothing leaves this machine (about 15 s)
 uv run python -m feeltriva_ingestion suggest-relations # possible synonyms and subtypes for review; nothing is merged (seconds)
 ```
 
 `link-vocabularies` needs a WHO ICD API key in `.env` (`ICD_API_CLIENT_ID`, `ICD_API_CLIENT_SECRET`; see `.env.example`) and
 the LOINC release (`Loinc_2.83.zip`) in `data/raw/`. It sends only term text (a column heading or a disease label) to the
 WHO API. `load-release` needs the DDXPlus release (`22687585.zip`, registered in `specs/supplementary_sources.json`) in `data/raw/`.
+`link-ontologies` needs `hp.json` (HPO) and `mondo.owl` (MONDO) in `data/raw/`; each is read only when its checksum and release
+are the registered ones. It writes every name's outcome to `data/derived/review/ontology_links.csv`, outside Git.
 
 `completeness` prints, for each of the 27 rows of the source-to-target table in
 `docs/04_DATA_MAPPING.md`, the loaded value next to the expected one and exits with status 1 on
@@ -139,7 +142,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
 | M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks, 22,059 pending evidence proposals, the six raw archives in a private, versioned object store, and a completeness check of all of it against the handoff's mapping table (235 checks, 0 mismatches) done. Everything loaded is still `pending` review |
-| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); archive 15 is traced row for row to its source release, whose own question dictionary settles all 223 of its questions. Candidate ICD-11 codes for 405 of 960 disease labels and 166 of 738 named symptom terms, and 10 LOINC codes, stored pending review. 420 synonym and subtype suggestions in the review queue (`GET /internal/v1/review/relation-suggestions`), none merged. Further vocabulary links (ICD-11, LOINC, SNOMED CT), release publishing and review UI wiring not started |
+| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); archive 15 is traced row for row to its source release, whose own question dictionary settles all 223 of its questions. Candidate ICD-11 codes for 405 of 960 disease labels and 166 of 738 named symptom terms, and 10 LOINC codes, stored pending review. Candidate HPO and MONDO terms for 607 of 960 disease labels and 246 of 738 named terms (1,142 links), stored pending review; counting ICD-11 as well, 662 disease labels and 300 named terms have at least one candidate. 456 synonym and subtype suggestions in the review queue (`GET /internal/v1/review/relation-suggestions`), none merged. SNOMED CT could not be obtained. Archive-15 answers, statement extraction, urgency rules, release publishing, serving views and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
 | M4 – M5 Modelling, retrieval and LLM adapters | Not started |
@@ -166,8 +169,8 @@ question texts from that release appear in `docs/review/` and `data_audit/`.
 
 The origin of the other five archives is not documented; see `docs/DECISIONS.md` E30.
 
-Candidate codes come from two standard vocabularies. The link lists themselves are kept in the private database, not in
-this repository (`docs/DECISIONS.md` E56).
+Candidate codes come from four vocabularies. The link lists themselves are kept in the private database, not in
+this repository (`docs/DECISIONS.md` E56). SNOMED CT is not used: its release could not be obtained (`docs/DECISIONS.md` E60).
 
 - **ICD-11:** International Classification of Diseases, Eleventh Revision (ICD-11), World Health Organization (WHO) 2019,
   <https://icd.who.int/browse11>. Licensed under the Creative Commons Attribution-NoDerivatives 3.0 IGO licence
@@ -175,6 +178,14 @@ this repository (`docs/DECISIONS.md` E56).
 - **LOINC:** This material contains content from LOINC (http://loinc.org). LOINC is copyright © Regenstrief Institute, Inc.
   and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at
   http://loinc.org/license. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.
+- **HPO:** This product is using the Human Phenotype Ontology (release 2026-09-01). Find out more at
+  http://www.human-phenotype-ontology.org. Sebastian Köhler, Sandra C Doelken, Christopher J. Mungall, Sebastian Bauer,
+  Helen V. Firth, et al., *The Human Phenotype Ontology project: linking molecular biology and disease through phenotype
+  data*, Nucl. Acids Res. (1 January 2014) 42 (D1): D966-D974, doi:10.1093/nar/gkt1026. Its terms are stored unchanged:
+  identifier, label and address.
+- **MONDO:** Mondo Disease Ontology, release 2026-11-03, licensed
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). *Mondo: integrating disease terminology across communities*,
+  Genetics, <https://doi.org/10.1093/genetics/iyaf215>. Its terms are stored unchanged: identifier, label and address.
 
 ## Safety boundaries that the code enforces
 

@@ -338,3 +338,23 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
     assert json.loads(
         (tmp_path / "cache").glob("*.json").__next__().read_text()
     )  # answers are kept on disk, outside Git
+
+    # BUG-021: a link decided by a named reviewer is not a difference; a decision nobody signed is.
+    decided = {"d": f"dis_{tag}_0"}
+    with owner_db.transaction(None) as tx:
+        tx.execute(
+            text(
+                "UPDATE terminology_links SET status = 'rejected', reviewer = 'dev-reviewer:test' WHERE disease_id = :d"
+            ),
+            decided,
+        )
+    assert check(run()) == []
+    try:
+        with owner_db.transaction(None) as tx:
+            tx.execute(text("UPDATE terminology_links SET reviewer = NULL WHERE disease_id = :d"), decided)
+        assert check(run()) == ["1 links were decided without a recorded reviewer; only a reviewer may decide a link"]
+    finally:  # the check reads the whole table: leave no unsigned decision behind for other tests
+        with owner_db.transaction(None) as tx:
+            tx.execute(
+                text("UPDATE terminology_links SET reviewer = 'dev-reviewer:test' WHERE disease_id = :d"), decided
+            )

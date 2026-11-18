@@ -308,31 +308,12 @@ def link_vocabularies(
     release = client.release()
     chapters = client.chapters(release)
     table = loinc_table(raw_dir, loinc_entry) if loinc_entry else []
-    scope = "AND m.source_id = ANY(%s)" if source_ids is not None else ""
-    params: tuple[Any, ...] = (source_ids,) if source_ids is not None else ()
     engine = create_engine(database_url)
     items: list[dict[str, Any]] = []
-    stored: Counter[str] = Counter()
     loinc_version = str(loinc_entry["version"]) if loinc_entry else ""
     try:
         with _raw_cursor(engine) as cur:  # a short read: the lookups below hold no database transaction open
-            cur.execute(
-                f"""SELECT DISTINCT d.disease_id, d.preferred_name FROM diseases d JOIN disease_mappings m USING (disease_id)
-                    WHERE true {scope} ORDER BY 1""",  # noqa: S608 - fixed text
-                params,
-            )
-            subjects = [("disease", row[0], row[1], "", "") for row in cur.fetchall()]
-            cur.execute(
-                f"""SELECT f.feature_id, f.preferred_name, f.kind::text,
-                           max(m.original_term), max(m.transformation -> 'source_dictionary' ->> 'question')
-                    FROM features f JOIN feature_mappings m USING (feature_id)
-                    WHERE true {scope} GROUP BY 1, 2, 3 ORDER BY 1""",  # noqa: S608 - fixed text
-                params,
-            )
-            for feature_id, name, kind, heading, question in cur.fetchall():
-                subjects.append(
-                    ("feature", feature_id, name, kind, question or ("" if not is_question(heading) else heading))
-                )
+            subjects = read_subjects(cur, source_ids)
         for number, (subject_type, subject_id, name, kind, question) in enumerate(subjects, start=1):
             if number % 100 == 0:
                 progress(f"{number} of {len(subjects)} looked up, {client.calls} new API calls")
@@ -364,30 +345,12 @@ def link_vocabularies(
                     )
             items.append(item)
         with _raw_cursor(engine) as cur:
-            for item in items:
-                for link in item["links"]:
-                    cur.execute(
-                        """INSERT INTO terminology_links (link_id, disease_id, feature_id, system, system_version, code, title,
-                                                          uri, match_method, detail)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb) ON CONFLICT (link_id) DO NOTHING""",
-                        (
-                            link_id(item["id"], link["system"], link["version"], link["code"]),
-                            item["id"] if item["type"] == "disease" else None,
-                            item["id"] if item["type"] == "feature" else None,
-                            link["system"],
-                            link["version"],
-                            link["code"],
-                            link["title"],
-                            link["uri"],
-                            link["method"],
-                            json.dumps(link["detail"], sort_keys=True),
-                        ),
-                    )
-                    stored[link["system"]] += cur.rowcount
+            stored = store_links(cur, items)
             cur.execute(
-                "SELECT count(*), count(*) FILTER (WHERE status <> 'pending'), count(*) FILTER (WHERE uri IS NULL OR title = '') FROM terminology_links"
+                """SELECT count(*), count(*) FILTER (WHERE status <> 'pending' AND reviewer IS NULL),
+                          count(*) FILTER (WHERE uri IS NULL OR title = '') FROM terminology_links"""
             )
-            total, not_pending, incomplete = cur.fetchone()
+            total, unsigned, incomplete = cur.fetchone()
     finally:
         engine.dispose()
     return {
@@ -396,7 +359,7 @@ def link_vocabularies(
         "items": items,
         "inserted": dict(stored),
         "api_calls": client.calls,
-        "table": {"links": total, "not_pending": not_pending, "without_title_or_uri": incomplete},
+        "table": {"links": total, "decided_without_reviewer": unsigned, "without_title_or_uri": incomplete},
     }
 
 
@@ -424,8 +387,12 @@ def summarise(result: dict[str, Any]) -> dict[str, Any]:
 def check(result: dict[str, Any]) -> list[str]:
     diffs = []
     table = result["table"]
-    if table["not_pending"]:
-        diffs.append(f"{table['not_pending']} links are not pending; only a reviewer may decide a link")
+    # A decided link is expected once review has begun; a decision without a reviewer's name is not.
+    if table["decided_without_reviewer"]:
+        diffs.append(
+            f"{table['decided_without_reviewer']} links were decided without a recorded reviewer; only a reviewer "
+            "may decide a link"
+        )
     if table["without_title_or_uri"]:
         diffs.append(
             f"{table['without_title_or_uri']} links lack a title or a URI; the WHO terms require code, title and URI together"
@@ -488,3 +455,60 @@ def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
                     ]
                 )
     return path
+
+
+# -- shared by every command that links our terms to a vocabulary (M2.14) -----------------------------
+Subject = tuple[str, str, str, str, str]  # type, id, name, kind, question sentence or ""
+
+
+def read_subjects(cur: Any, source_ids: list[str] | None) -> list[Subject]:
+    """Every disease candidate and every feature that a source maps to, in a fixed order.
+
+    The last field is the question sentence when the feature is a question and not a name; a
+    sentence is never looked up as a name. source_ids limits the subjects to those mapped from
+    these sources (used by tests); None means all."""
+    scope = "AND m.source_id = ANY(%s)" if source_ids is not None else ""
+    params: tuple[Any, ...] = (source_ids,) if source_ids is not None else ()
+    cur.execute(
+        f"""SELECT DISTINCT d.disease_id, d.preferred_name FROM diseases d JOIN disease_mappings m USING (disease_id)
+            WHERE true {scope} ORDER BY 1""",  # noqa: S608 - fixed text
+        params,
+    )
+    subjects: list[Subject] = [("disease", row[0], row[1], "", "") for row in cur.fetchall()]
+    cur.execute(
+        f"""SELECT f.feature_id, f.preferred_name, f.kind::text,
+                   max(m.original_term), max(m.transformation -> 'source_dictionary' ->> 'question')
+            FROM features f JOIN feature_mappings m USING (feature_id)
+            WHERE true {scope} GROUP BY 1, 2, 3 ORDER BY 1""",  # noqa: S608 - fixed text
+        params,
+    )
+    for feature_id, name, kind, heading, question in cur.fetchall():
+        subjects.append(("feature", feature_id, name, kind, question or ("" if not is_question(heading) else heading)))
+    return subjects
+
+
+def store_links(cur: Any, items: list[dict[str, Any]]) -> Counter[str]:
+    """Insert the links of every item as pending candidates; a link already stored keeps its row and
+    its review decision. Returns the number of new rows per vocabulary."""
+    stored: Counter[str] = Counter()
+    for item in items:
+        for link in item["links"]:
+            cur.execute(
+                """INSERT INTO terminology_links (link_id, disease_id, feature_id, system, system_version, code, title,
+                                                  uri, match_method, detail)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb) ON CONFLICT (link_id) DO NOTHING""",
+                (
+                    link_id(item["id"], link["system"], link["version"], link["code"]),
+                    item["id"] if item["type"] == "disease" else None,
+                    item["id"] if item["type"] == "feature" else None,
+                    link["system"],
+                    link["version"],
+                    link["code"],
+                    link["title"],
+                    link["uri"],
+                    link["method"],
+                    json.dumps(link["detail"], sort_keys=True),
+                ),
+            )
+            stored[link["system"]] += cur.rowcount
+    return stored

@@ -29,6 +29,7 @@ command output, not estimated.
 | BUG-018 | M2.11 | The ICD client opened a new secure connection for every request and ran the lookups inside a database transaction; the real run crawled at about 6 terms a minute | Fixed |
 | BUG-019 | M2.11 | LOINC matching on the component name alone gave a wrong-sense link ("fever" to "Fever in Mother") | Fixed before commit |
 | BUG-020 | M2.8 | Two labels that share only a catch-all ICD-11 code were suggested as synonyms (chronic and diabetic kidney disease) | Fixed before commit |
+| BUG-021 | M2.11 / M2.14 | The self-check of `link-vocabularies` reported any link that was not `pending` as a difference, so the command would fail as soon as a reviewer decided one link | Fixed |
 
 ## Entries
 
@@ -1874,3 +1875,152 @@ alert because no fix exists. Its preset rule dismisses certain low-impact kinds 
 one is recorded as CWE-1333, inefficient regular expression) in npm packages used only for
 development. GitHub's documentation does not say whether a fix will then arrive as an automatic
 pull request, so the item is tracked in the plan (M0.8) with the command to re-check.
+
+### M2.14 — Candidate links to HPO and MONDO, in place of SNOMED CT
+
+Owner's go-ahead: 2026-11-18, with the order of decision E59. The owner could not obtain the
+SNOMED CT release and supplied `hp.json` (HPO, release 2026-09-01) and `mondo.owl` (MONDO,
+release 2026-11-03) in `data/raw/`.
+
+**What was built.**
+
+- `ontologies.py` (reads two files, no database): `read_hpo`, `read_mondo`, `read_vocabulary`
+  (checksum and release must be the registered ones), `lookup` and `nearest`. `mondo.owl` is
+  255 MB and is read as a stream; both files are read in about 15 seconds.
+- `ontology_links.py`: `link_ontologies`, `summarise`, `check`, `write_review`.
+- New command `python -m feeltriva_ingestion link-ontologies`. Offline: nothing leaves the machine.
+- `vocabulary.py`: the subject query and the link insert of `link_vocabularies` moved into
+  `read_subjects` and `store_links`, used by both link commands, so both look up the same items
+  and store a link the same way.
+- `specs/supplementary_sources.json`: both files registered with SHA-256, size, release, licence.
+- No migration: the links go into `terminology_links` (M2.11). No API or web change.
+
+**The rule for a link (decision E60).** A `pending` link only when our whole name equals the
+label or an exact synonym of a current term that may be linked. Not through an abbreviation, a
+related, broad or narrow synonym, an obsolete term or a disease of animals. None when several
+terms carry the name. Every other name gets a recorded reason and up to three nearest terms.
+
+**Facts measured on the real files before the rules were fixed** (read-only scripts):
+
+| Fact | Consequence |
+|---|---|
+| Our label "scar" equals MONDO's abbreviation SCAR ("severe cutaneous adverse reaction"); our symptom "cold" equals COLD, its abbreviation for chronic obstructive pulmonary disease | An abbreviation is not a name: no link, listed for review |
+| "ards" and "multiple myeloma" also name a dog disease and a "non-human animal" variant; 8,319 of MONDO's 32,137 current terms are animal diseases | Only terms under "human disease" or "injury" are linked |
+| "frostbite", "burn" and "head injury" stand under MONDO's separate root "injury" | "injury" is linkable |
+| "mood swings", "hypersomnia", "vertigo" and 9 more equal only obsolete terms; "diabetes mellitus type 1" equals only a term of the branch "disease susceptibility" | Such terms are indexed so that the reason can be stated; never linked |
+| 45 of our names equal only a related, broad or narrow HPO synonym ("dizziness" is a related synonym of "Vertigo") | Looser synonyms never link |
+| After these rules no real name is carried by several linkable terms | The "several terms" rule is covered by tests only |
+
+**Real run** (`link-ontologies`, 11 seconds):
+
+| | HPO 2026-09-01 | MONDO 2026-11-03 |
+|---|---:|---:|
+| Terms in the file | 20,482 | 36,168 |
+| Current / obsolete | 19,894 / 588 | 32,137 / 4,031 |
+| Entries of other vocabularies, counted and not read | 50 | 27,627 |
+| Terms that may be linked | 19,845 | 23,285 |
+| Labels / exact synonyms / looser synonyms read | 19,894 / 23,665 / 2,595 | 32,137 / 71,027 / 22,487 |
+| Exact synonyms that are abbreviations or otherwise not names | 593 | 6,116 |
+| Parent links | 24,436 | 46,770 |
+
+| Outcome | Disease labels (960): HPO | MONDO | Feature terms (961): HPO | MONDO |
+|---|---:|---:|---:|---:|
+| Linked: our name is the term's label | 257 | 420 | 147 | 23 |
+| Linked: our name is an exact synonym | 67 | 121 | 92 | 15 |
+| Equals only an abbreviation | 8 | 15 | 0 | 1 |
+| Equals only a looser synonym | 33 | 12 | 12 | 6 |
+| Only terms that may not be linked | 0 | 9 | 2 | 2 |
+| No term with this name; nearest listed | 264 | 210 | 218 | 116 |
+| No term with this name or near it | 331 | 173 | 267 | 575 |
+| Not looked up: a question sentence | | | 223 | 223 |
+
+Every column adds up to its total. Stored: 563 HPO and 579 MONDO links, all `pending`
+(`terminology_links` now holds 1,723: 571 ICD-11, 10 LOINC, 563 HPO, 579 MONDO).
+
+| Coverage | Before (ICD-11 only) | HPO or MONDO | Any of the three |
+|---|---:|---:|---:|
+| Disease labels with a candidate link (of 960) | 405 | 607 | 662 |
+| Named terms with a candidate link (of 738) | 166 | 246 | 300 |
+| Case labels whose label has a link (of 1,365,363) | 608,438 | 847,340 | 923,332 |
+
+Links by branch: MONDO human disease 576 (2 of them also "disease susceptibility"), injury 3;
+HPO phenotypic abnormality 556, past medical history 5, clinical modifier 2. Synonym links by
+the kind the vocabulary states: HPO layperson 89, plain 63, plural form 5, UK spelling 2; MONDO
+plain 134, UK spelling 1, historic 1.
+
+**Reading the stored links.** The 95 synonym links whose label shares no word with our name
+were read one by one: they are lay names against technical names ("heart attack" and
+"Myocardial infarction", "bunion" and "Hallux valgus", "whooping cough" and "pertussis"). For a
+reviewer to judge, because the vocabulary's own exact synonym is broader or narrower in everyday
+use: "sweating" and "Hyperhidrosis", "fainting" and "Loss of consciousness", "cushing syndrome"
+and HPO's "Increased circulating cortisol level", "gestational diabetes" and HPO's "Maternal
+diabetes" (a history item about a pregnancy).
+
+**Effect on the suggestions of M2.8.** `suggest-relations` was rerun: 36 new possible synonyms
+(22 disease pairs, 14 feature pairs) from two of our names carrying one HPO or MONDO term, all
+read ("influenza" and "flu", "hematuria" and "blood in urine", "typhoid fever" and "typhoid").
+456 suggestions are pending; nothing is merged.
+
+**Impact analysis.** `main` (command dispatcher): 1 caller, LOW. `link_vocabularies`: 1 caller
+(`main`) and its tests, LOW. `load_supplementary`: 2 callers, each choosing its entry by kind,
+LOW. `suggest_relations`: 1 caller, LOW (affected through the data only). `check` of
+`vocabulary.py`: 1 caller, LOW. `detect_changes` before commit: intended `main` and
+`link_vocabularies`; summary risk "high" because `main` is the first step of eight flows.
+Investigated by comparing every function body with the last commit: in `vocabulary.py` only
+`check` and `link_vocabularies` differ (`write_review` and the variables it listed are
+identical: the known line-shift artefact); in `main` exactly one command branch was added and
+none of the 14 existing branches differs. `verify`, `search-text`, `link-vocabularies` and
+`suggest-relations` were run after the change.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 49 files |
+| `uv run pytest -m "not archives"` (SQLite) | 179 passed, 45 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 231 passed |
+| `tests/unit/test_ontologies.py` (8), `tests/ingestion/test_ontology_links.py` (3) | 11 passed |
+| `link-ontologies` on the real files, twice | 1,142 links, then 0 new; exit 0 both times |
+| `link-vocabularies` after the change (answers cached, no network) | 0 new calls, 0 new links, exit 0 |
+
+The tests prove: every entry of a file is counted and placed in a branch; synonym kinds are
+read (HPO from the synonym, MONDO from its annotation); a parent given as a restriction is not
+a parent; label and exact-synonym links; no link through an abbreviation, a looser synonym, an
+obsolete term, a frequency term, a susceptibility or an animal disease; none when several terms
+carry the name, the label winning when there is exactly one; nearest terms ranked and never an
+abbreviation; a file is refused when its checksum, its release or its layout is not the expected
+one; links stored `pending` with code, label, address, branch and matched text; a question
+sentence is not looked up; the review file has one row per item and vocabulary, a reason
+wherever there is no link, and no ICD-11 code; a rerun stores nothing; a reviewer's decision
+survives; on the real files the known hazards ("scar", "cold", "ards", "gerd") get no link and
+"multiple myeloma" is linked to the human disease only.
+
+**Bugs.**
+
+- **BUG-021 — a reviewed link made `link-vocabularies` fail.** Its self-check counted every
+  link in the table that was not `pending` and reported it as a difference. Nothing had been
+  reviewed when M2.11 was written, so it never fired. *Found by* the new test in which a
+  reviewer's decision survives a rerun: it left one decided link in the test database and the
+  M2.11 test then failed. *Resolution:* a decided link is expected; what is reported is a link
+  decided without a reviewer's name (`decided_without_reviewer`), in both link commands; tests
+  for both cases. *Same pattern, not changed here:* the self-checks of `load-evidence` and
+  `completeness` report any row that is not `pending`; recorded on the M2.5 row of the plan,
+  where approvals begin.
+- Two expectations in the new unit tests were wrong (six exact synonyms in the invented file,
+  not five; the shorter name is the nearer one). The code was right; the tests were corrected.
+
+**Limits, stated plainly.**
+
+- A link is a match of names. Nothing is approved, and no disease or feature ID is replaced.
+- 19 names equal only an abbreviation and have no link in either vocabulary: 39,842 case rows,
+  among them `gerd` (15,831), `psvt` (10,994), `sle` (7,023) and `copd` (2,872). Most of these
+  are probably right; "scar" and "cold" are not, and the rule cannot tell them apart.
+- 298 disease labels and 438 named terms have no candidate in ICD-11, HPO or MONDO. Many are
+  compound or misspelt labels ("possible nstemi / stemi", "larygospasm").
+- "Nearest terms" are found by shared words only (at least half). They are a starting point
+  for a person, and some are poor ("sweating" and "gustatory sweating").
+- The 223 question sentences of archive 15 are not looked up as names.
+- The nearest terms and reasons live in a file outside Git, not in the database; the review
+  screens (M2.4) will need them loaded.
+- Identifiers of other vocabularies inside MONDO (ICD-11, SNOMED CT) were not read (D-T2).
+- The two files are not copied into the object store, as with the other supplied releases.

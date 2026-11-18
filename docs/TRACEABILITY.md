@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.8 (2026-11-18).
+Last updated after sub-step M2.14 (2026-11-18).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -67,11 +67,11 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
-| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Done | Every row kept as a record; feature values of the matrix files (M1.8) and every listed symptom of the list files (M1.9) kept; no external IDs forced | M1.7, M1.8, M1.9 |
+| Union | Full union with provenance; every source record kept; no forced ICD/MONDO/HPO IDs | Done | Every row kept as a record; feature values of the matrix files (M1.8) and every listed symptom of the list files (M1.9) kept; no external IDs forced: ICD-11, HPO and MONDO identifiers are candidate links pending review, stored beside the provisional IDs and never replacing them (M2.11, M2.14) | M1.7, M1.8, M1.9 |
 | D1 | Fingerprint ZIPs and files; namespace versions and split names | Done | SHA-256 per archive and file; split names namespaced by archive | M1.1, M1.3, M1.7 |
 | D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
 | D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
-| D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Done | 960 lexical groups, never merged. 420 suggestions in the review queue (71 possible synonyms, 349 possible subtypes), each with both terms and its reasons; an added word is never treated as a synonym (M2.8). Acting on an accepted suggestion is M2.5 | M1.3, M2.8; M2.5 |
+| D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Done | 960 lexical groups, never merged. 456 suggestions in the review queue (107 possible synonyms, 349 possible subtypes), each with both terms and its reasons; an added word is never treated as a synonym (M2.8; 36 of the synonym suggestions come from two labels sharing one HPO or MONDO term, M2.14). Acting on an accepted suggestion is M2.5 | M1.3, M2.8; M2.5 |
 | D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | All 223 `E_*` questions have a proposed kind taken from the publisher's own dictionary (110 symptom, 86 history, 26 exposure or lifestyle, 1 measurement; M2.12); an antecedent is never proposed as a symptom. **Missing:** approval | M1.3, M2.7, M2.12; M2.5 |
 | D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
@@ -322,7 +322,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |
 | U15 | External cases are also used for training, split once (E35) | Missing | M4.3 |
-| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Partial: ICD-11 and LOINC links stored as pending candidates (571 and 10); SNOMED CT awaits the owner's decision (D-T1) | M2.11 |
+| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Partial: ICD-11 and LOINC links stored as pending candidates (571 and 10; M2.11). SNOMED CT could not be obtained by the owner; in its place HPO and MONDO links are stored as pending candidates (563 and 579; M2.14, E60). 662 of 960 disease labels and 300 of 738 named terms have at least one candidate; none is approved, and the 223 question sentences are not looked up as names | M2.11, M2.14 |
 
 ## 11. Sub-steps added by this trace
 

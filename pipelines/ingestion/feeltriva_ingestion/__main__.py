@@ -1,5 +1,6 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies|suggest-relations}"""
+load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies|link-ontologies|
+suggest-relations}"""
 
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ def main() -> int:
             "derive-meanings",
             "load-release",
             "link-vocabularies",
+            "link-ontologies",
             "suggest-relations",
         ],
     )
@@ -287,6 +289,53 @@ def main() -> int:
                 f"{time.monotonic() - started:.0f}s; "
                 + (
                     "every link is a name match, carries code, title and URI, and is pending review"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
+        if args.command == "link-ontologies":
+            from .ontology_links import check as check_ontology_links
+            from .ontology_links import link_ontologies
+            from .ontology_links import summarise as summarise_ontology_links
+            from .ontology_links import write_review as write_ontology_review
+
+            result = link_ontologies(
+                args.raw_dir, progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True)
+            )
+            for vocabulary in result["vocabularies"]:
+                counted = vocabulary.inventory
+                print(
+                    f"{vocabulary.system} release {vocabulary.version}: {counted['terms']} terms "
+                    f"({counted['current']} current, {counted['obsolete']} obsolete); "
+                    f"{counted['entries_of_other_vocabularies']} entries of other vocabularies not read; "
+                    f"{counted['linkable']} terms may be linked"
+                )
+                print(
+                    f"  names read: {counted['labels']} labels, {counted['exact_synonyms']} exact synonyms "
+                    f"({counted['synonyms_that_are_not_names']} of them abbreviations or otherwise not names), "
+                    f"{counted['looser_synonyms']} looser synonyms; {counted['parent_links']} parent links"
+                )
+                for branch, n in sorted(counted["by_branch"].items(), key=lambda kv: -kv[1]):
+                    print(f"  current terms in branch {branch}: {n}")
+            summary = summarise_ontology_links(result)
+            for (group, system, outcome), n in sorted(summary["rows"].items()):
+                print(f"{group} ({summary['groups'][group]}): {system}: {outcome}: {n}")
+            for (group, outcome), n in sorted(summary["linked"].items()):
+                print(f"{group} ({summary['groups'][group]}): {outcome}: {n}")
+            print(f"case labels: {result['case_labels']}")
+            print(f"links inserted now: {result['inserted']}")
+            for system, status, count, _incomplete, _unsigned in result["stored"]:
+                print(f"stored: {system}: {status}: {count}")
+            print(f"review file (outside Git): {write_ontology_review(result)}")
+            diffs = check_ontology_links(result)
+            for diff in diffs[:20]:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every term of both files is counted, every name has a recorded outcome, and every link is an "
+                    "exact name match stored for review"
                     if not diffs
                     else f"{len(diffs)} differences"
                 )
