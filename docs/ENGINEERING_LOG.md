@@ -1835,3 +1835,16 @@ A search of `apps/web` found no other use of these packages. `detect_changes` be
 - `pnpm` reports one unmet peer: `eslint-plugin-jsx-a11y` 6.10.2 declares support for `eslint`
   up to version 9, and the project uses version 10. This was already so before the change; lint
   runs and its rules fire. Left as it is.
+
+**Committed and indexed.** Committed as `172838b` and pushed; CI passed on both jobs. GitHub
+rescanned the branch and marked alert 1 as fixed (2026-11-18 08:15 UTC). The code graph was
+re-indexed at `172838b` and reports up-to-date. This paragraph was added in a following
+documents-only commit, after which the index was refreshed again.
+
+**A second alert, seen at the same rescan, not fixable today.** Alert 2: GHSA-fc5q-39xc-vjpf
+(high, development scope), `picomatch` 4.0.7 and every earlier version; no fixed release exists
+(4.0.7 is the newest published). GitHub dismissed it automatically under its rule for
+development-only dependencies. The package was in the lockfile before this change, unchanged by
+it, and is used by `vite`, `vitest`, `tinyglobby` and `fdir` to match file names from this
+repository's own configuration; it is not in the built web app. To be updated when a fixed
+release is published.
