@@ -2024,3 +2024,10 @@ survives; on the real files the known hazards ("scar", "cold", "ards", "gerd") g
   screens (M2.4) will need them loaded.
 - Identifiers of other vocabularies inside MONDO (ICD-11, SNOMED CT) were not read (D-T2).
 - The two files are not copied into the object store, as with the other supplied releases.
+
+**Committed and indexed.** Committed as `ef750d4` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `ef750d4` and reports up-to-date; both new modules are below the 32 KB
+limit and their call edges are present. Note for later changes: the graph now rates the shared
+functions `store_links` and `read_subjects` HIGH, because both link commands depend on them.
+The API and the web app were not restarted: this sub-step changes neither. This paragraph was
+added in a following documents-only commit, after which the index was refreshed again.
