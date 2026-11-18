@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.15 (2026-11-18).
+Last updated after sub-step M2.16 (2026-11-18).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -322,7 +322,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |
 | U15 | External cases are also used for training, split once (E35) | Missing | M4.3 |
-| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Partial: ICD-11 and LOINC links stored as pending candidates (571 and 10; M2.11). SNOMED CT could not be obtained by the owner; in its place HPO and MONDO links are stored as pending candidates (573 and 594; M2.14, E60, and the owner's confirmed readings of abbreviated labels, M2.15, E61). 680 of 960 disease labels and 300 of 738 named terms have at least one candidate; none is approved, and the 223 question sentences are not looked up as names. The SNOMED CT and ICD-11 identifiers that MONDO carries are to be imported on the owner's instruction (M2.16, E62) | M2.11, M2.14, M2.15; M2.16 |
+| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Partial: ICD-11 and LOINC links stored as pending candidates (571 and 10; M2.11). SNOMED CT could not be obtained by the owner; in its place HPO and MONDO links are stored as pending candidates (573 and 594; M2.14, E60, and the owner's confirmed readings of abbreviated labels, M2.15, E61). 680 of 960 disease labels and 300 of 738 named terms have at least one candidate; none is approved, and the 223 question sentences are not looked up as names. On the owner's instruction the SNOMED CT and ICD-11 identifiers that MONDO marks equivalent were imported as pending candidates (527 SNOMED CT, 172 ICD-11 MMS, 46 ICD-11 foundation; M2.16, E62): 475 disease labels have an ICD-11 candidate and 501 a SNOMED CT identifier. No code is shown to a user (E63) | M2.11, M2.14, M2.15, M2.16 |
 
 ## 11. Sub-steps added by this trace
 

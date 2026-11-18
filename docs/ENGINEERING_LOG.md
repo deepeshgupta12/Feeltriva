@@ -2137,3 +2137,141 @@ for "cold" above.
 graph was re-indexed at `9c904d9` and reports up-to-date. The API and the web app were not
 restarted: this sub-step changes neither. This paragraph was added in a following documents-only
 commit, after which the index was refreshed again.
+
+### M2.16 — SNOMED CT and ICD-11 identifiers taken from MONDO
+
+Owner's instruction of 2026-11-18 (decision E62): "We do not need any license for the same,
+import them and map them correctly, for the deduplication, keep the most accurate nomenclature".
+Before the work the owner confirmed how deduplication is to be read, accepted that a SNOMED CT
+link shows the number and MONDO's name, confirmed "scar" as "Scarring", and added a standing rule:
+no code of any vocabulary is shown to a user (decision E63, now in `CLAUDE.md`).
+
+**What was built.**
+
+- `mondo_identifiers.py` (one file, WHO, no database): `read_identifiers` (streams `mondo.owl`
+  after its checksum and release are confirmed), `grade`, `resolve_icd`.
+- `identifier_links.py`: `import_identifiers`, `summarise`, `check`, `write_review`.
+- New command `python -m feeltriva_ingestion import-identifiers`.
+- No migration: links go into `terminology_links`. No API or web change.
+- `specs/confirmed_readings.json`: the basis of "scar" now records the owner's confirmation.
+
+**The rules.**
+
+- Basis: every label with a MONDO link that no reviewer has rejected (594).
+- Only an identifier MONDO marks `MONDO:equivalentTo`, and not as obsolete, may become a link.
+  When MONDO marks several identifiers of one vocabulary equivalent for a term, none is chosen.
+- SNOMED CT: the concept number, the address `http://snomed.info/id/<number>`, and as title
+  MONDO's name of the equivalent disease, with a note saying so. No SNOMED CT name is held.
+- ICD-11: MONDO gives foundation entity numbers. WHO is asked for the entity's official title
+  and for where the MMS linearization codes it. If the MMS entity is that same entity, the link
+  is its MMS code (the kind M2.11 stores). If WHO codes it under another entity, the link is the
+  foundation entity itself and the MMS code is recorded beside it, not linked.
+- One row per label and code. Each link names the MONDO term, release and marks it came through.
+
+**WHO's API, checked before use.** The official OpenAPI document (`id.who.int/swagger`) gives
+`GET /icd/entity/{id}` and `GET /icd/release/11/{releaseId}/{linearizationname}/lookup` with
+`foundationUri`; a linearization entity carries `code`, `title` and `source` (the foundation
+entity it derives from). One real call per endpoint with WHO's documented example (cholera)
+confirmed it. Only entity numbers are sent.
+
+**Real run** (`import-identifiers`; the dry run before it made 568 WHO calls in four minutes,
+all cached, so the run itself took 9 seconds and a rerun adds nothing):
+
+| In `mondo.owl` | SNOMED CT | ICD-11 |
+|---|---:|---:|
+| Identifiers listed for current MONDO terms | 9,026 | 4,569 |
+| Marked equivalent | 8,985 | 4,565 |
+| Other marks | 41 | 4 |
+
+| Outcome for our 594 labels with a MONDO link | SNOMED CT | ICD-11 |
+|---|---:|---:|
+| Linked | 527 | 278 as an MMS code |
+| Linked to the foundation entity (WHO codes it only under a sub-code) | | 46 |
+| MONDO lists no identifier | 61 | 263 |
+| Several identifiers marked equivalent, none chosen | 5 | 5 |
+| No identifier marked equivalent | 1 | 1 |
+| WHO does not know the entity | | 1 |
+
+Stored: 527 SNOMED CT, 172 ICD-11 MMS and 46 ICD-11 foundation links, all `pending`
+(`terminology_links` now holds 2,493 rows).
+
+**Deduplication against the name search of M2.11**, for the 278 MMS codes MONDO leads to:
+
+| Case | Labels | What was done |
+|---|---:|---|
+| The name search had stored the same code | 106 | No second row; the existing row is noted as also reached through MONDO |
+| The name search had stored only the "unspecified" or "other specified" sub-code of the same category | 121 | The category is added; the sub-code row is noted with the category. Both stay as candidates |
+| The name search had stored a different code | 5 | Both stay as candidates; listed for review |
+| The name search had no code | 46 | New row |
+
+The 121 show how the two routes differ: asked for a bare category name, WHO's search codes it as
+a coder would, as "Lyme borreliosis, unspecified" (`1C1G.Z`); MONDO leads to the category itself
+(`1C1G`). The 5 real differences were read: "eczema" (our label is linked to MONDO's "atopic
+eczema"), "indigestion" as a disease label and as a symptom (dyspepsia against functional
+dyspepsia), "stye" (hordeolum against hordeolum externum) and "valley fever" (coccidioidomycosis
+against its acute pulmonary form).
+
+| Coverage | Before | After |
+|---|---:|---:|
+| Disease labels with an ICD-11 candidate (of 960) | 405 | 475 |
+| Disease labels with a SNOMED CT identifier | 0 | 501 |
+| Case labels whose label has an ICD-11 candidate (of 1,365,363) | 608,438 | 735,746 |
+| Case labels whose label has a SNOMED CT identifier | 0 | 725,473 |
+| Suggestions pending (after `suggest-relations`) | 467 | 467 |
+
+No new suggestion: the imported codes are shared only by labels that already share the MONDO term.
+
+**Impact analysis.** `main`: 1 caller, LOW. `IcdClient.get`: LOW; called unchanged.
+`store_links`: **HIGH** (two commands depend on it). Reported to the owner before any code was
+written, with the plan: the function is called and not changed. Confirmed after the work by
+comparing every function with the last commit: `vocabulary.py` (22 functions, `store_links`
+among them), `ontologies.py`, `ontology_links.py` and `relations.py` are identical; in `main`
+one command branch was added and the other 15 are identical. `link-vocabularies` and
+`link-ontologies` were rerun and pass. `detect_changes` before commit: `main` and the test
+fixture `write_mondo`, both intended; `_hp` and four variables are the known line-shift artefact;
+summary risk "high" because `main` is the first step of seven flows.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 51 files |
+| `uv run pytest -m "not archives"` (SQLite) | 187 passed, 48 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 244 passed |
+| `tests/unit/test_mondo_identifiers.py` (3), `tests/ingestion/test_identifier_links.py` (4) | 7 passed |
+| `import-identifiers` on the real data, twice | 745 links, then 0 new and 0 WHO calls; exit 0 both times |
+
+The tests prove: only SNOMED CT and ICD-11 identifiers are read, with MONDO's marks, and all are
+counted; an obsolete term's identifiers are not read; the one identifier marked equivalent is
+chosen, none when there are several, none when it is broader, related or equivalent to an
+obsolete concept; WHO is asked for the official title and the MMS code, only numbers are sent and
+an answer is not asked for twice; an entity WHO does not know gives no link; a link is stored
+`pending` with no reviewer, names its MONDO term and marks, and a SNOMED CT link says whose name
+its title is; a code the name search already stored is not stored again and is noted; the
+unspecified sub-code is recognised as the same category; a different code stays beside the new
+one; a rejected MONDO link is not used, and pending links that rest on one are reported.
+
+**Bugs.**
+
+- Found by the new database test before any real data was written: the note written onto an
+  existing ICD-11 row merged two sets of fields that both have a `code` and a `title`, so MONDO's
+  code replaced the ICD-11 code in the note. The two are now kept apart (`icd_code`, `via`).
+- The first version reported the 121 unspecified sub-codes as "a different code". The dry run on
+  the real data showed what they are; the command now recognises them by WHO's own address of a
+  residual sub-code, with a test.
+
+**Limits, stated plainly.**
+
+- Every link here rests on two steps that are both candidates: our label's match to a MONDO term
+  (a match of names) and MONDO's statement of equivalence. Nothing is approved.
+- If a reviewer rejects a MONDO link, the SNOMED CT and ICD-11 links taken through it are not
+  removed by this command; it reports them and fails until M2.5 handles the case.
+- SNOMED CT links carry MONDO's name as their title, not SNOMED CT's. The release is not held.
+- Of the 594 labels, 67 have no SNOMED CT link and 270 no ICD-11 link through MONDO. Most of
+  these are terms for which MONDO lists no identifier (61 and 263); the other 13 cases are listed
+  for review in `data/derived/review/mondo_identifiers.csv` (two equivalents, none equivalent,
+  or unknown to WHO).
+- 388 labels and terms with a link in another vocabulary have no MONDO link and so get nothing here.
+- The licence question was decided by the owner (E62). The lists are in the private database and
+  a file outside Git, not in the repository.
+- `cold` still has no full name: the owner has not answered whether it is "common cold".

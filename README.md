@@ -113,6 +113,7 @@ uv run python -m feeltriva_ingestion load-release    # trace archive 15 to its s
 uv run python -m feeltriva_ingestion derive-meanings # proposed kind and zero meaning per column, pending review (about 20 s)
 uv run python -m feeltriva_ingestion link-vocabularies # candidate ICD-11 and LOINC codes (first run about 40 min; later runs seconds)
 uv run python -m feeltriva_ingestion link-ontologies   # candidate HPO and MONDO terms from two local files; nothing leaves this machine (about 15 s)
+uv run python -m feeltriva_ingestion import-identifiers # SNOMED CT and ICD-11 identifiers that MONDO marks equivalent (first run about 4 min; later runs seconds)
 uv run python -m feeltriva_ingestion suggest-relations # possible synonyms and subtypes for review; nothing is merged (seconds)
 ```
 
@@ -122,7 +123,9 @@ WHO API. `load-release` needs the DDXPlus release (`22687585.zip`, registered in
 `link-ontologies` needs `hp.json` (HPO) and `mondo.owl` (MONDO) in `data/raw/`; each is read only when its checksum and release
 are the registered ones. It writes every name's outcome to `data/derived/review/ontology_links.csv`, outside Git. Labels that
 are abbreviations (`gerd`, `copd`) are linked only through `specs/confirmed_readings.json`, where a named person has confirmed
-the full name each stands for.
+the full name each stands for. `import-identifiers` takes, for every label with a MONDO link, the SNOMED CT and ICD-11
+identifiers MONDO marks equivalent; it sends only ICD-11 entity numbers to the WHO API, to fetch official titles and codes.
+No code of any vocabulary is shown to a user: the links are for the internal database (`docs/DECISIONS.md` E63).
 
 `completeness` prints, for each of the 27 rows of the source-to-target table in
 `docs/04_DATA_MAPPING.md`, the loaded value next to the expected one and exits with status 1 on
@@ -144,7 +147,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
 | M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks, 22,059 pending evidence proposals, the six raw archives in a private, versioned object store, and a completeness check of all of it against the handoff's mapping table (235 checks, 0 mismatches) done. Everything loaded is still `pending` review |
-| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); archive 15 is traced row for row to its source release, whose own question dictionary settles all 223 of its questions. Candidate ICD-11 codes for 405 of 960 disease labels and 166 of 738 named symptom terms, and 10 LOINC codes, stored pending review. Candidate HPO and MONDO terms for 625 of 960 disease labels and 246 of 738 named terms (1,167 links, 25 of them through the owner's confirmed readings of abbreviated labels), stored pending review; counting ICD-11 as well, 680 disease labels and 300 named terms have at least one candidate. 467 synonym and subtype suggestions in the review queue (`GET /internal/v1/review/relation-suggestions`), none merged. SNOMED CT could not be obtained; the SNOMED CT and ICD-11 identifiers that MONDO carries are next (M2.16). Archive-15 answers, statement extraction, urgency rules, release publishing, serving views and review UI wiring not started |
+| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); archive 15 is traced row for row to its source release, whose own question dictionary settles all 223 of its questions. Candidate ICD-11 codes for 405 of 960 disease labels and 166 of 738 named symptom terms, and 10 LOINC codes, stored pending review. Candidate HPO and MONDO terms for 625 of 960 disease labels and 246 of 738 named terms (1,167 links, 25 of them through the owner's confirmed readings of abbreviated labels), stored pending review; counting ICD-11 as well, 680 disease labels and 300 named terms have at least one candidate. 467 synonym and subtype suggestions in the review queue (`GET /internal/v1/review/relation-suggestions`), none merged. Through those MONDO links, 527 SNOMED CT identifiers and 218 further ICD-11 links (official WHO titles) are stored pending review; 475 of 960 disease labels now have an ICD-11 candidate and 501 a SNOMED CT identifier. The SNOMED CT release itself could not be obtained. Archive-15 answers, statement extraction, urgency rules, release publishing, serving views and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
 | M4 – M5 Modelling, retrieval and LLM adapters | Not started |
@@ -172,7 +175,9 @@ question texts from that release appear in `docs/review/` and `data_audit/`.
 The origin of the other five archives is not documented; see `docs/DECISIONS.md` E30.
 
 Candidate codes come from four vocabularies. The link lists themselves are kept in the private database, not in
-this repository (`docs/DECISIONS.md` E56). SNOMED CT is not used: its release could not be obtained (`docs/DECISIONS.md` E60).
+this repository (`docs/DECISIONS.md` E56). The SNOMED CT release could not be obtained (`docs/DECISIONS.md` E60); on the
+owner's decision (E62) the SNOMED CT concept identifiers and ICD-11 entity numbers that MONDO lists as equivalent to its
+terms are stored as internal candidates. No SNOMED CT name, description or hierarchy is held.
 
 - **ICD-11:** International Classification of Diseases, Eleventh Revision (ICD-11), World Health Organization (WHO) 2019,
   <https://icd.who.int/browse11>. Licensed under the Creative Commons Attribution-NoDerivatives 3.0 IGO licence

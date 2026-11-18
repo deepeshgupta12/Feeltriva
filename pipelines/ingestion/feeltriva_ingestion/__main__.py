@@ -1,6 +1,6 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
 load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies|link-ontologies|
-suggest-relations}"""
+import-identifiers|suggest-relations}"""
 
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ def main() -> int:
             "load-release",
             "link-vocabularies",
             "link-ontologies",
+            "import-identifiers",
             "suggest-relations",
         ],
     )
@@ -340,6 +341,54 @@ def main() -> int:
                 + (
                     "every term of both files is counted, every name has a recorded outcome, and every link is an "
                     "exact name match stored for review"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
+        if args.command == "import-identifiers":
+            from .identifier_links import check as check_identifiers
+            from .identifier_links import import_identifiers
+            from .identifier_links import summarise as summarise_identifiers
+            from .identifier_links import write_review as write_identifier_review
+
+            result = import_identifiers(
+                args.raw_dir, progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True)
+            )
+            counted = result["counted"]
+            print(
+                f"MONDO release {result['mondo_release']}: {counted['terms_with_an_identifier']} current terms list a "
+                "SNOMED CT or ICD-11 identifier"
+            )
+            for vocabulary in ("SNOMED CT", "ICD-11 Foundation"):
+                of = counted[vocabulary]
+                print(
+                    f"  {vocabulary}: {of['identifiers']} identifiers in the file, {of['marked_equivalent']} marked "
+                    f"equivalent; other marks: {of['other_marks']}"
+                )
+            print(
+                f"our labels with a MONDO link: {result['mondo_links']['read']} "
+                f"({result['mondo_links']['rejected_and_not_used']} rejected by a reviewer and not used)"
+            )
+            summary = summarise_identifiers(result)
+            for (group, vocabulary, outcome), n in sorted(summary["rows"].items()):
+                print(f"{group} ({summary['groups'][group]}): {vocabulary}: {outcome}: {n}")
+            for outcome, n in sorted(summary["agreement"].items()):
+                print(f"ICD-11 code reached through MONDO: {outcome}: {n}")
+            print(f"ICD-11 release {result['icd_release'] or 'not asked'}; {result['who_calls']} new WHO calls")
+            print(f"case labels: {result['case_labels']}")
+            print(f"links inserted now: {result['inserted']}")
+            for system, status, count, _incomplete, _unsigned in result["stored"]:
+                print(f"stored through MONDO: {system}: {status}: {count}")
+            print(f"review file (outside Git): {write_identifier_review(result)}")
+            diffs = check_identifiers(result)
+            for diff in diffs[:20]:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every label with a MONDO link has a recorded outcome for both vocabularies, and every link is an "
+                    "identifier MONDO marks equivalent, stored for review"
                     if not diffs
                     else f"{len(diffs)} differences"
                 )

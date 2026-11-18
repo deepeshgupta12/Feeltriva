@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import urllib.error
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
 OBO = "http://purl.obolibrary.org/obo/"
 HP_TYPE = OBO + "hp#"
+ENTITY = "http://id.who.int/icd/entity/"
 
 
 def _hp(number: str) -> str:
@@ -118,8 +121,28 @@ def _typed(number: str, text: str, type_iri: str) -> str:
 """
 
 
+def _xref(text: str) -> str:
+    return f"        <oboInOwl:hasDbXref>{text}</oboInOwl:hasDbXref>"
+
+
+def _marked(number: str, text: str, *sources: str) -> str:
+    lines = "".join(f"        <oboInOwl:source>{source}</oboInOwl:source>\n" for source in sources)
+    return f"""    <owl:Axiom>
+        <owl:annotatedSource rdf:resource="{OBO}MONDO_{number}"/>
+        <owl:annotatedProperty rdf:resource="http://www.geneontology.org/formats/oboInOwl#hasDbXref"/>
+        <owl:annotatedTarget>{text}</owl:annotatedTarget>
+{lines}    </owl:Axiom>
+"""
+
+
 def write_mondo(path: Path, release: str = "2026-01-01", tag: str = "", human_label: str = "human disease") -> Path:
-    """A file with 12 MONDO terms (1 obsolete) and one class of another vocabulary."""
+    """A file with 12 MONDO terms (1 obsolete) and one class of another vocabulary.
+
+    Four current terms list identifiers of other vocabularies (invented numbers), with MONDO's kind of marks:
+    9000001 one SNOMED CT and one ICD-11 identifier marked equivalent, and a related SNOMED CT one;
+    9000003 two SNOMED CT identifiers both marked equivalent, and an ICD-11 one marked broader;
+    9000006 an ICD-11 identifier marked equivalent, and a SNOMED CT one equivalent to an obsolete concept;
+    9000002 (a disease of dogs) one SNOMED CT identifier. The obsolete term's identifier is not read."""
     t = f" {tag}" if tag else ""
     restriction = """        <rdfs:subClassOf>
             <owl:Restriction>
@@ -134,6 +157,10 @@ def write_mondo(path: Path, release: str = "2026-01-01", tag: str = "", human_la
             _synonym("Exact", f"SFD{t}"),
             _synonym("Exact", f"synthetic foever disease{t}"),
             _synonym("Narrow", f"mild pretend fever{t}"),
+            _xref("MESH:D000001"),
+            _xref("SCTID:111"),
+            _xref("SCTID:112"),
+            _xref("icd11.foundation:900001"),
         ]
     )
     parts = [
@@ -147,15 +174,42 @@ def write_mondo(path: Path, release: str = "2026-01-01", tag: str = "", human_la
         _class("9000001", f"synthetic fever disease{t}", ("0700096",), fever),
         _typed("9000001", f"SFD{t}", OBO + "mondo#ABBREVIATION"),
         _typed("9000001", f"synthetic foever disease{t}", OBO + "OMO_0003005"),
-        _class("9000002", f"synthetic fever disease{t}, dog", ("0005583",), _synonym("Exact", f"pretend fever{t}")),
-        _class("9000003", f"synthetic cut{t}", ("0021178",)),
+        _marked("9000001", "MESH:D000001", "MONDO:equivalentTo"),
+        _marked("9000001", "SCTID:111", "DOID:1", "MONDO:equivalentTo"),
+        _marked("9000001", "SCTID:112", "MONDO:relatedTo"),
+        _marked("9000001", "icd11.foundation:900001", "MONDO:equivalentTo"),
+        _class(
+            "9000002",
+            f"synthetic fever disease{t}, dog",
+            ("0005583",),
+            _synonym("Exact", f"pretend fever{t}") + "\n" + _xref("SCTID:115"),
+        ),
+        _marked("9000002", "SCTID:115", "MONDO:equivalentTo"),
+        _class(
+            "9000003",
+            f"synthetic cut{t}",
+            ("0021178",),
+            "\n".join((_xref("SCTID:113"), _xref("SCTID:114"), _xref("icd11.foundation:900003"))),
+        ),
+        _marked("9000003", "SCTID:113", "MONDO:equivalentTo"),
+        _marked("9000003", "SCTID:114", "MONDO:equivalentTo"),
+        _marked("9000003", "icd11.foundation:900003", "MONDO:mondoIsBroaderThanSource"),
         _class("9000004", f"synthetic leaning{t}", ("0042489",)),
         _class(
             "9000005",
             f"obsolete synthetic ache{t}",
-            body='        <owl:deprecated rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</owl:deprecated>',
+            body='        <owl:deprecated rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</owl:deprecated>\n'
+            + _xref("SCTID:117"),
         ),
-        _class("9000006", f"synthetic fever disease{t} of the young", ("9000001",)),
+        _marked("9000005", "SCTID:117", "MONDO:equivalentTo"),
+        _class(
+            "9000006",
+            f"synthetic fever disease{t} of the young",
+            ("9000001",),
+            _xref("SCTID:116") + "\n" + _xref("icd11.foundation:900006"),
+        ),
+        _marked("9000006", "SCTID:116", "MONDO:equivalentObsolete"),
+        _marked("9000006", "icd11.foundation:900006", "MONDO:equivalentTo"),
         f'    <owl:Class rdf:about="{OBO}HP_0000118">\n        <rdfs:label>Phenotypic abnormality</rdfs:label>\n    </owl:Class>\n',
         "</rdf:RDF>\n",
     ]
@@ -171,3 +225,39 @@ def entry(path: Path, kind: str, release: str = "2026-01-01") -> dict[str, Any]:
         "version": release,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
     }
+
+
+class FakeWho:
+    """Answers like the WHO ICD API v2 for foundation entities and the MMS lookup, from a table.
+
+    entities: number -> (title, None) or (title, (mms code, mms title, number of the foundation entity it is coded as))."""
+
+    def __init__(self, entities):
+        self.entities, self.seen = entities, []
+
+    def __call__(self, url, headers, body):
+        if "connect/token" in url:
+            return {"access_token": "token-1", "token_type": "Bearer", "expires_in": 3600}
+        assert headers["API-Version"] == "v2" and headers["Accept-Language"] == "en"
+        self.seen.append(url)
+        parts = urllib.parse.urlsplit(url)
+        if parts.path == "/icd/release/11/mms":
+            return {"latestRelease": "http://id.who.int/icd/release/11/2026-01/mms"}
+        if parts.path.startswith("/icd/entity/"):
+            number = parts.path.rsplit("/", 1)[1]
+            if number not in self.entities:
+                raise urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
+            return {"@id": ENTITY + number, "title": {"@language": "en", "@value": self.entities[number][0]}}
+        assert parts.path == "/icd/release/11/2026-01/mms/lookup"
+        (uri,) = urllib.parse.parse_qs(parts.query)["foundationUri"]
+        coded = self.entities[uri.rsplit("/", 1)[1]][1]
+        if coded is None:
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
+        code, title, source = coded
+        return {
+            "@id": f"http://id.who.int/icd/release/11/2026-01/mms/{source}",
+            "code": code,
+            "title": {"@language": "en", "@value": title},
+            "source": ENTITY + source,
+            "classKind": "category",
+        }
