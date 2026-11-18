@@ -1590,3 +1590,10 @@ rebuilt a large table once per row and ran past ten minutes; it was stopped and 
 - For archives 11, 12, 14 and 16 nothing new is known: no origin, no documentation.
 - Everything stored here is `pending`.
 
+**Committed and indexed.** Committed as `9a42446` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `9a42446` and reports up-to-date. This paragraph was added in a
+following documents-only commit, after which the index was refreshed again.
+
+**Noticed, not acted on.** Three untracked items appeared under `.claude/` on 2026-11-17 at 17:13
+(`CLAUDE.md`, `settings.json`, `hooks/`), written by an editor tool named vexp (v3.5.1). They
+were not created by this work and are not committed; the owner decides whether they are kept.
