@@ -133,7 +133,7 @@
       "plain_word": true,
       "confirmed_by": "owner",
       "confirmed_on": "2026-11-18",
-      "basis": "the owner stated on 2026-11-18 that cold is a plain word that can be a symptom; it is not the abbreviation COLD. No full name is given yet: in the data the symptom is affirmed in 43 cases, labelled swine flu (12), influenza (10), common cold (7), sinusitis (6), measles (5) and allergy (3), which points to \"a cold\" and not to \"feeling cold\"; HPO has no finding of that name and MONDO has the disease \"common cold\". Reading it as \"common cold\" awaits the owner's confirmation"
+      "basis": "the owner stated on 2026-11-18 that cold is a symptom and that the disease is \"common cold\"; the symptom is not the abbreviation COLD and is not to be read as the disease. No full name is given on purpose: when a user says they have a cold, follow-up symptom questions identify the disease (decision E65). In the data the symptom is affirmed in 43 cases: swine flu 12, influenza 10, common cold 7, sinusitis 6, measles 5, allergy 3"
     }
   ]
 }
