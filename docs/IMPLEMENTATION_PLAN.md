@@ -21,13 +21,16 @@ nonmedical fixture until a clinical owner approves a real release.
 One sub-step at a time; each starts only after the owner's go-ahead (see `CLAUDE.md`).
 Sub-step numbers are labels in the order the sub-steps were added; **the order of work is the
 list below**, not the numbers. The knowledge-model order (line 2) was confirmed by the owner on
-2026-11-17; the other lines are proposed and are confirmed sub-step by sub-step:
+2026-11-17 and replaced by the owner on 2026-11-18 (decision E59); the other lines are proposed and
+are confirmed sub-step by sub-step:
 
 1. **Finish ingestion** (complete since M1.13): M1.8 → M1.9 → M1.10 → M1.11 → M1.12 → M1.13
-2. **Knowledge model** (order confirmed by the owner): M2.7 → M2.8 → M2.5 → M2.9 → M2.10 → M2.6 → M2.4
-   (M2.7, M2.12, M2.11 and M2.8 are done. Next in the confirmed order: M2.5. M2.14: the owner could not obtain SNOMED CT;
-   the open vocabularies HPO and MONDO are proposed in its place; the owner supplied both files on 2026-11-18, they were
-   checked and kept, and the sub-step awaits the owner's go-ahead. M2.13 has no go-ahead yet)
+2. **Knowledge model** (order confirmed by the owner on 2026-11-18, decision E59):
+   M2.14 → M2.13 → M2.6 → M2.10 → M2.5 → M2.9 → M2.4
+   (Done before this order: M2.1, M2.2, M2.3, M2.7, M2.12, M2.11, M2.8. Reason for the order: first everything that
+   produces material for review (M2.14, M2.13, M2.6, M2.10), then what approves and freezes it (M2.5), then what serves
+   it (M2.9), then the review screens over the complete backend (M2.4). The earlier order M2.5 → M2.9 → M2.10 → M2.6 →
+   M2.4 built the care-statement view of M2.9 before the statements of M2.6 existed and had no place for M2.13 and M2.14)
 3. **Product gaps**: M3.14 → M3.8 → M3.9 → M3.10 → M3.12 → M3.13 → M3.11 → M3.15
 4. **Conversations on Cassandra**: C2 → C12
 5. **Model training and testing**: M4.1 → M4.6
