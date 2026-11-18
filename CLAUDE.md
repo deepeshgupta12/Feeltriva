@@ -128,6 +128,7 @@ uv run python -m feeltriva_ingestion completeness              # read-only: load
 uv run python -m feeltriva_ingestion load-release              # trace archive 15 to its source release; question dictionary
 uv run python -m feeltriva_ingestion derive-meanings           # proposed feature kinds and zero meanings (pending)
 uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-11 and LOINC codes (needs the ICD key in .env)
+uv run python -m feeltriva_ingestion suggest-relations         # possible synonyms and subtypes for review (nothing merged)
 ```
 
 Run the PostgreSQL suite **without** `-m "not archives"` at least once per sub-step when the

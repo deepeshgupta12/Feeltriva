@@ -112,6 +112,7 @@ uv run python -m feeltriva_ingestion completeness   # read-only check of everyth
 uv run python -m feeltriva_ingestion load-release    # trace archive 15 to its source release; store the publisher's question dictionary (about 30 s)
 uv run python -m feeltriva_ingestion derive-meanings # proposed kind and zero meaning per column, pending review (about 20 s)
 uv run python -m feeltriva_ingestion link-vocabularies # candidate ICD-11 and LOINC codes (first run about 40 min; later runs seconds)
+uv run python -m feeltriva_ingestion suggest-relations # possible synonyms and subtypes for review; nothing is merged (seconds)
 ```
 
 `link-vocabularies` needs a WHO ICD API key in `.env` (`ICD_API_CLIENT_ID`, `ICD_API_CLIENT_SECRET`; see `.env.example`) and
@@ -138,7 +139,7 @@ GitNexus, the developer code-intelligence index described in `CLAUDE.md`.
 |---|---|
 | M0 Bootable project and contracts | Backend, migrations, auth, generated web client, CI (backend and web jobs) done |
 | M1 Reproducible ingestion | Verification, audit, reference load, 1,365,363 case rows, 16,013,976 feature rows, 3,651 narrative chunks, 22,059 pending evidence proposals, the six raw archives in a private, versioned object store, and a completeness check of all of it against the handoff's mapping table (235 checks, 0 mismatches) done. Everything loaded is still `pending` review |
-| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); archive 15 is traced row for row to its source release, whose own question dictionary settles all 223 of its questions. Candidate ICD-11 codes for 405 of 960 disease labels and 166 of 738 named symptom terms, and 10 LOINC codes, stored pending review. SNOMED CT links (ICD-11, LOINC, SNOMED CT), release publishing and review UI wiring not started |
+| M2 Reviewable knowledge model | Review API and reviewed-only serving done. Feature meanings proposed from the data for all 1,962 column and list-term mappings, each with its basis, pending review ([`docs/review/feature_meanings.md`](docs/review/feature_meanings.md)); archive 15 is traced row for row to its source release, whose own question dictionary settles all 223 of its questions. Candidate ICD-11 codes for 405 of 960 disease labels and 166 of 738 named symptom terms, and 10 LOINC codes, stored pending review. 420 synonym and subtype suggestions in the review queue (`GET /internal/v1/review/relation-suggestions`), none merged. Further vocabulary links (ICD-11, LOINC, SNOMED CT), release publishing and review UI wiring not started |
 | M3 Fixture-mode vertical slice | Service, REST, contract tests, stdio MCP and the web app done; web verified against the live API in a browser (43 checks) |
 | C User conversations on Apache Cassandra (replaces the PostgreSQL session tables) | Planned, not started |
 | M4 – M5 Modelling, retrieval and LLM adapters | Not started |

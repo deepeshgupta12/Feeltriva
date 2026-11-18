@@ -22,6 +22,7 @@ from .models import (
     DiseaseMapping,
     FeatureMapping,
     MappingRelease,
+    RelationSuggestion,
     ReviewNote,
     Source,
     Statement,
@@ -60,6 +61,7 @@ class ReviewService:
                 "disease_mappings": by_status(DiseaseMapping),
                 "feature_mappings": by_status(FeatureMapping),
                 "statements": by_status(Statement),
+                "relation_suggestions": by_status(RelationSuggestion),
                 "feature_columns_with_repeated_header": sum(1 for t in mappings if (t or {}).get("repeated_header")),
                 "mapping_releases": [
                     {"release_id": r.release_id, "version": r.version, "status": r.status}
@@ -198,6 +200,61 @@ class ReviewService:
                 ],
             }
 
+    def list_relation_suggestions(
+        self,
+        principal: Principal,
+        *,
+        status: str | None = None,
+        relation: str | None = None,
+        subject_type: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Suggested synonyms and subtypes, each with both terms and the reasons. Nothing is merged
+        by a suggestion; accepting or rejecting one is a recorded review decision."""
+        principal.require_role("reviewer")
+        limit, offset = _page(limit, offset)
+        stmt = select(RelationSuggestion)
+        if status:
+            stmt = stmt.where(RelationSuggestion.status == status)
+        if relation:
+            stmt = stmt.where(RelationSuggestion.relation == relation)
+        if subject_type:
+            stmt = stmt.where(RelationSuggestion.subject_type == subject_type)
+        if q:
+            pattern = q.lower()
+            stmt = stmt.where(
+                func.lower(RelationSuggestion.left_label).contains(pattern)
+                | func.lower(RelationSuggestion.right_label).contains(pattern)
+            )
+        with self._db.transaction(principal.subject, role="reviewer") as tx:
+            total = tx.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+            rows = tx.execute(
+                stmt.order_by(
+                    RelationSuggestion.subject_type, RelationSuggestion.left_label, RelationSuggestion.suggestion_id
+                )
+                .limit(limit)
+                .offset(offset)
+            ).scalars()
+            return {
+                "label": "Suggestions from wording only - not clinically reviewed; nothing is merged until a reviewer decides",
+                "total": total,
+                "items": [
+                    {
+                        "suggestion_id": r.suggestion_id,
+                        "subject_type": r.subject_type,
+                        "relation": r.relation,
+                        "left": {"id": r.left_id, "term": r.left_label},
+                        "right": {"id": r.right_id, "term": r.right_label},
+                        "signals": r.signals or [],
+                        "review_status": r.status,
+                        "reviewer": r.reviewer,
+                    }
+                    for r in rows
+                ],
+            }
+
     def record_review(
         self, principal: Principal, *, target_type: str, target_id: str, note: str, status: str | None = None
     ) -> dict[str, Any]:
@@ -218,7 +275,7 @@ class ReviewService:
                 target.status = status
                 if isinstance(target, Statement):
                     target.reviewed_by, target.reviewed_at = principal.subject, datetime.now(UTC)
-                elif isinstance(target, DiseaseMapping):
+                elif isinstance(target, DiseaseMapping | RelationSuggestion):
                     target.reviewer = principal.subject
             entry = ReviewNote(
                 note_id=uuid.uuid4(),
@@ -300,3 +357,7 @@ class KnowledgeService:
                 "definition": disease.definition,
                 "statements": out,
             }
+
+
+# Registered here, at the end of the module, so that the decision endpoint also serves suggestions.
+_TARGETS["relation_suggestion"] = (RelationSuggestion, "suggestion_id")

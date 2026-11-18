@@ -1,5 +1,5 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies}"""
+load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies|suggest-relations}"""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def main() -> int:
             "derive-meanings",
             "load-release",
             "link-vocabularies",
+            "suggest-relations",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -242,6 +243,20 @@ def main() -> int:
             out.write_text(text + "\n", encoding="utf-8")
             print(f"report: {out}")
             return 1 if mismatches else 0
+        if args.command == "suggest-relations":
+            from .relations import suggest_relations
+
+            result = suggest_relations()
+            print(f"candidates compared: {result['subjects']}")
+            for (subject_type, relation), n in sorted(result["suggested"].items()):
+                print(f"{subject_type}: {relation}: {n} suggested, {result['inserted'][(subject_type, relation)]} new")
+            for (subject_type, relation, signal), n in sorted(result["signals"].items()):
+                print(f"  {subject_type}: {relation}: because {signal.replace('_', ' ')}: {n}")
+            print(f"stored, by review status: {result['stored']}")
+            print(
+                f"{time.monotonic() - started:.0f}s; suggestions only: nothing is merged, and a decided pair keeps its decision"
+            )
+            return 0
         if args.command == "link-vocabularies":
             from .release import load_supplementary
             from .vocabulary import check as check_links

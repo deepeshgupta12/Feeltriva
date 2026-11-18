@@ -21,12 +21,12 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.11 (2026-11-18).
+Last updated after sub-step M2.8 (2026-11-18).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
 | Functional requirements | 7 | 10 | 1 | 0 | 0 |
-| Data | 43 | 12 | 5 | 0 | 0 |
+| Data | 44 | 11 | 5 | 0 | 0 |
 | Architecture | 11 | 15 | 8 | 0 | 0 |
 | Model training and testing | 5 | 5 | 12 | 2 | 1 |
 | Test and evaluation layers | 1 | 8 | 2 | 0 | 0 |
@@ -34,9 +34,9 @@ Last updated after sub-step M2.11 (2026-11-18).
 | Backlog milestones | 3 | 1 | 5 | 0 | 0 |
 | Frontend prompt | 9 | 6 | 0 | 0 | 0 |
 | Other requirements | 1 | 1 | 4 | 2 | 3 |
-| **Total** | **90** | **64** | **41** | **4** | **4** |
+| **Total** | **91** | **63** | **41** | **4** | **4** |
 
-Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. (M1.13 completed two requirements and moved three data rows, T12, T14 and T16, from Done back to Partial: the completeness check showed that each still has work owned by a later sub-step.) The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
+Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. (M1.13 completed two requirements and moved three data rows, T12, T14 and T16, from Done back to Partial: the completeness check showed that each still has work owned by a later sub-step.) The largest missing blocks are model training and testing (section 4), retrieval and language-model work (sections 3 and 5), and the knowledge-review steps that turn pending content into approved releases.
 
 ## 1. Functional requirements (`docs/01` §2)
 
@@ -71,7 +71,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | D1 | Fingerprint ZIPs and files; namespace versions and split names | Done | SHA-256 per archive and file; split names namespaced by archive | M1.1, M1.3, M1.7 |
 | D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
 | D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
-| D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Partial | Lexical groups done (960). No synonym suggestions are produced | M1.3; **M2.8 new**, M2.5 |
+| D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Done | 960 lexical groups, never merged. 420 suggestions in the review queue (71 possible synonyms, 349 possible subtypes), each with both terms and its reasons; an added word is never treated as a synonym (M2.8). Acting on an accepted suggestion is M2.5 | M1.3, M2.8; M2.5 |
 | D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | All 223 `E_*` questions have a proposed kind taken from the publisher's own dictionary (110 symptom, 86 history, 26 exposure or lifestyle, 1 measurement; M2.12); an antecedent is never proposed as a symptom. **Missing:** approval | M1.3, M2.7, M2.12; M2.5 |
 | D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
@@ -217,7 +217,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | Layer | Required | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Done | Every loader that reads columns now refuses a file whose columns changed, before writing anything (`tests/ingestion/test_schema_drift.py`); text outside ASCII is covered in the archive, list and narrative tests | M1.1 – M1.13 |
-| Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym, ambiguity and merge tests | M2.5, M2.8 |
+| Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym and subtype suggestions are tested (M2.8). Missing: ambiguity, redirect and merge tests | M2.5, M2.8 |
 | ML | Split leakage, target leakage, train-only transforms, coverage, calibration isolation, OOD, partial observations, per-source and subgroup | Missing | All | M4 |
 | Rules | Approved fixtures, boundary ages, unknown inputs, contradictions, precedence, missing bundle | Partial | Clinician-approved fixtures | M3.1; M6.2 |
 | Conversation | Negation, temporality, experiencer, uncertainty, mixed complaints, repeats, unknowns, non-English, correction | Partial | Temporality, experiencer, non-English | M5.1, M5.5 |

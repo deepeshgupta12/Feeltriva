@@ -208,6 +208,22 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             )
         )
 
+    @app.get("/internal/v1/review/relation-suggestions")
+    def review_relation_suggestions(
+        who: Who,
+        status: str | None = None,
+        relation: str | None = None,
+        subject_type: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            container.review.list_relation_suggestions(
+                who, status=status, relation=relation, subject_type=subject_type, q=q, limit=limit, offset=offset
+            )
+        )
+
     @app.post("/internal/v1/review/decisions")
     def review_decision(body: ReviewDecision, who: Who) -> JSONResponse:
         return JSONResponse(

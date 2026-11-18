@@ -28,6 +28,7 @@ command output, not estimated.
 | BUG-017 | M2.11 | The ICD client did not retry a dropped connection; the first real run died on a network timeout | Fixed |
 | BUG-018 | M2.11 | The ICD client opened a new secure connection for every request and ran the lookups inside a database transaction; the real run crawled at about 6 terms a minute | Fixed |
 | BUG-019 | M2.11 | LOINC matching on the component name alone gave a wrong-sense link ("fever" to "Fever in Mother") | Fixed before commit |
+| BUG-020 | M2.8 | Two labels that share only a catch-all ICD-11 code were suggested as synonyms (chronic and diabetic kidney disease) | Fixed before commit |
 
 ## Entries
 
@@ -1699,3 +1700,81 @@ sent; links stored pending with code, title and URI; the API role cannot read th
 **Committed and indexed.** Committed as `9dc5c0a` and pushed; CI passed on both jobs. The code
 graph was re-indexed at `9dc5c0a` and reports up-to-date. This paragraph was added in a
 following documents-only commit, after which the index was refreshed again.
+
+### M2.8 — Synonym and subtype suggestions
+
+**Handoff clauses applied.** `docs/01` §4, deduplication rule 4: "Use casefold/trim/collapse-whitespace
+only for initial disease labels. Preserve subtype, acuity and severity distinctions. Suggested
+synonyms go to review." `docs/05` M2: review screens for disease aliases; redirects and merge
+history (the acting part, M2.5). Owner's confirmed order: M2.8 after M2.7.
+
+**Impact analysis before editing.** `record_review`, `overview`, `create_app` and the ingestion
+CLI `main`: LOW each, one caller each. Shared files touched: `models.py` (one class appended),
+`review.py`, `main.py`, a new migration.
+
+**Implemented.**
+
+- Migration `0007`: `relation_suggestions`. The API role may read and decide rows only inside a
+  reviewer transaction (row-level security), and may change only `status` and `reviewer`.
+- `relations.py` and the command `suggest-relations`. Possible synonym: same words under other
+  punctuation, other order or number, British or American spelling, or a candidate link to
+  the same specific standard code. Possible subtype: one label is the other plus one or two
+  words; the narrower label is stored on the left. Question sentences are not compared.
+- Review API: `GET /internal/v1/review/relation-suggestions` (filters: status, relation,
+  subject type, text). Decisions go through the existing `POST /internal/v1/review/decisions`
+  with target type `relation_suggestion`: the reviewer, the note and an audit event are
+  recorded. The overview now counts suggestions by status.
+- A pair that already has a row keeps it, whatever was decided, so a rejection is remembered.
+- Accepting a suggestion records the decision only. Creating the redirect is M2.5.
+
+**Result of the real run** (1 s; a second run added 0):
+
+| Candidates | Possible synonyms | Possible subtypes |
+|---|---:|---:|
+| 960 disease labels | 18 | 175 |
+| 738 named feature terms | 53 | 174 |
+
+Reasons among the 71 synonym suggestions: same words under other punctuation 32, same specific
+standard code 33, other order or number 14, spelling 1 (a pair can have a code reason and a
+wording reason). All 420 are `pending`. Examples: "typhoid fever" as a subtype of "typhoid";
+"acute rhinosinusitis" and "acute sinusitis" (one ICD-11 code); "pain in gums" and "gum pain".
+The broader terms with most suggested subtypes: swelling 25, cancer 24, weakness 18.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 47 files |
+| `uv run pytest -m "not archives"` (SQLite) | 170 passed, 44 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 220 passed |
+| `uv run pytest tests/unit/test_relations.py tests/api/test_review_suggestions.py` | 8 passed |
+| Migration `0007` on a scratch database: head, down to `0006`, head, base, head | 32, 31, 32, 1, 32 tables |
+| Live API after restart: the new route as a reviewer, and without the role | 200 with 18 disease synonyms; 403 |
+| `detect_changes` before commit | intended: `main`, `create_app`, `overview`, `record_review`; also listed but identical to the last commit (code added above them): `get_condition_information`, `KnowledgeService`, `review_decision`, `app_factory` |
+
+The tests prove: each kind of likeness is found with its reason; an added word gives a subtype
+and never a synonym; three added words give nothing; one identity per pair; the route is for
+reviewers only and shows both terms; a rejection is stored with the reviewer; a rerun suggests
+nothing twice and keeps the rejection; no disease is redirected by a suggestion; outside a
+reviewer transaction the rows can be neither read nor changed.
+
+**Bugs.**
+
+- **BUG-020 — synonyms from a catch-all code.** The first real run suggested "chronic kidney
+  disease" and "diabetic kidney disease", and "Gaucher disease" and "Niemann-Pick disease", as
+  possible synonyms, because each pair carries one residual ICD-11 code ("unspecified", "other
+  specified"). *Found by* reading a sample of the stored suggestions. *Resolution:* residual codes
+  are no reason to suggest (decision E58); the 440 pending rows were deleted and 420 generated;
+  a test with a specific and a residual code.
+- Also corrected before commit: the singular form cut "virus" to "viru" and would have cut
+  "arthritis"; endings "us" and "is" are now left alone.
+
+**Limits, stated plainly.**
+
+- Wording and shared codes are the only evidence. A suggestion is a question for a reviewer.
+- Synonyms with no word in common ("heart attack", "myocardial infarction") are found only
+  when both have a link to the same specific code, and only 42% of disease labels and 22% of
+  terms have an ICD-11 link.
+- The 349 subtype suggestions include loose ones ("neck cramps or spasms" under "cramps").
+- The review screens do not show suggestions yet (M2.4); they are reachable through the API.
+

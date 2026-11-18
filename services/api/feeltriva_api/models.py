@@ -291,3 +291,19 @@ class IdempotencyKey(Base):
     encrypted_response: Mapped[bytes | None] = mapped_column(LargeBinary)
     state: Mapped[str] = mapped_column(String(16))
     expires_at: Mapped[datetime] = mapped_column(TZ)
+
+
+class RelationSuggestion(Base):
+    """A suggested relation between two candidates, for a reviewer to accept or reject (M2.8)."""
+
+    __tablename__ = "relation_suggestions"
+    suggestion_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    subject_type: Mapped[str] = mapped_column(Text)
+    relation: Mapped[str] = mapped_column(Text)
+    left_id: Mapped[str] = mapped_column(Text)
+    right_id: Mapped[str] = mapped_column(Text)
+    left_label: Mapped[str] = mapped_column(Text)
+    right_label: Mapped[str] = mapped_column(Text)
+    signals: Mapped[Any] = mapped_column(Json, default=list)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    reviewer: Mapped[str | None] = mapped_column(Text)
