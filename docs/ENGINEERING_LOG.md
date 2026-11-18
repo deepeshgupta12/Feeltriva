@@ -1782,3 +1782,56 @@ reviewer transaction the rows can be neither read nor changed.
 graph was re-indexed at `01ee0c8` and reports up-to-date. The API on port 8000 was restarted so
 that it serves the new route. This paragraph was added in a following documents-only commit,
 after which the index was refreshed again.
+
+### Maintenance — dependency alert on `minimatch` resolved (2026-11-18)
+
+Asked for by the owner after GitHub's Dependabot alert 1 was reported. Not a plan sub-step; no
+product code changed.
+
+**The alert.** GHSA-g3hv-75wg-m249 (CVE-2026-118764, medium): `minimatch` versions 7.0.0 up to
+but not including 11.0.1 can be made to use excessive time on a crafted pattern. Scope:
+development only, in `apps/web/pnpm-lock.yaml`.
+
+**Where it came from.** The lockfile held four copies of `minimatch`:
+
+| Copy | Pulled in by | In the affected range |
+|---|---|---|
+| 10.2.6 | `eslint` 10.14.0 and `@typescript-eslint/typescript-estree` 8.72.2 | yes |
+| 11.0.8 | `@eslint/config-array` | no (fixed) |
+| 5.1.9 | `openapi-typescript` through `@redocly/openapi-core` | no (below 7.0.0) |
+| 3.1.5 | `eslint-plugin-jsx-a11y` | no (below 7.0.0) |
+
+All four belong to lint and type-generation tools. None is in the built web app or the API.
+
+**Change.** Two pinned development dependencies in `apps/web/package.json`, checked against the
+registry before choosing: `eslint` 10.14.0 → 10.15.0 (declares `minimatch ^11.0.5`) and
+`typescript-eslint` 8.72.2 → 8.73.0 (its `typescript-estree` declares `minimatch ^11.0.1`). The
+lockfile was regenerated. No override was needed, so no package is forced outside the range its
+publisher declares. In the lockfile only `eslint`, the `typescript-eslint` family and `minimatch`
+changed; copy 10.2.6 is gone.
+
+**Impact analysis.** `impact` on `apps/web/eslint.config.js`, upstream: 0 dependents, risk LOW.
+A search of `apps/web` found no other use of these packages. `detect_changes` before commit:
+2 files, 0 symbols, 0 flows, risk low.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `pnpm install --frozen-lockfile` | already up to date |
+| `pnpm typecheck` | clean |
+| `pnpm lint` (before and after the change) | clean both times, with `eslint` 10.15.0 after |
+| A probe file using `localStorage` and an unused variable, linted, then deleted | 2 errors, as required: the storage rule and the unused-variable rule still fire |
+| `pnpm test` | 118 passed in 6 files |
+| `pnpm build` | built |
+| `pnpm gen:api` and `git diff --exit-code src/api/generated` | no difference |
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 47 files |
+| `uv run pytest` (SQLite, nothing deselected) | 173 passed, 47 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 220 passed |
+
+**Limits, stated plainly.**
+
+- Copies 3.1.5 and 5.1.9 remain. This advisory does not list them; they were not changed.
+- `pnpm` reports one unmet peer: `eslint-plugin-jsx-a11y` 6.10.2 declares support for `eslint`
+  up to version 9, and the project uses version 10. This was already so before the change; lint
+  runs and its rules fire. Left as it is.
