@@ -1848,3 +1848,29 @@ development-only dependencies. The package was in the lockfile before this chang
 it, and is used by `vite`, `vitest`, `tinyglobby` and `fdir` to match file names from this
 repository's own configuration; it is not in the built web app. To be updated when a fixed
 release is published.
+
+**Alert 2 re-examined at the owner's request ("fix this"), 2026-11-18. It cannot be fixed yet.**
+
+What was checked, with results:
+
+| Question | Finding |
+|---|---|
+| Is there a fixed release? | No. The registry's newest `picomatch` is 4.0.7 (published 2026-08-24); the advisory covers 4.0.7 and everything earlier and names no patched version |
+| Is a repair on its way? | The advisory points to pull request 194 in the `picomatch` repository. It is open and unmerged, written by an outside contributor, last updated 2026-11-09 |
+| Can the package be removed or avoided? | No. The newest `vite` (8.3.8), `vitest` (5.1.1), `tinyglobby` (0.2.17) and `fdir` (6.5.0) all still require `picomatch` 4 |
+| Is the weakness real in the installed copy? | Yes. The advisory's pattern `+(*a)` took 9 ms against 20 letters, 36 ms against 22, 149 ms against 24 and 546 ms against 26: about four times longer for every two letters |
+| Can it be reached in this project? | Not found. It needs a file pattern of that special kind to be supplied to the tool. The only pattern this project writes is `src/**/*.test.{ts,tsx}` (0.11 ms on a long path); no configuration file or script contains such a pattern; the source uses no `import.meta.glob`; the development server listens on this machine only (`[::1]:5173`); the built app in `dist/` does not contain the package |
+
+Not done, and why:
+
+- **The unmerged repair was not applied as a local patch.** It is 160 changed lines in the
+  pattern parser, not reviewed or accepted by the package's maintainers. The same parser decides
+  which test files `vitest` finds, so a subtle error could make tests silently not run. GitHub's
+  alert would also stay as it is, because the version number would not change.
+- **No override was added.** Every published version is affected, so there is nothing to pin to.
+
+Correction to what was reported to the owner earlier the same day: GitHub did not dismiss the
+alert because no fix exists. Its preset rule dismisses certain low-impact kinds of weakness (this
+one is recorded as CWE-1333, inefficient regular expression) in npm packages used only for
+development. GitHub's documentation does not say whether a fix will then arrive as an automatic
+pull request, so the item is tracked in the plan (M0.8) with the command to re-check.
