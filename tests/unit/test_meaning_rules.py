@@ -160,3 +160,85 @@ def test_two_files_hold_the_same_cases_only_when_every_case_matches():
     assert same_cases(_scan(changed), _scan(listed)) is None  # same number of rows, different symptoms
     assert same_cases(_scan(listed + [listed[0]]), _scan(listed)) is None  # one more row under a shared label
     assert same_cases(_scan(listed), _scan([])) is None
+
+
+# -- a source that documents its own questions (M2.12) ------------------------------------------------
+
+
+def _entry(question, antecedent, answer_type="yes_no", default=0, values=None):
+    return {
+        "question": question,
+        "is_antecedent": antecedent,
+        "answer_type": answer_type,
+        "default_value": default,
+        "values": values or {},
+    }
+
+
+def test_the_sources_own_flag_decides_symptom_or_not():
+    from feeltriva_ingestion.meanings import classify_kind_with_dictionary as classify
+
+    symptom = classify(_entry("Do you have a fever (either felt or measured with a thermometer)?", False))
+    assert (symptom.kind, symptom.rule) == ("symptom", "source_dictionary") and "Do you have a fever" in symptom.basis
+    # "Do you have ..." questions that the wording alone could not settle (M2.7) are settled by the source.
+    for question, kind, rule in (
+        ("Do you have a problem with poor circulation?", "history", "source_dictionary"),
+        ("Have you recently had a viral infection?", "history", "source_dictionary"),
+        ("Have you ever had a heart attack?", "history", "source_dictionary+past_event"),
+        (
+            "Do you have high blood pressure or do you take medications to treat it?",
+            "history",
+            "source_dictionary+treatment",
+        ),
+        ("Do you smoke cigarettes?", "risk_factor", "source_dictionary+exposure_or_lifestyle"),
+        (
+            "Have you traveled out of the country in the last 4 weeks?",
+            "risk_factor",
+            "source_dictionary+exposure_or_lifestyle",
+        ),
+        ("Is your BMI less than 18.5, or are you underweight?", "measurement", "source_dictionary+body_measure"),
+    ):
+        proposal = classify(_entry(question, True))
+        assert (proposal.kind, proposal.rule) == (kind, rule), question
+        assert "antecedent" in proposal.basis
+    # An antecedent is never a symptom, even when its wording sounds like one.
+    assert classify(_entry("Do you feel anxious?", True)).kind == "history"
+
+
+def test_a_documented_zero_is_the_sources_no_but_still_not_an_approved_denial():
+    from feeltriva_ingestion.meanings import ZERO_NO_PER_SOURCE
+    from feeltriva_ingestion.meanings import classify_zero_with_dictionary as classify
+
+    yes_no = classify(_entry("Do you have a fever?", False))
+    assert (yes_no.zero, yes_no.rule) == (ZERO_NO_PER_SOURCE, "source_dictionary_default") and yes_no.zero != "absent"
+    several = classify(
+        _entry("Characterize your pain:", False, "several_of_several", "V_11", {"V_11": "NA", "V_20": "sharp"})
+    )
+    assert (several.zero, several.rule) == (ZERO_NO_ANSWER, "source_dictionary_answer_type")
+    assert "2 possible answers" in several.basis and "'V_11'" in several.basis
+
+
+def test_rows_are_traced_to_the_release_as_runs_in_file_order():
+    from feeltriva_ingestion.release import _answered, heading_is_start_of, trace
+
+    release = {"train": [10, 11, 12, 13, 14], "validate": [20, 21], "test": [30]}
+    traced = trace([10, 11, 13, 14, 20, 21], release)  # train rows 1-2, a gap, train rows 4-5, then all of validate
+    assert (traced["rows"], traced["traced"], traced["not_in_release"]) == (6, 6, 0)
+    assert [(r["our_first_row"], r["release_split"], r["release_first_row"], r["rows"]) for r in traced["runs"]] == [
+        (1, "train", 1, 2),
+        (3, "train", 4, 2),
+        (5, "validate", 1, 2),
+    ]
+    assert trace([10, 99, 11], release)["not_in_release"] == 1  # a row the release does not contain
+    assert trace([12, 12], {"train": [12, 5, 12, 12]})["runs"][0]["release_first_row"] == 3  # the longest run wins
+    assert _answered("['E_48', 'E_54_@_V_161', 'E_54_@_V_183', 'E_56_@_4']") == {"E_48", "E_54", "E_56"}
+    assert _answered("[]") == frozenset()
+    assert heading_is_start_of(
+        "E_174_have_you_been_unintentionally_losin", "Have you been unintentionally losing weight?"
+    )
+    assert heading_is_start_of(
+        "E_47_do_you_suffer_from_crohns", "Do you suffer from Crohn's disease or ulcerative colitis?"
+    )
+    assert heading_is_start_of("E_187_did_you_eat_darkfleshed_fish", "Did you eat dark-fleshed fish (such as tuna)?")
+    assert not heading_is_start_of("E_91_do_you_have_a_fever", "Do you have a cough?")
+    assert not heading_is_start_of("fever", "Do you have a fever?")

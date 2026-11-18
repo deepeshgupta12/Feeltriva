@@ -1,5 +1,5 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness|derive-meanings}"""
+load-evidence|store-archives|completeness|derive-meanings|load-release}"""
 
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ def main() -> int:
             "store-archives",
             "completeness",
             "derive-meanings",
+            "load-release",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -240,6 +241,41 @@ def main() -> int:
             out.write_text(text + "\n", encoding="utf-8")
             print(f"report: {out}")
             return 1 if mismatches else 0
+        if args.command == "load-release":
+            from .release import check as check_release
+            from .release import load_release
+
+            result = load_release(args.raw_dir)
+            for name, facts in result["releases"].items():
+                print(
+                    f"{name}: {facts['questions']} questions ({facts['antecedents']} antecedents), "
+                    f"{facts['conditions']} conditions, answer types {facts['answer_types']}, rows {facts['release_rows']}"
+                )
+                for file, found in facts["files"].items():
+                    print(
+                        f"  {file}: {found['traced']} of {found['rows']} rows traced to the release, "
+                        f"{found['not_in_release']} not found; {found['mappings_with_a_dictionary_entry']} of "
+                        f"{found['mappings']} columns in the dictionary, {found['headings_that_start_the_question']} "
+                        "headings are the start of their question"
+                    )
+                    for run in found["runs"][:10]:
+                        print(
+                            f"    our rows {run['our_first_row']}-{run['our_first_row'] + run['rows'] - 1} = release "
+                            f"{run['release_split']} rows {run['release_first_row']}-{run['release_first_row'] + run['rows'] - 1}"
+                        )
+                print(f"  changed: {facts['changed']}")
+            diffs = check_release(result)
+            for diff in diffs:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every row and every question column is accounted for in the release"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
         if args.command == "derive-meanings":
             from .meanings_load import check as check_meanings
             from .meanings_load import derive_meanings, summarise, write_review

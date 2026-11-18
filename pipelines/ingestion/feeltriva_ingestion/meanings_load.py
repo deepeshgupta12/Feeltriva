@@ -37,7 +37,9 @@ from .meanings import (
     VERSION,
     ZERO_NO_ANSWER,
     classify_kind,
+    classify_kind_with_dictionary,
     classify_zero,
+    classify_zero_with_dictionary,
     is_cut_off,
     is_question,
     propose_age_unit,
@@ -213,7 +215,12 @@ def derive(mappings: list[dict[str, Any]], scans: dict[str, dict[str, Any]], fil
     for m in mappings:
         sid, scan, index = m["source_id"], scans[m["source_id"]], m["column_index"]
         text = m["original_term"] if is_question(m["original_term"]) else m["term"]
-        kind = classify_kind(text, stated[m["mapping_id"]], vocabulary)
+        documented = m.get("dictionary")  # the source's own description of the question, when it supplied one
+        kind = (
+            classify_kind_with_dictionary(documented)
+            if documented
+            else classify_kind(text, stated[m["mapping_id"]], vocabulary)
+        )
         affirmed = scan["listed"].get(m["term"], 0) if index is None else scan["affirmed"].get(index, 0)
         always = index is not None and scan["cases"] > 0 and affirmed == scan["cases"]
         zero = classify_zero(
@@ -223,6 +230,8 @@ def derive(mappings: list[dict[str, Any]], scans: dict[str, dict[str, Any]], fil
             describes_a_symptom=kind.rule == "description_of_a_symptom",
             same_cases_as_lists=twins[sid][0] if sid in twins else "",
         )
+        if documented:
+            zero = classify_zero_with_dictionary(documented)
         meaning = {
             "version": VERSION,
             "status": "proposal, pending review",
@@ -234,6 +243,7 @@ def derive(mappings: list[dict[str, Any]], scans: dict[str, dict[str, Any]], fil
             "zero_basis": zero.basis,
             "one_means": "an answer was recorded" if zero.zero == ZERO_NO_ANSWER else "affirmed",
             "question_cut_off": is_cut_off(m["original_term"]),
+            "question": documented["question"] if documented else "",
             "affirmed_cases": affirmed,
             "cases": scan["cases"],
         }
@@ -294,7 +304,7 @@ def derive_meanings(
         with _raw_cursor(engine) as cur:
             cur.execute(
                 """SELECT m.mapping_id, m.source_id, m.column_index, m.original_term, m.feature_id, m.status::text,
-                          m.transformation ->> 'candidate_term'
+                          m.transformation ->> 'candidate_term', m.transformation -> 'source_dictionary'
                    FROM feature_mappings m WHERE m.release_id = %s AND m.source_id = ANY(%s)
                    ORDER BY m.source_id, m.column_index NULLS LAST, m.original_term""",
                 (release_id, list(files)),
@@ -308,8 +318,9 @@ def derive_meanings(
                     "feature_id": feature_id,
                     "status": status,
                     "term": candidate or norm_label(heading.replace("_", " ")),
+                    "dictionary": dictionary,
                 }
-                for mapping_id, sid, index, heading, feature_id, status, candidate in cur.fetchall()
+                for mapping_id, sid, index, heading, feature_id, status, candidate, dictionary in cur.fetchall()
             ]
             archives_with_lists = {e["archive"] for e in targets if e.get("adapter") == "symptom_list"}
             scans = {}

@@ -125,6 +125,7 @@ TEST_DATABASE_URL=postgresql+psycopg://feeltriva_app:feeltriva_app_dev@127.0.0.1
 TEST_MIGRATION_DATABASE_URL=postgresql+psycopg://feeltriva:feeltriva_dev@127.0.0.1:5440/feeltriva_test \
   uv run pytest                                                # same suite + RLS/concurrency on PostgreSQL
 uv run python -m feeltriva_ingestion completeness              # read-only: loaded data vs the handoff mapping table
+uv run python -m feeltriva_ingestion load-release              # trace archive 15 to its source release; question dictionary
 uv run python -m feeltriva_ingestion derive-meanings           # proposed feature kinds and zero meanings (pending)
 ```
 

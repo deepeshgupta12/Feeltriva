@@ -1483,3 +1483,110 @@ web). The code graph was re-indexed at `1f4b4e9` and reports up-to-date. For M2.
 API key is in the local `.env` as `ICD_API_CLIENT_ID` and `ICD_API_CLIENT_SECRET`; the LOINC
 release is `data/raw/Loinc_2.83.zip`. Both are outside Git. This paragraph was added in a
 following documents-only commit, after which the index was refreshed again.
+
+### M2.12 — Archive-15 source release: origin traced, question dictionary, kinds settled
+
+**Why this sub-step exists.** M2.7 left 51 archive-15 questions undecided because the file cuts
+each question off. The owner then supplied the release that archive 15 resembled, downloaded
+from its publisher, said the data are real and asked for that to be checked, and asked for the
+meaning of zeros to be understood from the data as well.
+
+**Handoff clauses and owner decisions applied.** `docs/01` §3: archive 15's "feature dictionary
+distinguishes symptoms, history and risk factors"; §4: "E_* questions must be classified by
+clinical meaning. Do not treat a history question as an active symptom"; §7: "Confirm use
+rights and document data provenance, label origin, populations and feature meanings". `docs/04`
+T22: "Preserve full question text and raw value". Decisions E34, E53, E54.
+
+**Impact analysis before editing.** `derive`, `derive_meanings` and the CLI `main`: LOW each,
+one caller each. New modules call `read_csv_positional`, `_raw_cursor`, `sha256_file`
+(CRITICAL, unchanged).
+
+**What was checked, and how.**
+
+- **The file.** `data/raw/22687585.zip`, SHA-256 `edf2cc50…5834`, 178,758,020 bytes, registered in
+  `specs/supplementary_sources.json`. Its five members have the names and sizes the publisher's
+  record lists. It was read in memory; nothing was unpacked to disk.
+- **The publisher's record** (figshare API, DOI 10.6084/m9.figshare.22687585.v2) and its
+  documentation (`github.com/mila-iqia/ddxplus`, README): title "DDXPlus Dataset (English)",
+  licence CC BY 4.0, and: "The dataset contains patients synthesized using a proprietary medical
+  knowledge base and a commercial rule-based AD system." Field descriptions: `AGE`: "the age of
+  the synthesized patient"; `EVIDENCES`: "list of evidences experienced by the patient";
+  `default_value`: "If this value is used to characterize the evidence, then it is as if the
+  evidence was not synthesized"; `is_antecedent`: "whether the evidence is an antecedent or a
+  symptom". Only the DOI and repository name were sent to those services; no project data.
+- **The rows.** Each row of our files and of the release was reduced to age, sex, condition and
+  the set of answered question codes, and our rows were matched to the release as runs in file
+  order.
+
+**Result of the real run** (`load-release`, 28 s; a second run changed 0 rows):
+
+| Our file | Rows | In the release |
+|---|---:|---|
+| `test.csv` | 134,529 | test set, rows 1 – 134,529 |
+| `train.csv` rows 1 – 310,850 | 310,850 | train set, rows 1 – 310,850 |
+| `train.csv` rows 310,851 – 343,054 | 32,204 | train set, rows 330,223 – 362,426 |
+| `train.csv` rows 343,055 – 475,502 | 132,448 | the whole validation set |
+
+610,031 of 610,031 rows traced; 0 not found. The release holds 1,025,602 train, 132,448
+validation and 134,529 test patients; ours uses 343,054 of its train rows. 223 of 223 columns
+have a dictionary entry and all 223 cut-off headings are the beginning of their question.
+The dictionary: 110 symptoms and 113 antecedents; 208 yes/no questions, 10 with one answer
+out of several and 5 with several answers: the same 15 columns M2.7 had found from the data
+alone.
+
+**Conclusions.**
+
+- **Archive 15 is the publisher's DDXPlus release, rendered as 0/1 columns, and its patients are
+  simulated** (decision E55). The owner's statement that the data are real (E30) does not hold
+  for this archive.
+- **Zeros in archive 15:** for the 208 yes/no questions a 0 is the source's documented "no"
+  (stored as `no_per_source`, still not `absent`, which only an approval may set). For the 15
+  other questions the file keeps only that an answer is listed.
+- **Its `train.csv` contains the publisher's validation set.** Recorded on the source for M4.3.
+
+**Meanings re-derived** (`derive-meanings`, rule set `meanings-2`; a second run changed 0 rows):
+archive 15 now has 110 symptom, 86 history, 26 exposure or lifestyle, 1 measurement, 0
+undecided. The proposals of the other archives are unchanged (0 of 1,516 differ).
+
+**How good were M2.7's wording rules?** Of the 172 questions they had decided, 169 agree with
+the publisher on symptom or not. Three do not: `E_16` ("Do you feel anxious?", an antecedent
+for the publisher, a symptom for my rule), `E_128` and `E_42`. The 51 they could not decide
+are 35 symptoms, 15 history and 1 exposure. The same rules still serve the other archives,
+where they mostly confirm what the source says.
+
+**Implemented.** `specs/supplementary_sources.json`; `release.py` and the command
+`load-release`; `meanings.py` (two functions for a documented source) and `meanings_load.py`
+(the dictionary is used where a mapping carries one). The origin, licence and publisher's
+statement are on the sources (`origin_url`, `licence`, `population.origin`), still `pending`.
+`README.md` credits the publisher as the licence requires.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 45 files |
+| `uv run pytest -m "not archives"` (SQLite) | 158 passed, 42 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 206 passed |
+| `uv run pytest tests/ingestion/test_release.py tests/unit/test_meaning_rules.py` | 39 passed |
+| `load-release` and `derive-meanings`, each run twice | second runs change 0 rows |
+| `uv run python -m feeltriva_ingestion completeness` | exit 0; 235 checks, 228 ok, 0 mismatches, 7 later; T22 now reads "223 of 223 have a proposed kind; none is approved" |
+| `detect_changes` before commit | `main`, `derive`, `derive_meanings`, the regenerated review files |
+
+The new tests use a crafted release with the real layout and a crafted archive built like the
+real one (train rows, a gap, then the validation set). They prove the runs are found, a row
+the release lacks is reported, a changed release file is refused, the dictionary reaches the
+mappings, an antecedent is never proposed as a symptom, and a documented zero is not `absent`.
+
+**Bugs.** None in committed code. A slip in an exploration script of mine (never committed)
+rebuilt a large table once per row and ran past ten minutes; it was stopped and corrected.
+
+**Not done, and limits.**
+
+- The answers to the 15 non-yes/no questions and the publisher's per-condition knowledge
+  (symptoms, antecedents, severity, ICD-10) are in the release but not loaded: new sub-step
+  M2.13, no go-ahead yet.
+- The release file is not in the object store; it is registered by checksum only.
+- The 550,099 train rows of the release that archive 15 does not use are not loaded.
+- For archives 11, 12, 14 and 16 nothing new is known: no origin, no documentation.
+- Everything stored here is `pending`.
+

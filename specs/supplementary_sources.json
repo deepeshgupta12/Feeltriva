@@ -1,0 +1,24 @@
+{
+  "version": "0.1.0",
+  "note": "Reference releases supplied by the owner after the handoff. They are not among the six handoff archives of ingestion_manifest.json. Files stay in data/raw/, outside Git.",
+  "sources": [
+    {
+      "name": "22687585.zip",
+      "sha256": "edf2cc5030126e6816e98719c11db0d444dbaaa4850d54da65b16ddf100d5834",
+      "size_bytes": 178758020,
+      "kind": "ddxplus_release",
+      "title": "DDXPlus Dataset (English)",
+      "doi": "10.6084/m9.figshare.22687585.v2",
+      "origin_url": "https://figshare.com/articles/dataset/DDXPlus_Dataset_English_/22687585",
+      "documentation_url": "https://github.com/mila-iqia/ddxplus",
+      "licence": "CC BY 4.0",
+      "authors": "Arsene Fansi Tchango, Rishab Goel, Zhi Wen, Julien Martel, Joumana Ghosn",
+      "publisher_statement": "The dataset contains patients synthesized using a proprietary medical knowledge base and a commercial rule-based AD system.",
+      "supplied": "by the owner on 2026-11-17, downloaded from the publisher",
+      "describes": [
+        {"archive": "archive(15).zip", "file": "train.csv"},
+        {"archive": "archive(15).zip", "file": "test.csv"}
+      ]
+    }
+  ]
+}

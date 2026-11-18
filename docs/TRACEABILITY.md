@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.7 (2026-11-17).
+Last updated after sub-step M2.12 (2026-11-18).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -72,7 +72,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | D2 | Parse by position so duplicate headings survive | Done | Positional reader; tested | M1.1 |
 | D3 | Raw rows immutable; exact-content hashes; all member references kept | Done | Content hash per row; duplicates marked, never removed | M1.7 |
 | D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Partial | Lexical groups done (960). No synonym suggestions are produced | M1.3; **M2.8 new**, M2.5 |
-| D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | Proposed kinds stored for 172 of the 223 `E_*` questions (72 history, 25 exposure or lifestyle, 1 measurement, 74 symptom); the rules for relatives, the past, diagnoses, treatment and exposure run before any symptom rule. **Missing:** 51 headings the wording cannot settle (listed in `docs/review/feature_meanings.md`); nothing is approved | M1.3, M2.7; owner review, M2.5 |
+| D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | All 223 `E_*` questions have a proposed kind taken from the publisher's own dictionary (110 symptom, 86 history, 26 exposure or lifestyle, 1 measurement; M2.12); an antecedent is never proposed as a symptom. **Missing:** approval | M1.3, M2.7, M2.12; M2.5 |
 | D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
@@ -106,7 +106,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | T19 | 14 `Symptom_Count` → comparison | Done | Compared with the parsed list for all 25,000 rows: 0 mismatches; a mismatch would be flagged on the record. Not stored as a feature | M1.9 |
 | T20 | 14 `Disease` | Done | | M1.7 |
 | T21 | 15 `PATIENT_ID`, `AGE`, `SEX`, `DISEASE` with split | Done | | M1.7 |
-| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded. 172 of 223 questions have a proposed kind. **Missing:** 51 undecided headings; approval. The source file stores each question cut off after a few words and 15 columns as "an answer was recorded" only, so the handoff's "full question text and raw value" cannot be met from the supplied file | M1.8, M2.7; owner review, M2.5 |
+| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded; every mapping now carries the full question text and a proposed kind (M2.12). **Missing:** the answers themselves for the 15 questions that are not yes/no (they are in the source release; M2.13); approval | M1.8, M2.7, M2.12; M2.13, M2.5 |
 | T23 | 15 `SYMPTOM_COUNT` → consistency check | Done | Equals the number of affirmed `E_*` columns in all 610,031 rows: 0 mismatches. Not treated as ground truth | M1.9 |
 | T24 | 16 matrix `diseases` | Done | | M1.7 |
 | T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Done | 1,032,212 values loaded; repeated headers kept per position with explicit conflicts | M1.3, M1.8 |
@@ -187,7 +187,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
 | E0 | Supplied baseline preserved as a reproducible benchmark and rejected for serving | Partial | Results stored and checked against the figures; not re-run here; not wired into serving | M4.1 |
-| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Owner states the data are real and original (E30). Feature meanings are proposed from the data (M2.7), pending the owner's review. No written provenance; label origin unknown (D-O1) | M2.7, M4.2 |
+| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Archive 15: origin, licence (CC BY 4.0) and nature (simulated patients) established and recorded (E55). The other archives: owner's statement only (E30), no written provenance. Feature meanings proposed, pending review. Label origin unknown for archives 11 – 14 and 16 (D-O1); for archive 15 the label is the simulator's condition | M2.7, M2.12, M4.2 |
 | E2 | Review mappings; exact and near-duplicate clusters; group by identity where available | Partial | Exact and profile clusters done | M1.7; M2.5, M4.3 |
 | E3 | Archive 15 original test kept untouched; overlap audited; contaminated result reported separately | Partial | Overlap audited and flagged (27,910 shared profiles) | M1.7; M4.3 |
 | E4 | Train, validation, separate calibration and untouched test; transforms fitted on training only; clusters kept together | Missing | | M4.3, M4.4 |
@@ -196,7 +196,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | E6 | Selection on validation only; calibration and abstention on their own partition; freeze before final test | Missing | | M4.5 |
 | E7 | Class support and cluster-bootstrap confidence intervals; sparse slices marked inconclusive | Missing | Baseline has none | M4.5 |
 | E8 | Urgency evaluated separately with adjudicated labels | External | No urgency labels exist. Urgency rules will be drafted by the assistant on the owner's instruction (E39), which is not the same as adjudicated labels | M2.10, M6.2 |
-| N1 | Next experiment: verify zero semantics and label origins | Partial | Zero meaning examined in M2.7: no file records a denial; archive 12 zeros are terms not listed; 15 archive-15 columns are not yes/no answers; no evidence either way for 1,244 columns. Label origin still unknown | M2.7, M4.2 |
+| N1 | Next experiment: verify zero semantics and label origins | Partial | Archive 15: a 0 on a yes/no question is the source's documented "no" (M2.12); 15 questions are not yes/no. Archive 12: a zero is a term not listed. Archives 11 and 16: the files give no evidence; the owner's decision E53 applies. Label origin known for archive 15 only | M2.7, M2.12, M4.2 |
 | N2 | Next: inspect feature relationships and source artefacts (accuracy rises when features are hidden; falls with more data) | Missing | | M4.2 |
 | N3 | Next: regularised linear baseline and boosted challenger on controlled splits | Missing | | M4.4 |
 | N4 | Next: evaluate missingness explicitly | Missing | | M4.5 |

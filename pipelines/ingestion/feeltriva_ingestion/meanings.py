@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-VERSION = "meanings-1"
+VERSION = "meanings-2"
 UNDECIDED = "undecided"
 # Zero meanings that may be proposed. `absent` (a recorded denial) is deliberately not among them.
 ZERO_UNKNOWN, ZERO_NOT_RECORDED, ZERO_NO_ANSWER = "unknown", "not_recorded", "no_answer"
@@ -253,3 +253,53 @@ def propose_age_unit(minimum: float, maximum: float, whole_numbers: bool) -> tup
             "fits it. No source documentation states the unit",
         )
     return UNDECIDED, f"{described}; the range does not single out a unit and no source documentation states it"
+
+
+# -- a source that documents its own questions (M2.12) ------------------------------------------------
+# A zero that the source's own documentation defines as "no". It is the publisher's definition for
+# the patients it produced; it is still not `absent`, which only a reviewer's approval can set.
+ZERO_NO_PER_SOURCE = "no_per_source"
+
+
+def classify_kind_with_dictionary(entry: dict) -> KindProposal:
+    """Kind of a question whose source says whether it is a symptom or an antecedent.
+
+    The source decides symptom or not. Its word "antecedent" covers both history and exposure, so
+    the wording of the full question is used only to tell those apart."""
+    question = entry["question"]
+    text = " ".join(re.sub(r"[^a-z0-9\s]", "", question.lower()).split())
+    if not entry["is_antecedent"]:
+        return KindProposal(
+            "symptom", "source_dictionary", f'the source\'s own dictionary lists it as a symptom: "{question}"'
+        )
+    for rule in WORDING_RULES:
+        if rule.kind != "symptom" and rule.pattern.search(text):
+            return KindProposal(
+                rule.kind,
+                f"source_dictionary+{rule.rule_id}",
+                f'the source\'s own dictionary lists it as an antecedent, and {rule.basis}: "{question}"',
+            )
+    return KindProposal(
+        "history",
+        "source_dictionary",
+        "the source's own dictionary lists it as an antecedent; the wording names no habit, exposure or measurement, "
+        f'so it is recorded as history: "{question}"',
+    )
+
+
+def classify_zero_with_dictionary(entry: dict) -> ZeroProposal:
+    """What a zero means for a question whose source documents its answer type and default."""
+    if entry["answer_type"] == "yes_no":
+        return ZeroProposal(
+            ZERO_NO_PER_SOURCE,
+            "source_dictionary_default",
+            "the source documents this as a yes/no question whose default is 0, and a patient's list holds only what "
+            'the patient experiences: a 0 is the source\'s "no"',
+        )
+    return ZeroProposal(
+        ZERO_NO_ANSWER,
+        "source_dictionary_answer_type",
+        f"the source documents this as a question with {len(entry.get('values', {}))} possible answers (default "
+        f"{entry['default_value']!r}); this file keeps only whether an answer is listed, and the answer itself is in the "
+        "source release",
+    )
