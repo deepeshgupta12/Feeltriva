@@ -1778,3 +1778,7 @@ reviewer transaction the rows can be neither read nor changed.
 - The 349 subtype suggestions include loose ones ("neck cramps or spasms" under "cramps").
 - The review screens do not show suggestions yet (M2.4); they are reachable through the API.
 
+**Committed and indexed.** Committed as `01ee0c8` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `01ee0c8` and reports up-to-date. The API on port 8000 was restarted so
+that it serves the new route. This paragraph was added in a following documents-only commit,
+after which the index was refreshed again.
