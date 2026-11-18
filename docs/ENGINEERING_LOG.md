@@ -2275,3 +2275,8 @@ one; a rejected MONDO link is not used, and pending links that rest on one are r
 - The licence question was decided by the owner (E62). The lists are in the private database and
   a file outside Git, not in the repository.
 - `cold` still has no full name: the owner has not answered whether it is "common cold".
+
+**Committed and indexed.** Committed as `e3aaa10` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `e3aaa10` and reports up-to-date; both new modules are below the 32 KB
+limit. The API and the web app were not restarted: this sub-step changes neither. This paragraph
+was added in a following documents-only commit, after which the index was refreshed again.
