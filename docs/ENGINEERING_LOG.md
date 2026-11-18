@@ -25,6 +25,9 @@ command output, not estimated.
 | BUG-014 | M1.12 | New `store-archives` command was not registered in the CLI | Fixed before commit |
 | BUG-015 | M1.3 / M1.13 | The real-archive reference-load test failed on the persistent PostgreSQL test database; unnoticed from M1.7 to M1.12 because PostgreSQL runs excluded the real-archive tests | Fixed |
 | BUG-016 | M1.3, M1.7, M1.9 / M1.13 | Loaders did not refuse a file whose columns had changed: the case loader loaded it, the list and reference loaders stopped with an unexplained error | Fixed |
+| BUG-017 | M2.11 | The ICD client did not retry a dropped connection; the first real run died on a network timeout | Fixed |
+| BUG-018 | M2.11 | The ICD client opened a new secure connection for every request and ran the lookups inside a database transaction; the real run crawled at about 6 terms a minute | Fixed |
+| BUG-019 | M2.11 | LOINC matching on the component name alone gave a wrong-sense link ("fever" to "Fever in Mother") | Fixed before commit |
 
 ## Entries
 
@@ -1597,3 +1600,99 @@ following documents-only commit, after which the index was refreshed again.
 **Noticed, not acted on.** Three untracked items appeared under `.claude/` on 2026-11-17 at 17:13
 (`CLAUDE.md`, `settings.json`, `hooks/`), written by an editor tool named vexp (v3.5.1). They
 were not created by this work and are not committed; the owner decides whether they are kept.
+
+### M2.11 — Candidate links to ICD-11 and LOINC
+
+**Why this sub-step exists.** Owner decision E51 (2026-11-17): use standard vocabularies for
+diseases, symptoms, history and lifestyle items and measurements. The owner supplied a WHO ICD
+API key and the LOINC 2.83 release, and agreed to decide on SNOMED CT from this result.
+
+**Handoff clauses applied.** `docs/01` §4: "Do not force ICD/MONDO/HPO IDs when no verified
+mapping exists"; reviewer-approved content only in serving. Project rule: no user health data to
+outside services.
+
+**Checked before designing** (official sources, read for this sub-step):
+
+- WHO ICD API documentation and its Swagger reference (v2.6.0): token at
+  `icdaccessmanagement.who.int/connect/token` with client credentials and scope
+  `icdapi_access`; search at `/icd/release/11/{releaseId}/mms/search`; headers `API-Version: v2`
+  and `Accept-Language`. One live call confirmed the reply format; the latest release is 2026-01.
+- WHO terms of use, read in full: licence CC BY-ND 3.0 IGO; code, title and URI must be kept
+  together (1.2.3); mappings between ICD and other classifications or terminologies need a
+  separate written agreement (1.2.4); citation required (1.3).
+- LOINC licence 5.8 (inside the release): free use; the LOINC notice must accompany its content.
+
+**Impact analysis before editing.** CLI `main`: LOW (one new command). New migration `0006`
+(shared area `migrations/`, no existing object changed). New module calls `_raw_cursor` and
+`sha256_file` (CRITICAL, unchanged).
+
+**Implemented.** Migration `0006` (`terminology_links`, not readable by the API role);
+`vocabulary.py`; command `link-vocabularies`; LOINC registered in
+`specs/supplementary_sources.json`; key placeholders in `.env.example`; credits in `README.md`.
+Rules (decision E56): a link only for an exact name match; a close result is written to the
+review file, never stored as a link; question sentences are not sent; no table relating ICD-11
+to another vocabulary; link lists stay outside Git (`data/derived/review/vocabulary_links.csv`).
+
+**What was sent to the WHO API:** 1,698 terms (960 disease labels and 738 feature names), each
+as plain text, one request each, over one connection. No case row, no count, no question
+sentence. Answers are cached in `data/derived/icd_cache/`.
+
+**Result of the real run** (ICD-11 release 2026-01):
+
+| Items | Looked up | Exact ICD-11 name (link stored) | Close result, for a person (best score 0.9 or more) | Weak result or none |
+|---|---:|---:|---:|---:|
+| Disease labels | 960 | 405 | 332 | 223 |
+| Named symptom, history and exposure terms | 738 | 166 | 99 | 473 |
+| Archive-15 questions (sentences) | 223 | not sent | | |
+
+571 ICD-11 links and 10 LOINC links stored; all `pending`; every one has code, title and URI;
+no item has more than one exact ICD-11 entity. Of the 166 linked symptom terms, 111 are in
+ICD-11's chapter for symptoms and signs and 55 are filed in a body-system chapter (for example
+"muscle pain" under musculoskeletal diseases); that is a hint for the kind review, not a
+verdict. LOINC: one measurement item (the BMI question, `39156-5`) and nine symptom terms whose
+whole LOINC name equals ours. A second run made 0 API calls and stored 0 new links (9 s).
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 46 files |
+| `uv run pytest -m "not archives"` (SQLite) | 163 passed, 43 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 212 passed |
+| `uv run pytest tests/ingestion/test_vocabulary.py` | 6 passed, no network |
+| Migration `0006` on a scratch database: head, down to `0005`, head, base, head | 31, 30, 31, 1, 31 tables; scratch database dropped |
+| `link-vocabularies` on the real data, then again | 581 links; second run 0 API calls, 0 new links |
+| `detect_changes` before commit | `main` only among existing symbols |
+
+The tests replace the ICD API by a local stand-in: one token with the documented request;
+answers cached and reused; an expired token renewed; a dropped connection retried and a dead
+one ended with a plain message; only an exact name is a match; the question sentence is never
+sent; links stored pending with code, title and URI; the API role cannot read them.
+
+**Bugs** (all found by the real run, none by the stand-in tests):
+
+- **BUG-017 — no retry on a dropped connection.** The first run died after a minute on a TLS
+  timeout. The client retried error replies but not connection failures. *Resolution:* five
+  attempts with a growing wait, then a plain message saying the run can be repeated; a test.
+- **BUG-018 — a new connection per request, inside a transaction.** The second run managed about
+  six terms a minute: the route to the WHO servers was unstable (one connection attempt in six
+  hung for 30 s) and each request made a new one. The lookups also ran inside an open database
+  transaction. *Resolution:* one kept-open connection per host with a 20 s limit; terms are read
+  in a short transaction, looked up with none open, then stored. The run then held about one
+  term a second. It stopped once more when the owner's internet connection dropped and resumed
+  from the cache, as designed.
+- **BUG-019 — wrong-sense LOINC match.** Matching our term to a LOINC component alone linked
+  "fever" to "Fever in Mother". *Found by* reading the twelve LOINC links. *Resolution:* the
+  whole LOINC name must equal ours; the twelve pending candidates were deleted and ten correct
+  ones stored; a test.
+
+**Limits, stated plainly.**
+
+- An exact name match is a candidate, not a clinical judgement, and nothing is approved.
+- 42% of disease labels and 22% of feature terms have an exact ICD-11 name. Many of our terms
+  are everyday phrases ("pus in sputum") that ICD-11 does not name. The close results need a
+  person; SNOMED CT would likely cover more (decision D-T1).
+- LOINC fits measurements, and our data hold exactly one measurement item.
+- The links are not published, and no ICD-11 crosswalk to another vocabulary exists (E56).
+- The completeness check was not rerun: this sub-step adds a table and changes no data it reads.
+

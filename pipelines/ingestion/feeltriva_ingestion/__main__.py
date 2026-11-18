@@ -1,5 +1,5 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness|derive-meanings|load-release}"""
+load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies}"""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ def main() -> int:
             "completeness",
             "derive-meanings",
             "load-release",
+            "link-vocabularies",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -241,6 +242,41 @@ def main() -> int:
             out.write_text(text + "\n", encoding="utf-8")
             print(f"report: {out}")
             return 1 if mismatches else 0
+        if args.command == "link-vocabularies":
+            from .release import load_supplementary
+            from .vocabulary import check as check_links
+            from .vocabulary import link_vocabularies
+            from .vocabulary import summarise as summarise_links
+            from .vocabulary import write_review as write_links_review
+
+            loinc = next((e for e in load_supplementary() if e.get("kind") == "loinc_release"), None)
+            result = link_vocabularies(
+                args.raw_dir,
+                loinc_entry=loinc,
+                progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True),
+            )
+            summary = summarise_links(result)
+            print(
+                f"ICD-11 release {result['release']}; {result['api_calls']} new API calls; links inserted {result['inserted']}"
+            )
+            for (group, outcome), n in sorted(summary["rows"].items()):
+                print(f"  {group}: {outcome}: {n}")
+            for (group, chapter), n in sorted(summary["chapters"].items(), key=lambda kv: (kv[0][0], -kv[1])):
+                print(f"  {group}: ICD-11 chapter {chapter} {result['chapters'].get(chapter, '')}: {n}")
+            print(f"stored: {result['table']}")
+            print(f"review file (outside Git): {write_links_review(result)}")
+            diffs = check_links(result)
+            for diff in diffs[:20]:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every link is a name match, carries code, title and URI, and is pending review"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
         if args.command == "load-release":
             from .release import check as check_release
             from .release import load_release

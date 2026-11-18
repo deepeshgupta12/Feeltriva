@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.12 (2026-11-18).
+Last updated after sub-step M2.11 (2026-11-18).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -322,7 +322,7 @@ Of 203 traced requirements, 90 are done and 4 were closed by an owner decision. 
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |
 | U15 | External cases are also used for training, split once (E35) | Missing | M4.3 |
-| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Missing | M2.11 |
+| U16 | Standard vocabularies ICD-11, LOINC and SNOMED CT for diseases, symptoms, history, lifestyle and measurements (E51) | Partial: ICD-11 and LOINC links stored as pending candidates (571 and 10); SNOMED CT awaits the owner's decision (D-T1) | M2.11 |
 
 ## 11. Sub-steps added by this trace
 
