@@ -2132,3 +2132,8 @@ for "cold" above.
 - `cold` has no link. `scar` rests on a wording the owner has not seen.
 - `nash` is read as MONDO's present name of the condition ("metabolic dysfunction-associated
   steatohepatitis"), which is what was shown to and confirmed by the owner.
+
+**Committed and indexed.** Committed as `9c904d9` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `9c904d9` and reports up-to-date. The API and the web app were not
+restarted: this sub-step changes neither. This paragraph was added in a following documents-only
+commit, after which the index was refreshed again.
