@@ -1,0 +1,139 @@
+{
+  "version": "0.1.0",
+  "note": "Readings of our own labels that a named person has confirmed. `read_as` is the full name the label stands for: it is looked up in place of the label, by the same exact-name rule as every other name. `plain_word` says the label is an ordinary word and is never linked through an abbreviation. A reading is a statement about a name, not a clinical approval: the links it leads to are stored pending like all others.",
+  "readings": [
+    {
+      "name": "gerd",
+      "read_as": "gastroesophageal reflux disease",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "psvt",
+      "read_as": "paroxysmal supraventricular tachycardia",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "sle",
+      "read_as": "systemic lupus erythematosus",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "copd",
+      "read_as": "chronic obstructive pulmonary disease",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "meaning stated by the owner on 2026-11-18"
+    },
+    {
+      "name": "ibs",
+      "read_as": "irritable bowel syndrome",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "ptsd",
+      "read_as": "post-traumatic stress disorder",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "adhd",
+      "read_as": "attention deficit hyperactivity disorder",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "ards",
+      "read_as": "acute respiratory distress syndrome",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "bppv",
+      "read_as": "benign paroxysmal positional vertigo",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "pcos",
+      "read_as": "polycystic ovary syndrome",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "pacs",
+      "read_as": "premature atrial contractions",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "meaning stated by the owner on 2026-11-18"
+    },
+    {
+      "name": "nash",
+      "read_as": "metabolic dysfunction-associated steatohepatitis",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right; this is the vocabulary's present name of the condition that NASH abbreviates"
+    },
+    {
+      "name": "als",
+      "read_as": "amyotrophic lateral sclerosis",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "siadh",
+      "read_as": "inappropriate ADH syndrome",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "aflp",
+      "read_as": "acute fatty liver of pregnancy",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "confirmed by the owner on 2026-11-18: the reading shown in the M2.14 report is right"
+    },
+    {
+      "name": "ocd",
+      "read_as": "obsessive-compulsive disorder",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "meaning stated by the owner on 2026-11-18; the terms shown in the M2.14 report (a personality disorder, compulsive behaviors) were doubted and are not used as such"
+    },
+    {
+      "name": "cidp",
+      "read_as": "chronic inflammatory demyelinating polyneuropathy",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "meaning stated by the owner on 2026-11-18; it settles the choice between the two terms that share the abbreviation"
+    },
+    {
+      "name": "scar",
+      "read_as": "scarring",
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "the owner stated on 2026-11-18 that scar is a plain word that can be a symptom and is to be mapped as one; it is not the abbreviation SCAR. The wording \"scarring\" (the name HPO gives the finding) was chosen by the assistant and has not been seen by the owner"
+    },
+    {
+      "name": "cold",
+      "plain_word": true,
+      "confirmed_by": "owner",
+      "confirmed_on": "2026-11-18",
+      "basis": "the owner stated on 2026-11-18 that cold is a plain word that can be a symptom; it is not the abbreviation COLD. No full name is given yet: in the data the symptom is affirmed in 43 cases, labelled swine flu (12), influenza (10), common cold (7), sinusitis (6), measles (5) and allergy (3), which points to \"a cold\" and not to \"feeling cold\"; HPO has no finding of that name and MONDO has the disease \"common cold\". Reading it as \"common cold\" awaits the owner's confirmation"
+    }
+  ]
+}

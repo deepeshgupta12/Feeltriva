@@ -2031,3 +2031,104 @@ limit and their call edges are present. Note for later changes: the graph now ra
 functions `store_links` and `read_subjects` HIGH, because both link commands depend on them.
 The API and the web app were not restarted: this sub-step changes neither. This paragraph was
 added in a following documents-only commit, after which the index was refreshed again.
+
+### M2.15 — Readings of abbreviated labels confirmed by the owner
+
+Owner's review of 2026-11-18. M2.14 left 19 names without a link because they equal only an
+abbreviation. The owner confirmed that the 14 readings marked "looks right" are right, wrote out
+what COPD, PACs, OCD and CIDP mean, and said that "scar" and "cold" are ordinary words that can
+be symptoms. In the same exchange the owner decided that the SNOMED CT and ICD-11 identifiers
+inside MONDO are to be imported (decision E62); that is sub-step M2.16 and was not started here.
+
+**What was built.**
+
+- `specs/confirmed_readings.json`: 19 readings, each with the label, the full name it stands
+  for (or `plain_word`), who confirmed it, when, and on what basis.
+- `ontologies.py`: `load_readings` (refuses an unclear file) and `lookup_as_read`; `Outcome`
+  gained the field `read_as`. `lookup` itself is unchanged.
+- `ontology_links.py`: `link_ontologies` applies the readings; a link made through one records
+  `read_as`, `our_name`, `reading_confirmed_by` and `reading_confirmed_on`; the review file has a
+  column `read_as`; `check` reports a reading that fits none of our names.
+- `link-ontologies` prints how many readings are in the file and how many fit a name.
+
+**The rule (decision E61).** A confirmed full name is looked up in place of the label by the
+unchanged exact-name rule. The abbreviation match itself is never accepted.
+
+**Why the full name is looked up, and not the abbreviation match as shown** (read-only check
+before any code): for 15 of the 17 readings the full name finds exactly the terms that were shown
+to the owner. For two it corrects them:
+
+| Label | The abbreviation match shown in the M2.14 report | What the owner's full name finds |
+|---|---|---|
+| `ocd` | MONDO "obsessive-compulsive personality disorder" | MONDO "obsessive-compulsive disorder" (its label); HPO "Compulsive behaviors", which HPO lists under that exact synonym |
+| `cidp` | two MONDO terms sharing the abbreviation | the one whose exact synonym is the owner's wording, "chronic inflammatory demyelinating polyradiculoneuropathy" |
+
+Two links were not shown before and follow from the full name: `adhd` to MONDO "attention
+deficit-hyperactivity disorder" and `als` to HPO "Amyotrophic lateral sclerosis".
+
+**Real run** (`link-ontologies`, 17 seconds; a second run added nothing):
+
+| | Before | After |
+|---|---:|---:|
+| HPO links / MONDO links | 563 / 579 | 573 / 594 |
+| Disease labels with an HPO or MONDO link (of 960) | 607 | 625 |
+| Disease labels with a link in ICD-11, HPO or MONDO | 662 | 680 |
+| Case labels whose label has a link (of 1,365,363) | 923,332 | 963,174 |
+| Suggestions pending (after `suggest-relations`) | 456 | 467 |
+
+All 25 new links were read: 21 are the label of the term, 4 an exact synonym (`gerd`, `copd`
+and `ocd` in HPO, `cidp` in MONDO). The 11 new possible synonyms pair an abbreviated label with its
+written-out label ("copd" and "chronic obstructive pulmonary disease", "ibs" and "irritable
+bowel syndrome").
+
+**"scar" and "cold".**
+
+- `scar` (a disease label, 347 cases): read as "scarring", which is HPO's name of the finding;
+  linked to HPO "Scarring". The owner said it is a symptom to be mapped; the wording "scarring"
+  was chosen by the assistant, and the file says so. MONDO: no link.
+- `cold` (a symptom, affirmed in 43 cases): recorded as an ordinary word, so MONDO's
+  abbreviation COLD is ruled out. No full name yet. The data: swine flu 12, influenza 10, common
+  cold 7, sinusitis 6, measles 5, allergy 3, which points to "a cold", not "feeling cold". HPO
+  has no finding of that name; MONDO has the disease "common cold". Left for the owner.
+
+**Impact analysis.** `lookup`: 1 direct caller (`link_ontologies`), LOW; it was in the end left
+unchanged. `link_ontologies`, `write_review`, `check` of `ontology_links.py`: 1 caller each
+(`main`), LOW. `main`: 1 caller, LOW (measured for M2.14 the same day). `detect_changes` before
+commit: `main`, `_link`, `link_ontologies`, `summarise`, `check`, `write_review`, all intended;
+summary risk "high" because `main` and `link_ontologies` are the first step of 13 flows.
+Compared with the last commit function by function: in `ontologies.py` only `Outcome` differs
+(one field) and two functions are new; in `main` only the `link-ontologies` branch differs, the
+other 14 are identical. `verify` and `link-vocabularies` were run after the change.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 49 files |
+| `uv run pytest -m "not archives"` (SQLite) | 183 passed, 46 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 237 passed |
+| `tests/unit/test_ontologies.py` (12), `tests/ingestion/test_ontology_links.py` (5) | 17 passed |
+| `link-ontologies` on the real files, twice | 25 links, then 0 new; exit 0 both times |
+
+The tests prove: a confirmed full name is looked up by the same rule and the link records who
+confirmed it; a full name that no term carries gives no link and a reason; a "full name" that is
+itself only an abbreviation still gives no link; an ordinary word is never linked through an
+abbreviation and gets the nearest terms; an unclear readings file is refused (both or neither
+kind, no name, no confirmer, no date, a label twice); the committed file is valid; a link through
+a reading is stored `pending` with no reviewer; a reading that fits no name is reported; on the
+real files the 19 readings lead to exactly 25 links, `ocd` to the disorder and not to the
+personality disorder, `cidp` to one term, `scar` to HPO only, `cold` to none.
+
+**Bugs.** None in committed code. A read-only data query written during the work was slow (four
+minutes for a count over 16 million rows; `case_features` has no index on the mapping alone) and
+one of its three parts had a SQL error; it changed nothing and its first part gave the figures
+for "cold" above.
+
+**Limits, stated plainly.**
+
+- A reading is the owner's statement about a name. The links stay `pending`; nothing is approved.
+- The readings apply to HPO and MONDO only. The ICD-11 name search of M2.11 was not repeated
+  with the full names; M2.16 will bring ICD-11 identifiers for these labels through MONDO.
+- `cold` has no link. `scar` rests on a wording the owner has not seen.
+- `nash` is read as MONDO's present name of the condition ("metabolic dysfunction-associated
+  steatohepatitis"), which is what was shown to and confirmed by the owner.

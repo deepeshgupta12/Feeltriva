@@ -28,11 +28,11 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from .archives import ArchiveError, sha256_file
+from .archives import ROOT, ArchiveError, sha256_file
 from .relations import content_words
 from .vocabulary import plain, query_for
 
@@ -129,6 +129,7 @@ class Outcome:
     reason: str = ""
     link: Candidate | None = None
     candidates: tuple[Candidate, ...] = ()
+    read_as: str = ""  # the full name that was looked up in place of ours, when a person confirmed that reading
 
 
 def not_a_name(kind: str) -> bool:
@@ -427,3 +428,61 @@ def lookup(vocabulary: Vocabulary, name: str) -> Outcome:
     if close:
         return Outcome(NEAREST, "no term carries this name; the nearest by shared words are listed", candidates=close)
     return Outcome(NOTHING, "no term carries this name or shares half of its words")
+
+
+# -- readings of our own labels that a named person has confirmed (M2.15) ------------------------------
+READINGS_PATH = ROOT / "specs" / "confirmed_readings.json"
+PLAIN_WORD = "plain_word_not_the_abbreviation"
+
+
+def load_readings(path: Path = READINGS_PATH) -> dict[str, dict[str, Any]]:
+    """The confirmed readings, by the plain form of our label. A file that is unclear is refused.
+
+    Each reading names the label, who confirmed it and when, and either the full name the label
+    stands for (`read_as`) or that it is an ordinary word (`plain_word`)."""
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))["readings"]
+    except (OSError, KeyError, TypeError, ValueError) as error:
+        raise ArchiveError(f"{path.name}: not a readings file ({error})") from error
+    found: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        name = query_for(str(entry.get("name", "")))
+        full, plain_word = entry.get("read_as"), entry.get("plain_word")
+        if not name or not entry.get("confirmed_by") or not entry.get("confirmed_on"):
+            raise ArchiveError(f"{path.name}: a reading needs a name, who confirmed it and when: {entry}")
+        if bool(isinstance(full, str) and query_for(full)) == (plain_word is True) or (full and plain_word):
+            raise ArchiveError(f"{path.name}: {entry.get('name')!r} needs either a full name or plain_word, not both")
+        if name in found:
+            raise ArchiveError(f"{path.name}: {entry.get('name')!r} has two readings")
+        found[name] = dict(entry)
+    return found
+
+
+def lookup_as_read(vocabulary: Vocabulary, name: str, reading: dict[str, Any] | None) -> Outcome:
+    """`lookup`, taking into account what a named person has confirmed about this label.
+
+    A confirmed full name is looked up in place of the label by the same rule, so an abbreviation
+    is still never a link by itself. A label confirmed to be an ordinary word keeps its outcome,
+    except that the terms it is the abbreviation of are ruled out and the nearest terms are listed."""
+    if not reading:
+        return lookup(vocabulary, name)
+    who = f"confirmed by {reading['confirmed_by']} on {reading['confirmed_on']}"
+    full = str(reading.get("read_as") or "")
+    if full:
+        found = lookup(vocabulary, full)
+        said = f'our name is read as "{full}" ({who})'
+        if found.link is not None:
+            note = "; ".join(part for part in (said, found.link.note) if part)
+            return Outcome(LINKED, "", replace(found.link, note=note), read_as=full)
+        return Outcome(found.outcome, f"{said}; {found.reason}", candidates=found.candidates, read_as=full)
+    found = lookup(vocabulary, name)
+    if found.outcome != ABBREVIATION_ONLY:
+        return found
+    ruled_out = ", ".join(f"{candidate.code} {candidate.title}" for candidate in found.candidates)
+    close = nearest(vocabulary, query_for(name))
+    return Outcome(
+        PLAIN_WORD,
+        f"our name is an ordinary word, not the abbreviation of {ruled_out} ({who}); "
+        + ("the nearest terms by shared words are listed" if close else "no term is near it"),
+        candidates=close,
+    )

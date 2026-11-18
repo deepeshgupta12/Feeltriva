@@ -18,8 +18,11 @@ from feeltriva_ingestion.ontologies import (
     MONDO,
     NOT_LINKABLE,
     NOTHING,
+    PLAIN_WORD,
     SENTENCE,
+    load_readings,
     lookup,
+    lookup_as_read,
     read_vocabulary,
 )
 from feeltriva_ingestion.ontology_links import REVIEW_FILE, check, link_ontologies, summarise, write_review
@@ -284,3 +287,123 @@ def test_the_registered_files_are_read_whole_and_the_known_hazards_get_no_link()
     assert lookup(hpo, "ataxia symptom").link.code == "HP:0001251"
     assert lookup(mondo, "ataxia symptom").link is None  # MONDO has it only as a looser synonym and an animal term
     assert lookup(hpo, "mood swings").outcome == NOT_LINKABLE  # the only HPO term with this name is obsolete
+
+
+@pytest.mark.postgres
+def test_a_confirmed_reading_gives_a_pending_link_that_records_who_confirmed_it(tmp_path, owner_db):
+    tag = uuid.uuid4().hex[:10]
+    sid = source_id(f"read-{tag}.zip", "data.csv")
+    short, word = f"sfd {tag}", f"sg {tag}"
+    with owner_db.transaction(None) as tx:
+        if tx.get(MappingRelease, RELEASE_ID) is None:
+            tx.add(MappingRelease(release_id=RELEASE_ID, version="lexical-0"))
+        tx.add(Source(source_id=sid, source_name=f"read-{tag}.zip/data.csv", version="t", sha256="0"))
+        for n, name in enumerate((short, word)):
+            tx.add(Disease(disease_id=f"dis_{tag}_{n}", preferred_name=name))
+        tx.flush()
+        for n, name in enumerate((short, word)):
+            tx.add(
+                DiseaseMapping(
+                    mapping_id=f"dm_{tag}_{n}",
+                    release_id=RELEASE_ID,
+                    source_id=sid,
+                    original_label=name,
+                    disease_id=f"dis_{tag}_{n}",
+                    method="lexical_casefold_whitespace",
+                )
+            )
+    entries = [
+        entry(write_hpo(tmp_path / "hp.json", tag=tag), "hpo_release"),
+        entry(write_mondo(tmp_path / "mondo.owl", tag=tag), "mondo_release"),
+    ]
+    url = os.environ["TEST_MIGRATION_DATABASE_URL"]
+    who = {"confirmed_by": "owner", "confirmed_on": "2026-01-02"}
+    readings = {
+        short: {"name": short, "read_as": f"synthetic fever disease {tag}", **who},
+        word: {"name": word, "plain_word": True, **who},
+        "elsewhere": {"name": "elsewhere", "plain_word": True, **who},
+    }
+
+    # Without the readings both labels equal only an abbreviation and nothing is stored.
+    before = link_ontologies(tmp_path, url, entries, [sid], readings={})
+    assert before["inserted"] == {HPO: 0, MONDO: 0} and check(before) == []
+    assert {item["outcomes"][MONDO].outcome for item in before["items"] if item["name"] == short} == {ABBREVIATION_ONLY}
+
+    result = link_ontologies(tmp_path, url, entries, [sid], readings=readings)
+    assert check(result) == [] and result["inserted"] == {HPO: 0, MONDO: 1}
+    assert result["readings"] == {"in_file": 3, "applied": sorted((short, word)), "fit_no_name": []}
+    by = {item["name"]: item for item in result["items"]}
+    assert by[short]["read_as"] == f"synthetic fever disease {tag}"
+    assert [(link["system"], link["code"], link["method"]) for link in by[short]["links"]] == [
+        (MONDO, "MONDO:9000001", "exact_label")
+    ]
+    assert by[word]["links"] == [] and by[word]["outcomes"][HPO].outcome == PLAIN_WORD
+    assert (
+        summarise(result)["rows"][
+            ("disease labels", MONDO, "linked: the full name a person confirmed for our label is a name of the term")
+        ]
+        == 1
+    )
+    with owner_db.transaction(None) as tx:
+        stored = tx.execute(
+            text(
+                """SELECT system, code, match_method, status::text, reviewer, detail ->> 'query', detail ->> 'our_name',
+                          detail ->> 'read_as', detail ->> 'reading_confirmed_by', detail ->> 'reading_confirmed_on'
+                   FROM terminology_links WHERE disease_id LIKE :d"""
+            ),
+            {"d": f"dis_{tag}_%"},
+        ).all()
+    # The link is a candidate like any other: pending, and no reviewer has approved it.
+    assert [tuple(row) for row in stored] == [
+        (
+            MONDO,
+            "MONDO:9000001",
+            "exact_label",
+            "pending",
+            None,
+            f"synthetic fever disease {tag}",
+            short,
+            f"synthetic fever disease {tag}",
+            "owner",
+            "2026-01-02",
+        )
+    ]
+    rows = list(csv.DictReader(write_review(result, tmp_path / "review").read_text(encoding="utf-8").splitlines()))
+    linked = next(row for row in rows if row["name"] == short and row["system"] == MONDO)
+    assert (linked["read_as"], linked["code"]) == (f"synthetic fever disease {tag}", "MONDO:9000001")
+    assert 'read as "synthetic fever disease' in linked["note"] and "confirmed by owner on 2026-01-02" in linked["note"]
+    ruled_out = next(row for row in rows if row["name"] == word and row["system"] == HPO)
+    assert ruled_out["outcome"] == PLAIN_WORD and "not the abbreviation of HP:9000001" in ruled_out["reason"]
+    assert link_ontologies(tmp_path, url, entries, [sid], readings=readings)["inserted"] == {HPO: 0, MONDO: 0}
+    # When every source is looked at, a reading that fits none of our names is reported as a slip in the file.
+    unscoped = {**result, "readings": {**result["readings"], "fit_no_name": ["elsewhere"]}}
+    assert check(unscoped) == ["the confirmed reading of 'elsewhere' fits none of our names"]
+
+
+@pytest.mark.archives
+def test_the_confirmed_readings_lead_to_the_terms_the_owner_meant_on_the_real_files():
+    entries = {KINDS[e["kind"]]: e for e in load_supplementary() if e.get("kind") in KINDS}
+    if not all((RAW_DIR / e["name"]).is_file() for e in entries.values()):
+        pytest.skip("hp.json and mondo.owl are not in data/raw")
+    hpo, mondo = read_vocabulary(RAW_DIR, entries[HPO]), read_vocabulary(RAW_DIR, entries[MONDO])
+    readings = load_readings()
+
+    def code(vocabulary, name):
+        found = lookup_as_read(vocabulary, name, readings[name])
+        return found.link.code if found.link else found.outcome
+
+    assert (code(hpo, "gerd"), code(mondo, "gerd")) == ("HP:0002020", "MONDO:0007186")
+    assert (code(hpo, "copd"), code(mondo, "copd")) == ("HP:0006510", "MONDO:0005002")
+    assert code(hpo, "pacs") == "HP:0006699"
+    # The owner's meaning of OCD leads to the disorder itself, not to the personality disorder that shares the letters.
+    assert code(mondo, "ocd") == "MONDO:0008114" != "MONDO:0001158"
+    assert (
+        code(mondo, "cidp") == "MONDO:0006702"
+    )  # one of the two terms that share the abbreviation carries the full name
+    assert (code(hpo, "scar"), lookup_as_read(mondo, "scar", readings["scar"]).link) == ("HP:0100699", None)
+    cold = lookup_as_read(mondo, "cold", readings["cold"])
+    assert (cold.outcome, cold.link) == (PLAIN_WORD, None) and "MONDO:0005002" in cold.reason
+    linked = sum(
+        lookup_as_read(v, name, reading).link is not None for v in (hpo, mondo) for name, reading in readings.items()
+    )
+    assert linked == 25

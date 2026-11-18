@@ -323,6 +323,10 @@ def main() -> int:
                 print(f"{group} ({summary['groups'][group]}): {system}: {outcome}: {n}")
             for (group, outcome), n in sorted(summary["linked"].items()):
                 print(f"{group} ({summary['groups'][group]}): {outcome}: {n}")
+            print(
+                f"confirmed readings: {result['readings']['in_file']} in specs/confirmed_readings.json, "
+                f"{len(result['readings']['applied'])} fit one of our names"
+            )
             print(f"case labels: {result['case_labels']}")
             print(f"links inserted now: {result['inserted']}")
             for system, status, count, _incomplete, _unsigned in result["stored"]:

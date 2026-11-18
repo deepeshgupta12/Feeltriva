@@ -40,7 +40,8 @@ from .ontologies import (
     Candidate,
     Outcome,
     Vocabulary,
-    lookup,
+    load_readings,
+    lookup_as_read,
     not_a_name,
     read_vocabulary,
 )
@@ -51,7 +52,9 @@ REVIEW_FILE = "ontology_links.csv"
 _SENTENCE = Outcome(SENTENCE, "a question sentence is not a name; it is not looked up")
 
 
-def _link(vocabulary: Vocabulary, looked_up: str, found: Candidate) -> dict[str, Any]:
+def _link(
+    vocabulary: Vocabulary, looked_up: str, found: Candidate, reading: dict[str, Any] | None = None
+) -> dict[str, Any]:
     detail = {
         "query": looked_up,
         "matched_text": found.matched,
@@ -59,6 +62,14 @@ def _link(vocabulary: Vocabulary, looked_up: str, found: Candidate) -> dict[str,
         "branch": found.branch,
         "note": found.note,
     }
+    if reading and reading.get("read_as"):  # the full name a person confirmed was compared, not our label
+        detail.update(
+            query=query_for(reading["read_as"]),
+            our_name=looked_up,
+            read_as=reading["read_as"],
+            reading_confirmed_by=reading["confirmed_by"],
+            reading_confirmed_on=reading["confirmed_on"],
+        )
     return {
         "system": vocabulary.system,
         "version": vocabulary.version,
@@ -76,11 +87,14 @@ def link_ontologies(
     entries: list[dict[str, Any]] | None = None,
     source_ids: list[str] | None = None,
     progress: Callable[[str], None] = lambda _message: None,
+    readings: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Look up every disease candidate and named feature term in HPO and MONDO; store exact names as pending links.
 
     entries: the registered files to read (default: those of `specs/supplementary_sources.json`).
-    source_ids limits the subjects to those mapped from these sources (used by tests); default all."""
+    source_ids limits the subjects to those mapped from these sources (used by tests); default all.
+    readings: what a named person has confirmed about some labels (default: `specs/confirmed_readings.json`)."""
+    readings = load_readings() if readings is None else readings
     entries = [entry for entry in (load_supplementary() if entries is None else entries) if entry.get("kind") in KINDS]
     if not entries:
         raise SystemExit("no HPO or MONDO file is registered in specs/supplementary_sources.json")
@@ -96,6 +110,7 @@ def link_ontologies(
     systems = [vocabulary.system for vocabulary in vocabularies]
     engine = create_engine(database_url)
     items: list[dict[str, Any]] = []
+    applied: set[str] = set()
     try:
         with _raw_cursor(engine) as cur:  # a short read: the lookups below hold no database transaction open
             subjects = read_subjects(cur, source_ids)
@@ -110,11 +125,15 @@ def link_ontologies(
                 "links": [],
                 "outcomes": {},
             }
+            reading = None if question else readings.get(item["looked_up"])
+            item["read_as"] = str((reading or {}).get("read_as") or "")
+            if reading:
+                applied.add(item["looked_up"])
             for vocabulary in vocabularies:
-                outcome = _SENTENCE if question else lookup(vocabulary, name)
+                outcome = _SENTENCE if question else lookup_as_read(vocabulary, name, reading)
                 item["outcomes"][vocabulary.system] = outcome
                 if outcome.link is not None:
-                    item["links"].append(_link(vocabulary, item["looked_up"], outcome.link))
+                    item["links"].append(_link(vocabulary, item["looked_up"], outcome.link, reading))
             items.append(item)
         with _raw_cursor(engine) as cur:
             inserted = store_links(cur, items)
@@ -144,6 +163,12 @@ def link_ontologies(
         "items": items,
         "inserted": {system: inserted.get(system, 0) for system in systems},
         "stored": stored,
+        "readings": {
+            "in_file": len(readings),
+            "applied": sorted(applied),
+            # A reading that fits none of our names is a slip in the file, unless only some sources were looked at.
+            "fit_no_name": [] if source_ids is not None else sorted(set(readings) - applied),
+        },
         "case_labels": {
             "all": int(total),
             "label_linked_here": int(here),
@@ -163,7 +188,9 @@ def summarise(result: dict[str, Any]) -> dict[str, Any]:
         groups[group] += 1
         for system, outcome in item["outcomes"].items():
             how = outcome.outcome
-            if outcome.link is not None:
+            if outcome.link is not None and outcome.read_as:
+                how = "linked: the full name a person confirmed for our label is a name of the term"
+            elif outcome.link is not None:
                 how = (
                     "linked: our name is the term's label"
                     if outcome.link.how == LABEL
@@ -204,7 +231,7 @@ def check(result: dict[str, Any]) -> list[str]:
                 found.code not in vocabulary.linkable
                 or found.how not in (LABEL, EXACT)
                 or not_a_name(found.kind)
-                or plain(found.matched) != item["looked_up"]
+                or plain(found.matched) != (query_for(outcome.read_as) if outcome.read_as else item["looked_up"])
                 or not found.title
                 or not found.uri
             ):
@@ -213,6 +240,8 @@ def check(result: dict[str, Any]) -> list[str]:
         1 for item in result["items"] for outcome in item["outcomes"].values() if outcome.outcome == LINKED
     ):
         diffs.append("the links to store and the linked outcomes differ in number")
+    for name in result["readings"]["fit_no_name"]:
+        diffs.append(f"the confirmed reading of {name!r} fits none of our names")
     for system, status, _count, incomplete, unsigned in result["stored"]:
         if incomplete:
             diffs.append(f"{incomplete} stored {system} links ({status}) lack a title or an address")
@@ -237,6 +266,7 @@ def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
                 "name",
                 "kind",
                 "looked_up",
+                "read_as",
                 "system",
                 "version",
                 "outcome",
@@ -270,6 +300,7 @@ def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
                         item["name"],
                         item["kind"],
                         item["looked_up"],
+                        outcome.read_as,
                         system,
                         versions[system],
                         outcome.outcome,

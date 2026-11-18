@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from feeltriva_ingestion.archives import ArchiveError
 from feeltriva_ingestion.ontologies import (
@@ -13,8 +15,12 @@ from feeltriva_ingestion.ontologies import (
     NEAREST,
     NOT_LINKABLE,
     NOTHING,
+    PLAIN_WORD,
+    READINGS_PATH,
     SEVERAL,
+    load_readings,
     lookup,
+    lookup_as_read,
     read_hpo,
     read_mondo,
     read_vocabulary,
@@ -179,3 +185,78 @@ def test_a_file_whose_layout_changed_is_refused(tmp_path):
     not_hpo.write_text('{"something": []}', encoding="utf-8")
     with pytest.raises(ArchiveError, match="not an HPO file"):
         read_hpo(not_hpo)
+
+
+OWNER = {"confirmed_by": "owner", "confirmed_on": "2026-01-02"}
+
+
+def test_a_confirmed_full_name_is_looked_up_in_place_of_the_label_by_the_same_rule(hpo, mondo):
+    assert lookup(hpo, "sg").outcome == ABBREVIATION_ONLY  # without a reading the abbreviation gives no link
+    found = lookup_as_read(hpo, "sg", {"name": "sg", "read_as": "Synthetic glow", **OWNER})
+    assert (found.outcome, found.link.code, found.link.how, found.read_as) == (
+        LINKED,
+        "HP:9000001",
+        "label",
+        "Synthetic glow",
+    )
+    assert found.link.note == 'our name is read as "Synthetic glow" (confirmed by owner on 2026-01-02)'
+    by_synonym = lookup_as_read(mondo, "sfd", {"name": "sfd", "read_as": "pretend fever", **OWNER})
+    assert (by_synonym.link.code, by_synonym.link.how) == ("MONDO:9000001", "exact_synonym")
+    # A full name that no term carries gives no link; the reason says what was read and by whom.
+    nothing = lookup_as_read(hpo, "sg", {"name": "sg", "read_as": "unheard thing", **OWNER})
+    assert (nothing.outcome, nothing.link, nothing.read_as) == (NOTHING, None, "unheard thing")
+    assert nothing.reason.startswith('our name is read as "unheard thing" (confirmed by owner on 2026-01-02); ')
+    # A reading does not loosen the rule: a "full name" that is itself only an abbreviation gives no link.
+    still = lookup_as_read(mondo, "something", {"name": "something", "read_as": "SFD", **OWNER})
+    assert (still.outcome, still.link) == (ABBREVIATION_ONLY, None)
+    assert lookup_as_read(hpo, "synthetic glow", None).link.code == "HP:9000001"  # no reading: the plain lookup
+
+
+def test_a_label_confirmed_to_be_an_ordinary_word_is_never_linked_through_an_abbreviation(hpo, mondo):
+    plain_word = {"name": "sg", "plain_word": True, **OWNER}
+    found = lookup_as_read(hpo, "sg", plain_word)
+    assert (found.outcome, found.link, found.read_as) == (PLAIN_WORD, None, "")
+    assert "not the abbreviation of HP:9000001 Synthetic glow (confirmed by owner on 2026-01-02)" in found.reason
+    assert all(candidate.kind != "abbreviation" for candidate in found.candidates)
+    # Where the label is not an abbreviation of anything, being an ordinary word changes nothing.
+    assert lookup_as_read(hpo, "synthetic glow", {"name": "synthetic glow", "plain_word": True, **OWNER}).link.code == (
+        "HP:9000001"
+    )
+    assert lookup_as_read(mondo, "unheard thing", {"name": "unheard thing", "plain_word": True, **OWNER}).outcome == (
+        NOTHING
+    )
+
+
+def test_a_readings_file_that_is_unclear_is_refused(tmp_path):
+    def write(readings):
+        path = tmp_path / "readings.json"
+        path.write_text(json.dumps({"readings": readings}), encoding="utf-8")
+        return path
+
+    good = load_readings(
+        write([{"name": "S-G", "read_as": "synthetic glow", **OWNER}, {"name": "fog", "plain_word": True, **OWNER}])
+    )
+    assert set(good) == {"s g", "fog"} and good["s g"]["read_as"] == "synthetic glow"
+    for bad, message in (
+        ([{"name": "sg", "read_as": "a", "plain_word": True, **OWNER}], "either a full name or plain_word"),
+        ([{"name": "sg", **OWNER}], "either a full name or plain_word"),
+        ([{"name": "sg", "read_as": "  ", **OWNER}], "either a full name or plain_word"),
+        ([{"name": "sg", "read_as": "a", "confirmed_on": "2026-01-02"}], "who confirmed it and when"),
+        ([{"name": "sg", "read_as": "a", "confirmed_by": "owner"}], "who confirmed it and when"),
+        ([{"read_as": "a", **OWNER}], "who confirmed it and when"),
+        ([{"name": "sg", "read_as": "a", **OWNER}, {"name": "SG", "read_as": "b", **OWNER}], "two readings"),
+    ):
+        with pytest.raises(ArchiveError, match=message):
+            load_readings(write(bad))
+    broken = tmp_path / "broken.json"
+    broken.write_text("{}", encoding="utf-8")
+    with pytest.raises(ArchiveError, match="not a readings file"):
+        load_readings(broken)
+
+
+def test_the_committed_readings_are_valid_and_each_says_who_confirmed_it():
+    readings = load_readings(READINGS_PATH)
+    assert len(readings) == 19 and {"gerd", "ocd", "cidp", "scar", "cold"} <= set(readings)
+    assert all(entry["confirmed_by"] and entry["confirmed_on"] and entry["basis"] for entry in readings.values())
+    assert readings["ocd"]["read_as"] == "obsessive-compulsive disorder"
+    assert readings["cold"].get("plain_word") is True and "read_as" not in readings["cold"]
