@@ -1696,3 +1696,6 @@ sent; links stored pending with code, title and URI; the API role cannot read th
 - The links are not published, and no ICD-11 crosswalk to another vocabulary exists (E56).
 - The completeness check was not rerun: this sub-step adds a table and changes no data it reads.
 
+**Committed and indexed.** Committed as `9dc5c0a` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `9dc5c0a` and reports up-to-date. This paragraph was added in a
+following documents-only commit, after which the index was refreshed again.
