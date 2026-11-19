@@ -312,16 +312,25 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
             ),
             {"p": f"dis_{tag}_%", "q": f"feat_{tag}_%"},
         ).all()
-        readable = tx.execute(
-            text("SELECT has_table_privilege('feeltriva_app', 'terminology_links', 'SELECT')")
-        ).scalar_one()
+        # Since M2.17 the API role may read these rows and set a decision, inside a reviewer transaction only
+        # (tests/api/test_review_links.py). It still cannot write a code or a title, nor add or remove a link.
+        guarded = tx.execute(
+            text(
+                """SELECT (SELECT relrowsecurity FROM pg_class WHERE relname = 'terminology_links'),
+                          has_column_privilege('feeltriva_app', 'terminology_links', 'code', 'UPDATE'),
+                          has_column_privilege('feeltriva_app', 'terminology_links', 'title', 'UPDATE'),
+                          has_table_privilege('feeltriva_app', 'terminology_links', 'INSERT'),
+                          has_table_privilege('feeltriva_app', 'terminology_links', 'DELETE')"""
+            )
+        ).one()
     assert [(r[0], r[1], r[2], r[5], r[6]) for r in rows] == [
         (LOINC, "9.99", "39156-5", "short_name_in_question", "pending"),
         (ICD, "2026-01", "MD12", "exact_synonym", "pending"),
         (ICD, "2026-01", "XA01", "exact_title", "pending"),
     ]
     assert all(r[3] and r[4] for r in rows)  # code, title and URI are always stored together
-    assert [bool(r[7]) != bool(r[8]) for r in rows] == [True, True, True] and readable is False
+    assert [bool(r[7]) != bool(r[8]) for r in rows] == [True, True, True]
+    assert tuple(guarded) == (True, False, False, False, False)
     assert sum(run()["inserted"].values()) == 0  # a rerun adds nothing, and asks the API nothing new
     with write_review(result, tmp_path / "review").open(encoding="utf-8", newline="") as handle:
         review = {row["name"]: row for row in csv.DictReader(handle)}

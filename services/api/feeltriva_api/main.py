@@ -16,6 +16,7 @@ from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
 from .errors import ApiError
+from .review import list_terminology_links
 from .service import AssessmentService
 from .settings import Settings, get_settings
 
@@ -221,6 +222,29 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         return JSONResponse(
             container.review.list_relation_suggestions(
                 who, status=status, relation=relation, subject_type=subject_type, q=q, limit=limit, offset=offset
+            )
+        )
+
+    @app.get("/internal/v1/review/terminology-links")
+    def review_terminology_links(
+        who: Who,
+        status: str | None = None,
+        system: str | None = None,
+        subject_type: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            list_terminology_links(
+                container.db,
+                who,
+                status=status,
+                system=system,
+                subject_type=subject_type,
+                q=q,
+                limit=limit,
+                offset=offset,
             )
         )
 

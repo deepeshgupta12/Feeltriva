@@ -236,15 +236,30 @@ def test_identifiers_mondo_marks_equivalent_become_pending_links_one_row_per_lab
         ),
     }
 
-    with owner_db.transaction(None) as tx:  # the note says through which MONDO term the category was reached
-        noted = tx.execute(
+    # The note says through which MONDO term the code was reached, and keeps the foundation entity MONDO names.
+    notes_sql = text(
+        """SELECT code, detail -> 'category_through_mondo' -> 'via' ->> 'code', detail -> 'category_through_mondo' ->> 'icd_title',
+                  detail -> 'category_through_mondo' ->> 'foundation_uri', detail -> 'also_through_mondo' ->> 'foundation_uri'
+           FROM terminology_links WHERE disease_id = ANY(:d) AND match_method = 'exact_title' AND code LIKE 'XZ01%' ORDER BY code"""
+    )
+    entity = "http://id.who.int/icd/entity/900001"
+    expected_notes = [
+        ("XZ01", None, None, None, entity),
+        ("XZ01.Z", "MONDO:9000001", "Synthetic fever disease", entity, None),
+    ]
+    with owner_db.transaction(None) as tx:
+        assert [tuple(row) for row in tx.execute(notes_sql, {"d": [ids["fever"], ids["grain"]]})] == expected_notes
+        # A note written by an earlier version, without the foundation entity, is brought up to date by the next run.
+        tx.execute(
             text(
-                """SELECT detail -> 'category_through_mondo' -> 'via' ->> 'code', detail -> 'category_through_mondo' ->> 'icd_title'
-                   FROM terminology_links WHERE disease_id = :d AND code = 'XZ01.Z'"""
+                """UPDATE terminology_links SET detail = jsonb_set(detail, '{also_through_mondo}', '{"icd_code": "XZ01"}')
+                   WHERE disease_id = :d AND code = 'XZ01'"""
             ),
-            {"d": ids["grain"]},
-        ).one()
-    assert tuple(noted) == ("MONDO:9000001", "Synthetic fever disease")
+            {"d": ids["fever"]},
+        )
+    assert check(run()) == []
+    with owner_db.transaction(None) as tx:
+        assert [tuple(row) for row in tx.execute(notes_sql, {"d": [ids["fever"], ids["grain"]]})] == expected_notes
 
     path = write_review(result, tmp_path / "review")
     assert path.name == REVIEW_FILE

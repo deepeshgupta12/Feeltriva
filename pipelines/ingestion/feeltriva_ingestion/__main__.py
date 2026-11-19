@@ -289,7 +289,7 @@ def main() -> int:
             print(
                 f"{time.monotonic() - started:.0f}s; "
                 + (
-                    "every link is a name match, carries code, title and URI, and is pending review"
+                    "every link is a name match and carries code, title and URI; none was decided without a reviewer"
                     if not diffs
                     else f"{len(diffs)} differences"
                 )

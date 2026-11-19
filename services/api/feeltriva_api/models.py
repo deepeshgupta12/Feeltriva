@@ -307,3 +307,25 @@ class RelationSuggestion(Base):
     signals: Mapped[Any] = mapped_column(Json, default=list)
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
     reviewer: Mapped[str | None] = mapped_column(Text)
+
+
+class TerminologyLink(Base):
+    """A candidate link from one of our disease or feature candidates to a term of an outside vocabulary.
+
+    Written by the ingestion pipeline (M2.11, M2.14 to M2.16). The API only reads these rows and records a
+    reviewer's decision on them (M2.17), and only inside a reviewer transaction. Codes are internal: no
+    user-facing response carries them (decision E63)."""
+
+    __tablename__ = "terminology_links"
+    link_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    disease_id: Mapped[str | None] = mapped_column(Text)
+    feature_id: Mapped[str | None] = mapped_column(Text)
+    system: Mapped[str] = mapped_column(Text)
+    system_version: Mapped[str] = mapped_column(Text)
+    code: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    uri: Mapped[str | None] = mapped_column(Text)
+    match_method: Mapped[str] = mapped_column(Text)
+    detail: Mapped[Any] = mapped_column(Json, default=dict)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    reviewer: Mapped[str | None] = mapped_column(Text)

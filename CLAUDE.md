@@ -23,8 +23,9 @@ Never transmit user health data to development analytics or LLM tracing by defau
 
 Codes and identifiers of outside vocabularies (ICD-11, LOINC, HPO, MONDO, SNOMED CT and any other source) are for the
 internal database only. They are never shown to a user: not in the web app, not in an API or MCP response, not in
-generated text. (Owner's instruction, 2026-11-18; decision E63.) The API's database role has no access to
-`terminology_links`; keep it so, and do not add a code field to a user-facing contract.
+generated text. (Owner's instruction, 2026-11-18; decision E63.) The API's database role can read
+`terminology_links` and set a decision on a row only inside a reviewer transaction (row-level security, migration 0008);
+a user-facing request sees no row of it. Keep it so, and do not add a code field to a user-facing contract or route.
 
 For each milestone: implement, run meaningful tests, document changes/limits and
 update the handoff checklist. Verify API/SDK syntax against official installed-version

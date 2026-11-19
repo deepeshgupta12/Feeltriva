@@ -30,6 +30,7 @@ command output, not estimated.
 | BUG-019 | M2.11 | LOINC matching on the component name alone gave a wrong-sense link ("fever" to "Fever in Mother") | Fixed before commit |
 | BUG-020 | M2.8 | Two labels that share only a catch-all ICD-11 code were suggested as synonyms (chronic and diabetic kidney disease) | Fixed before commit |
 | BUG-021 | M2.11 / M2.14 | The self-check of `link-vocabularies` reported any link that was not `pending` as a difference, so the command would fail as soon as a reviewer decided one link | Fixed |
+| BUG-022 | M2.16 / M2.17 | Where the name search already held the ICD-11 code that MONDO leads to, the note on that row did not keep the foundation entity MONDO names | Fixed |
 
 ## Entries
 
@@ -2280,3 +2281,109 @@ one; a rejected MONDO link is not used, and pending links that rest on one are r
 graph was re-indexed at `e3aaa10` and reports up-to-date; both new modules are below the 32 KB
 limit. The API and the web app were not restarted: this sub-step changes neither. This paragraph
 was added in a following documents-only commit, after which the index was refreshed again.
+
+### M2.17 — Vocabulary links in the review path; the owner's review recorded
+
+Owner's "apply now" of 2026-11-18, for the five labels where the two routes of M2.16 gave
+different ICD-11 codes (decision E64). With it the owner gave a written note on how the 121
+"unspecified" sub-codes are to be handled and three checks to run first (decision E66).
+
+**What was built.**
+
+- Migration `0008`: the API's database role may read `terminology_links` and change `status` and
+  `reviewer`, inside a reviewer transaction only (row-level security). No other column, no
+  insert, no delete.
+- `models.py`: `TerminologyLink` (appended). `review.py`: the target type `terminology_link`,
+  the reviewer set on a decision, a count in the overview, and `list_terminology_links`
+  (appended). `main.py`: `GET /internal/v1/review/terminology-links`.
+- `identifier_links.py`: the note on a row the name search already held now keeps the foundation
+  entity, and a note written by an earlier run is brought up to date (BUG-022).
+- `__main__.py`: the closing line of `link-vocabularies` no longer says every link is pending.
+
+**Why the API role now has access, and what guards it.** A decision is recorded through the
+review API, which runs as the application role. Before this sub-step that role had no access to
+the table. Decision E63 (no code is shown to a user) is kept by row-level security: a
+transaction that is not a reviewer's sees no row. `CLAUDE.md` said "has no access; keep it so",
+written one sub-step earlier; it now states the real rule.
+
+**The owner's review, recorded** through `POST /internal/v1/review/decisions` as
+`dev-reviewer:owner`, each with a note that names decision E64 and says the assistant entered
+it on the owner's instruction:
+
+| Label | Approved | Rejected |
+|---|---|---|
+| eczema | `EA8Z` Dermatitis or eczema, unspecified | the MONDO link to "atopic eczema"; `EA80` Atopic eczema taken through it |
+| indigestion (symptom) | `MD92` Dyspepsia | `DD90.3` Functional dyspepsia |
+| indigestion (disease label) | `MD92` Dyspepsia | `DD90.3` Functional dyspepsia |
+| stye | `9A01.2` Hordeolum | `9A01.20` Hordeolum externum |
+| valley fever | `1F25` Coccidioidomycosis | `1F25.00` Acute pulmonary coccidioidomycosis |
+
+11 decisions: 5 approved, 6 rejected. The listing of "indigestion" as a disease is flagged by a
+note on its four mappings; no status was changed by it. `terminology_links`: 2,482 pending,
+5 approved, 6 rejected. After the decisions `link-vocabularies`, `link-ontologies`,
+`import-identifiers` and `suggest-relations` were rerun: no difference reported, nothing
+inserted, and `import-identifiers` reports the eczema link as "rejected by a reviewer and not used".
+
+**The three checks of the owner's note on the 121 sub-codes** (read-only script; 108 WHO calls,
+entity numbers only):
+
+| Check | Result |
+|---|---|
+| (a) The hierarchy, from WHO's own parent relation in the same MMS release | For all 121 WHO names the category as the parent of the stored sub-code; both rows are of release 2026-01. Nothing is inferred by cutting a "Z" |
+| (b) What MONDO means by each identifier taken | All 745 rows carry `MONDO:equivalentTo`; all 481 SNOMED CT and 193 ICD-11 term and identifier pairs also carry MONDO's `skos:exactMatch`. No close, broad, narrow or related match was taken |
+| (c) The foundation-to-MMS step is kept | Kept on all 172 MMS rows (foundation entity, MMS address in 2026-01) and all 46 foundation rows (43 with the MMS code they are counted under; WHO places the other 3 nowhere in MMS). **Missing** from the note on the 106 rows where the name search already had the code: BUG-022 |
+
+**Impact analysis.** `record_review`: 1 caller (`review_decision`), LOW. `overview`: 1 caller,
+LOW. `create_app`: 1 caller (`app_factory`), LOW. `import_identifiers`: 1 caller (`main`), LOW.
+`main`: 1 caller, LOW. The MCP server does not use the review service. `detect_changes` before
+commit rated the set **critical**: 19 symbols in 7 files, 16 flows, among them the app factory
+and the review routes. Investigated statement by statement against the last commit: in the
+existing functions six statements differ, all intended (`record_review`: one type added to the
+reviewer check; `overview`: one count; `main`: one message; `import_identifiers`: the note and
+its condition; `create_app`: one route added). The other 19 route functions, `app_factory`,
+`review_decision` and all 22 functions of `vocabulary.py` are identical; `REVIEW_STATES`,
+`entry`, `stored`, `on_rejected` and the other listed variables are the known line-shift artefact.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 51 files |
+| `uv run pytest -m "not archives"` (SQLite) | 189 passed, 49 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 247 passed |
+| `uv run pytest tests/mcp` | 5 passed |
+| Migration `0008` on a scratch database: head, down to `0007`, head | row security on, 2 policies, readable; off, 0, not readable; on, 2, readable |
+| Live API after restart: the new route as a reviewer, as a user, with no token | 200 with 2,493 links; 403; 401 |
+
+The tests prove: links are listed for reviewers only, with our own term, and can be filtered by
+vocabulary, kind, status, label, title and code; a decision is stored with the reviewer and a
+note and changes nothing else on the row; a user cannot decide a link; outside a reviewer
+transaction the API role sees no link and changes none; even inside one it cannot change a code
+or a title, nor insert or delete a link; the note on an existing row keeps the foundation entity
+and an older note is refreshed.
+
+**Bugs.**
+
+- **BUG-022 — the foundation entity was not kept on rows the name search already held.** M2.16
+  stored it on every new row but not in the note it wrote on an existing one (106 rows), nor in
+  the note on a sub-code row (121). *Found by* check (c) of the owner's note. *Resolution:* both
+  notes carry `foundation_uri`; a note that differs from what the run would write is rewritten;
+  a test with an older note. All 106 and 121 notes on the main database were refreshed.
+- An older test asserted that the API role has no read privilege on the table. That is what this
+  sub-step changes on purpose; the test now asserts the guarantee that remains (row security on,
+  no write to code or title, no insert, no delete).
+
+**Limits, stated plainly.**
+
+- The owner's verdicts are naming decisions by the owner, with public health pages as sources
+  that the assistant did not open. No clinician has reviewed them (open decision D-C2).
+- "Approved" on a link means the owner accepted it as the label's code in that vocabulary. It
+  serves nothing to a user: links are internal (E63).
+- Rejecting the eczema MONDO link also meant rejecting, by hand, the ICD-11 code taken through
+  it. That a rejection carries over by itself is still M2.5.
+- The 121 sub-code rows and their categories are all still pending; the owner's rule (E66) says
+  which is the identity, and approval is M2.5.
+- The pending suggestion "rift valley fever is a subtype of valley fever" is wrong (different
+  diseases) and was not decided: the owner has not ruled on it.
+- The decisions live in the database and in the review notes, not in a file: a rebuilt database
+  would need them entered again from decision E64.

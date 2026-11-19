@@ -20,6 +20,7 @@ from .models import (
     AuditEvent,
     Disease,
     DiseaseMapping,
+    Feature,
     FeatureMapping,
     MappingRelease,
     RelationSuggestion,
@@ -27,6 +28,7 @@ from .models import (
     Source,
     Statement,
     StatementSource,
+    TerminologyLink,
 )
 
 REVIEW_STATES = ("pending", "approved", "rejected", "retired")
@@ -62,6 +64,7 @@ class ReviewService:
                 "feature_mappings": by_status(FeatureMapping),
                 "statements": by_status(Statement),
                 "relation_suggestions": by_status(RelationSuggestion),
+                "terminology_links": by_status(TerminologyLink),
                 "feature_columns_with_repeated_header": sum(1 for t in mappings if (t or {}).get("repeated_header")),
                 "mapping_releases": [
                     {"release_id": r.release_id, "version": r.version, "status": r.status}
@@ -275,7 +278,7 @@ class ReviewService:
                 target.status = status
                 if isinstance(target, Statement):
                     target.reviewed_by, target.reviewed_at = principal.subject, datetime.now(UTC)
-                elif isinstance(target, DiseaseMapping | RelationSuggestion):
+                elif isinstance(target, DiseaseMapping | RelationSuggestion | TerminologyLink):
                     target.reviewer = principal.subject
             entry = ReviewNote(
                 note_id=uuid.uuid4(),
@@ -361,3 +364,77 @@ class KnowledgeService:
 
 # Registered here, at the end of the module, so that the decision endpoint also serves suggestions.
 _TARGETS["relation_suggestion"] = (RelationSuggestion, "suggestion_id")
+
+
+def list_terminology_links(
+    db: Database,
+    principal: Principal,
+    *,
+    status: str | None = None,
+    system: str | None = None,
+    subject_type: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Candidate links to outside vocabularies, each with our own term, for reviewers only (M2.17).
+
+    A link is a match of names or an equivalence stated by a vocabulary; approving or rejecting one is
+    a recorded review decision. Codes are internal: this is never part of a user-facing response."""
+    principal.require_role("reviewer")
+    limit, offset = _page(limit, offset)
+    term = func.coalesce(Disease.preferred_name, Feature.preferred_name)
+    stmt = (
+        select(TerminologyLink, term)
+        .outerjoin(Disease, Disease.disease_id == TerminologyLink.disease_id)
+        .outerjoin(Feature, Feature.feature_id == TerminologyLink.feature_id)
+    )
+    if status:
+        stmt = stmt.where(TerminologyLink.status == status)
+    if system:
+        stmt = stmt.where(TerminologyLink.system == system)
+    if subject_type == "disease":
+        stmt = stmt.where(TerminologyLink.disease_id.is_not(None))
+    elif subject_type == "feature":
+        stmt = stmt.where(TerminologyLink.feature_id.is_not(None))
+    if q:
+        pattern = q.lower()
+        stmt = stmt.where(
+            func.lower(term).contains(pattern)
+            | func.lower(TerminologyLink.title).contains(pattern)
+            | func.lower(TerminologyLink.code).contains(pattern)
+        )
+    with db.transaction(principal.subject, role="reviewer") as tx:
+        total = tx.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+        rows = tx.execute(
+            stmt.order_by(term, TerminologyLink.system, TerminologyLink.code, TerminologyLink.link_id)
+            .limit(limit)
+            .offset(offset)
+        ).all()
+        return {
+            "label": "Candidate links to outside vocabularies - internal, not shown to users; a link is a candidate until a reviewer decides",
+            "total": total,
+            "items": [
+                {
+                    "link_id": link.link_id,
+                    "subject": {
+                        "type": "disease" if link.disease_id else "feature",
+                        "id": link.disease_id or link.feature_id,
+                        "term": name,
+                    },
+                    "system": link.system,
+                    "system_version": link.system_version,
+                    "code": link.code,
+                    "title": link.title,
+                    "uri": link.uri,
+                    "match_method": link.match_method,
+                    "detail": link.detail or {},
+                    "review_status": link.status,
+                    "reviewer": link.reviewer,
+                }
+                for link, name in rows
+            ],
+        }
+
+
+_TARGETS["terminology_link"] = (TerminologyLink, "link_id")

@@ -214,12 +214,26 @@ def import_identifiers(
                 if not item["note_on"] or link is None:
                     continue
                 key = "also_through_mondo" if item["agreement"] == SAME else "category_through_mondo"
-                noted = {"icd_code": link["code"], "icd_title": link["title"], "via": link["detail"]["via"]}
+                noted = {
+                    "icd_code": link["code"],
+                    "icd_title": link["title"],
+                    "foundation_uri": link["detail"][
+                        "foundation_uri"
+                    ],  # the entity MONDO names, kept beside its MMS code
+                    "via": link["detail"]["via"],
+                }
                 for row_id in item["note_on"]:
                     cur.execute(
                         """UPDATE terminology_links SET detail = detail || jsonb_build_object(%s::text, %s::jsonb)
-                           WHERE link_id = %s AND match_method <> %s AND NOT detail ? %s""",
-                        (key, json.dumps(noted, sort_keys=True), row_id, METHOD, key),
+                           WHERE link_id = %s AND match_method <> %s AND (detail -> %s) IS DISTINCT FROM %s::jsonb""",
+                        (
+                            key,
+                            json.dumps(noted, sort_keys=True),
+                            row_id,
+                            METHOD,
+                            key,
+                            json.dumps(noted, sort_keys=True),
+                        ),
                     )
             cur.execute(
                 """SELECT system, status::text, count(*),
