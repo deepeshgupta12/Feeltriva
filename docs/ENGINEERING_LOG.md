@@ -2583,3 +2583,12 @@ graph was re-indexed at `a349397` and reports up-to-date. The API and the web ap
 restarted: this sub-step changes neither. The second real run of `load-answers` had finished its
 larger file and was writing the smaller one when this paragraph was written. This paragraph was
 added in a following documents-only commit, after which the index was refreshed again.
+
+**M2.13a, the second real run of `load-answers`: result.** Finished with exit 0 after 5,740
+seconds (96 minutes; other work was using the database for part of that time). Inserted 0 for
+`train.csv` and 0 for `test.csv`; stored totals unchanged (5,437,674 answers in 3,376,591 cells
+of 475,502 cases, and 1,589,199 in 985,326 of 134,529); the self-check passed. So a rerun adds
+nothing on the real data, and it costs as much as the first load: every one of the 7 million
+answers is offered to the table again and refused one by one. Left as it is. If the loader is
+to be rerun routinely, it should first compare what is stored with what it read and skip the
+write when they agree; that is a change of its own and has not been made.
