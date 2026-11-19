@@ -1,6 +1,6 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness|derive-meanings|load-release|load-answers|link-vocabularies|
-link-ontologies|import-identifiers|suggest-relations}"""
+load-evidence|store-archives|completeness|derive-meanings|load-release|load-answers|load-conditions|
+link-vocabularies|link-ontologies|import-identifiers|suggest-relations}"""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ def main() -> int:
             "derive-meanings",
             "load-release",
             "load-answers",
+            "load-conditions",
             "link-vocabularies",
             "link-ontologies",
             "import-identifiers",
@@ -422,6 +423,35 @@ def main() -> int:
                 f"{time.monotonic() - started:.0f}s; "
                 + (
                     "every 1 in these columns has its answer from the release row it was traced to, and no answer is without its 1"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
+        if args.command == "load-conditions":
+            from .release_conditions import check as check_conditions
+            from .release_conditions import load_conditions
+
+            result = load_conditions(args.raw_dir)
+            for release, facts in result["releases"].items():
+                print(
+                    f"{release}: {facts['conditions']} conditions; listed questions: {facts['listed']['symptoms']} as "
+                    f"symptoms, {facts['listed']['antecedents']} as antecedents; severity levels: {facts['severity']}"
+                )
+                if facts["ready"]:
+                    print(f"  inserted now: {facts['inserted']}")
+                    print(f"  stored: {facts['stored_records']} source records; evidence {facts['stored_evidence']}")
+                    print(f"  stored: ICD-10 links {facts['stored_links']}")
+                    for item in facts["listed_against_the_dictionary"]:
+                        print(f"  kept as the publisher lists it, though its dictionary says otherwise: {item}")
+            diffs = check_conditions(result)
+            for diff in diffs[:20]:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every condition and every listed question is stored as what the source says, pending review; "
+                    "nothing is approved"
                     if not diffs
                     else f"{len(diffs)} differences"
                 )

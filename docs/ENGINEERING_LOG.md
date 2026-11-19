@@ -2491,3 +2491,89 @@ real run of `load-answers`, to confirm on the real data that a rerun adds nothin
 after the commit and was still in its write statement when this paragraph was written; the
 crafted test proves the same on a small release. This paragraph was added in a following
 documents-only commit, after which the index was refreshed again.
+
+### M2.13b — What the source release says about each condition
+
+Owner's go-ahead of 2026-11-19. In the same message the owner parked the medicines data (Step
+D) and chose to leave the scraper repository as it is.
+
+**What was built.**
+
+- `release_conditions.py`: `load_conditions`, `check`. New command
+  `python -m feeltriva_ingestion load-conditions`. No migration.
+- `vocabulary.py`: the self-check of `link-vocabularies` asks for an address only on the
+  vocabularies that command writes (one statement), because a source's own code can come
+  without one.
+
+**What is stored, and as what (decision E70).** From `release_conditions.json`, for each of the
+49 conditions: a source record; a `pending` evidence row per listed question; the ICD-10 code
+as a `pending` link written exactly as the publisher writes it; severity and names on the
+release's source row. The publisher's README was read for the meaning of the fields: severity
+is "the severity associated with the pathology. The lower the more severe"; the ICD-10 edition
+is not stated.
+
+**Real run** (`load-conditions`, 142 seconds; a second run inserted nothing):
+
+| | Count |
+|---|---:|
+| Conditions, each matched to one disease candidate | 49 |
+| Source records | 49 |
+| Questions listed as symptoms / as antecedents | 605 / 283 |
+| Evidence rows, all pending | 888 (49 diseases, 223 features) |
+| ICD-10 links, all pending, no address | 49 |
+| Severity level 1 / 2 / 3 / 4 / 5 | 5 / 12 / 17 / 12 / 3 |
+
+Two listings disagree with the publisher's own dictionary and are kept as listed: question
+`E_16` is listed among the symptoms of "PSVT" and of "Panic attack", and the dictionary calls
+it an antecedent. One code, `g44.009`, is lower case and has a form no WHO ICD-10 code has; it
+is stored as written.
+
+**Impact analysis.** `link_vocabularies`: 1 caller (`main`), LOW. `main`: 1 caller, LOW.
+`store_links`: HIGH for a change (three commands depend on it since M2.16); it is called and
+not changed. `open_release`, `read_dictionary`: called unchanged. `detect_changes` before
+commit: `main` and `link_vocabularies`, both intended, summary risk "high" for the number of
+flows they start. Compared with the last commit: one statement of `link_vocabularies` differs,
+its other 21 functions (with `store_links`) and all 12 of `release.py` are identical, and one
+command branch was added to `main` while the other 17 are identical.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 53 files |
+| `uv run pytest -m "not archives"` (SQLite) | 192 passed, 52 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 253 passed on the final run; see below for two earlier runs |
+| `uv run pytest tests/mcp` | 5 passed |
+| `load-conditions`, `link-vocabularies`, `suggest-relations` after the load | no difference reported; nothing inserted on the second run |
+
+The tests prove: every kind of gap is reported; nothing is written before `load-release` has
+registered the release; evidence rows are pending, of the one type, and point at the record of
+the condition entry they came from; a question listed against the dictionary is kept as listed
+and reported; a code is stored as written, with no address and no reviewer; severity and names
+are kept on the release's row; a second run inserts nothing; a condition that is no label of
+ours is reported and nothing is stored for it; a link that already exists is found and is no gap.
+
+**Bugs, and two full-suite runs that did not pass.**
+
+- Found by the new tests: conditions were looked up through `disease_mappings`, but a case's
+  disease comes from its case label. The lookup now uses the labels of the described files' cases.
+- **First failing full run: my own new test.** The check counted the ICD-10 links "of this
+  release", but a link is one disease, one vocabulary and one code: when an earlier run had
+  stored the same code, nothing new was stored and the check reported a gap. The check now looks
+  for the links themselves; a test covers a link that already exists.
+- **Second failing full run: `tests/mcp/test_mcp_parity.py::test_full_flow_gives_identical_results_over_rest_and_mcp`,
+  once.** It passed alone four times (with and without this sub-step's changes) and in the next
+  full run. The database was under heavy load from another job at the time. Its error text was
+  not captured. Recorded as an intermittent failure to watch, not as fixed.
+
+**Limits, stated plainly.**
+
+- These lists were written to generate simulated patients. They are stored as a source's
+  statement and are not reviewed knowledge.
+- Severity is the publisher's label. It is not used anywhere and is not an urgency rule.
+- The ICD-10 links have no address and no official title; the edition is not known.
+- The second real run of `load-answers` (M2.13a), started to confirm that a rerun adds nothing,
+  was still in its write after more than an hour: a rerun of that loader costs about as much as
+  the first load. Its result is reported when it ends.
+- `__main__.py` is now 27 KB; the code index cannot read a file above 32 KB, so the next
+  command should go with a split of that file.

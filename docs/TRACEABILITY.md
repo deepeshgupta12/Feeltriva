@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.13a (2026-11-19).
+Last updated after sub-step M2.13b (2026-11-19).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -123,7 +123,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | R4 | Source record → imported case | Done | M1.7 |
 | R5 | Case ↔ disease | Done | M1.7 |
 | R6 | Case ↔ feature | Done (16,013,976 rows: 14,807,481 from matrix files, 1,206,495 from lists) | M1.8, M1.9 |
-| R7 | Disease ↔ feature evidence | Done as pending proposals (22,059 rows: 575 narrative mentions, 21,484 per-source co-occurrence counts with denominators; none approved) | M1.11; M2.5, M2.9 |
+| R7 | Disease ↔ feature evidence | Done as pending proposals (22,947 rows: 575 narrative mentions, 888 questions the DDXPlus release lists per condition as symptoms or antecedents (M2.13b), 21,484 per-source co-occurrence counts with denominators; none approved) | M1.11; M2.5, M2.9 |
 | R8 | Disease → narrative statements | Done | M1.4, M1.5 |
 | R9 | Statement ↔ source record | Done | M1.4, M1.5 |
 | R10 | Knowledge release → evidence chunks | Done (pending release `knowledge-import-0` with 3,651 chunks; no approved release exists) | M1.10; M2.5 |

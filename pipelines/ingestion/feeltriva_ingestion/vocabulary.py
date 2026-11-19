@@ -348,7 +348,11 @@ def link_vocabularies(
             stored = store_links(cur, items)
             cur.execute(
                 """SELECT count(*), count(*) FILTER (WHERE status <> 'pending' AND reviewer IS NULL),
-                          count(*) FILTER (WHERE uri IS NULL OR title = '') FROM terminology_links"""
+                          count(*) FILTER (WHERE system = ANY(%s) AND (uri IS NULL OR title = ''))
+                   FROM terminology_links""",
+                (
+                    [ICD, LOINC],
+                ),  # the vocabularies this command writes; a source's own code may come without an address
             )
             total, unsigned, incomplete = cur.fetchone()
     finally:
