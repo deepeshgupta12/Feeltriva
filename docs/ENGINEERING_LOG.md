@@ -2577,3 +2577,9 @@ ours is reported and nothing is stored for it; a link that already exists is fou
   the first load. Its result is reported when it ends.
 - `__main__.py` is now 27 KB; the code index cannot read a file above 32 KB, so the next
   command should go with a split of that file.
+
+**Committed and indexed.** Committed as `a349397` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `a349397` and reports up-to-date. The API and the web app were not
+restarted: this sub-step changes neither. The second real run of `load-answers` had finished its
+larger file and was writing the smaller one when this paragraph was written. This paragraph was
+added in a following documents-only commit, after which the index was refreshed again.
