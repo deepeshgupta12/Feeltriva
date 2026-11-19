@@ -2387,3 +2387,9 @@ and an older note is refreshed.
   diseases) and was not decided: the owner has not ruled on it.
 - The decisions live in the database and in the review notes, not in a file: a rebuilt database
   would need them entered again from decision E64.
+
+**Committed and indexed.** Committed as `c5b6f26` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `c5b6f26` and reports up-to-date. Migration `0008` was applied to the
+main database, and the API on port 8000 was restarted so that it serves the new route. This
+paragraph was added in a following documents-only commit, after which the index was refreshed
+again.
