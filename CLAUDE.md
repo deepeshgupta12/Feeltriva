@@ -133,6 +133,7 @@ TEST_MIGRATION_DATABASE_URL=postgresql+psycopg://feeltriva:feeltriva_dev@127.0.0
 uv run python -m feeltriva_ingestion completeness              # read-only: loaded data vs the handoff mapping table
 uv run python -m feeltriva_ingestion load-release              # trace archive 15 to its source release; question dictionary
 uv run python -m feeltriva_ingestion derive-meanings           # proposed feature kinds and zero meanings (pending)
+uv run python -m feeltriva_ingestion load-answers              # archive-15 answers that are not yes/no, from the release (run load-release first; first run about 80 min)
 uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-11 and LOINC codes (needs the ICD key in .env)
 uv run python -m feeltriva_ingestion link-ontologies           # candidate HPO and MONDO terms from hp.json and mondo.owl in data/raw (offline)
 uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent (needs the ICD key)

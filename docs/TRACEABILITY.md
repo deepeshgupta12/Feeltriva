@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.17 (2026-11-19).
+Last updated after sub-step M2.13a (2026-11-19).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -106,7 +106,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | T19 | 14 `Symptom_Count` → comparison | Done | Compared with the parsed list for all 25,000 rows: 0 mismatches; a mismatch would be flagged on the record. Not stored as a feature | M1.9 |
 | T20 | 14 `Disease` | Done | | M1.7 |
 | T21 | 15 `PATIENT_ID`, `AGE`, `SEX`, `DISEASE` with split | Done | | M1.7 |
-| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded; every mapping now carries the full question text and a proposed kind (M2.12). **Missing:** the answers themselves for the 15 questions that are not yes/no (they are in the source release; M2.13); approval | M1.8, M2.7, M2.12; M2.13, M2.5 |
+| T22 | 15 `E_*` (223) → mappings, `case_features`, classified by kind | Partial | 9,363,408 values loaded; every mapping carries the full question text and a proposed kind (M2.12). The answers themselves for the 15 questions that are not yes/no are loaded from the source release: 7,026,873 answers in 4,361,917 cells, each with its release row (M2.13a). **Missing:** approval | M1.8, M2.7, M2.12, M2.13a; M2.5 |
 | T23 | 15 `SYMPTOM_COUNT` → consistency check | Done | Equals the number of affirmed `E_*` columns in all 610,031 rows: 0 mismatches. Not treated as ground truth | M1.9 |
 | T24 | 16 matrix `diseases` | Done | | M1.7 |
 | T25 | 16 654 positions → mappings, `case_features`, conflicts explicit | Done | 1,032,212 values loaded; repeated headers kept per position with explicit conflicts | M1.3, M1.8 |

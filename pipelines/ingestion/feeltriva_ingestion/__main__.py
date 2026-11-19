@@ -1,6 +1,6 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
-load-evidence|store-archives|completeness|derive-meanings|load-release|link-vocabularies|link-ontologies|
-import-identifiers|suggest-relations}"""
+load-evidence|store-archives|completeness|derive-meanings|load-release|load-answers|link-vocabularies|
+link-ontologies|import-identifiers|suggest-relations}"""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def main() -> int:
             "completeness",
             "derive-meanings",
             "load-release",
+            "load-answers",
             "link-vocabularies",
             "link-ontologies",
             "import-identifiers",
@@ -389,6 +390,38 @@ def main() -> int:
                 + (
                     "every label with a MONDO link has a recorded outcome for both vocabularies, and every link is an "
                     "identifier MONDO marks equivalent, stored for review"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
+        if args.command == "load-answers":
+            from .release_answers import check as check_answers
+            from .release_answers import load_answers
+
+            result = load_answers(args.raw_dir)
+            for release, facts in result["releases"].items():
+                print(
+                    f"{release}: {len(facts['questions'])} questions that are not yes/no: {', '.join(facts['questions'])}"
+                )
+                for name, info in facts["files"].items():
+                    print(
+                        f"  {name}: {info['rows']} rows, {info['cells_affirmed']} 1s in those columns, "
+                        f"{info['cells_answered']} answered in the release, {info['answers']} answers; "
+                        f"{info['answers_that_are_the_default']} of them the publisher's default answer; inserted {info['inserted']}"
+                    )
+                    print(
+                        f"    stored: {info['stored_answers']} answers in {info['stored_cells']} cells of {info['stored_cases']} cases"
+                    )
+                    for term, answers, cases, distinct in info["per_question"]:
+                        print(f"    {term}: {answers} answers, {cases} cases, {distinct} different answers")
+            diffs = check_answers(result)
+            for diff in diffs[:20]:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every 1 in these columns has its answer from the release row it was traced to, and no answer is without its 1"
                     if not diffs
                     else f"{len(diffs)} differences"
                 )

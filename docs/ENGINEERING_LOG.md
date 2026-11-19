@@ -2393,3 +2393,93 @@ graph was re-indexed at `c5b6f26` and reports up-to-date. Migration `0008` was a
 main database, and the API on port 8000 was restarted so that it serves the new route. This
 paragraph was added in a following documents-only commit, after which the index was refreshed
 again.
+
+### M2.13a — The answers behind archive 15's questions that are not yes/no
+
+Owner's go-ahead of 2026-11-19 ("proceed ahead") after confirming the M2.17 tests. M2.13 was
+split in two because its halves are independent and each is large; this is the first half. In
+the same message the owner described Rift Valley fever; the wrong suggestion that it is a
+subtype of valley fever was rejected through the review path under the owner's identity (E69).
+
+**What was built.**
+
+- Migration `0009`: table `case_answers` (case, question mapping, answer, the release as source,
+  release split, release row). Import-only: the application role has no access.
+- `release_answers.py`: `answers_in`, `load_answers`, `check`. New command
+  `python -m feeltriva_ingestion load-answers`.
+- `release.py` is unchanged; its `open_release`, `read_dictionary`, `release_keys`, `file_keys`
+  and `trace` are reused.
+
+**How it works.** Each of our two files is traced to the release again, exactly as in M2.12, and
+the result must equal the trace `load-release` stored; otherwise nothing is written. For every
+traced row the release's evidence list is read and each answer to one of the 15 questions is
+stored as written (`V_112`, or a number such as `6`). The archive's 0/1 values are not touched.
+
+**The check, against the files and not against the database.** For every row, the set of those
+15 columns that hold a 1 in our file must equal the set of those questions that have an answer
+in its release row; every answer must be one the publisher's dictionary lists; what is stored
+must equal what was read.
+
+**Real run** (`load-answers`, 4,722 seconds):
+
+| | `train.csv` | `test.csv` | Both |
+|---|---:|---:|---:|
+| Rows (cases) | 475,502 | 134,529 | 610,031 |
+| 1s in the 15 columns of our file | 3,376,591 | 985,326 | 4,361,917 |
+| Of them answered in the release row | 3,376,591 | 985,326 | 4,361,917 |
+| Answers stored | 5,437,674 | 1,589,199 | 7,026,873 |
+| Answers that are the publisher's default | 1,013,554 | 291,931 | 1,305,485 |
+| Answers not among the possible ones | 0 | 0 | 0 |
+
+**What the answers show.** A 1 in these columns does not mean yes. "Have you traveled out of
+the country in the last 4 weeks?" has a 1 for all 610,031 cases; the answer is "N" for 563,857
+of them. 1,305,485 of the stored answers (18.6%) are the publisher's default: "nowhere", "N",
+"NA" or 0. This is what M2.12 predicted from the dictionary and M2.7 from the data; it is now
+measured. Anything that reads these columns as symptoms that are present would be wrong.
+
+**Impact analysis.** `trace` and `open_release`: 1 caller each (`load_release`), LOW; both are
+called unchanged. `main`: 1 caller, LOW. `detect_changes` before commit: `main` only, summary
+risk "high" because it is the first step of seven flows; compared with the last commit, one
+command branch was added, the other 16 are identical, and all 12 functions of `release.py` are
+identical.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 52 files |
+| `uv run pytest -m "not archives"` (SQLite) | 191 passed, 50 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 250 passed |
+| `uv run pytest tests/mcp` | 5 passed |
+| Migration `0009` on a scratch database: head, down to `0008`, head | table present, absent, present; never readable by the API role |
+
+The tests prove: answers are read as written and yes/no items are left out; every kind of gap
+is reported; nothing is written before the files have been traced by `load-release`; each
+answer is stored with the release as its source and the split and row it came from, also where
+our file takes its rows from the release's validation set; a case with two answers to one
+question keeps both; the publisher's default answer is kept; no 0/1 value is stored or changed;
+a second run inserts nothing.
+
+**Bugs and what the real run taught.**
+
+- Found by the new database test: run before `load-release`, the loader failed on a missing
+  source row. It now writes nothing in that case and says which command to run first.
+- **The write is slow: 79 minutes, of which about 3 are reading.** Seven million rows are
+  inserted in random key order with three foreign-key checks each, and the checks run at the end
+  of the statement (the table stopped growing long before the statement ended).
+- **A freshly loaded table has no statistics.** A count that takes 2.6 seconds after `ANALYZE`
+  ran for more than five minutes before it; three exploratory queries had to be cancelled. The
+  loader now runs `ANALYZE case_answers` after its inserts. The same cause explains two slow
+  queries on `case_features` earlier in this session, which was last analysed after M1.8.
+
+**Limits, stated plainly.**
+
+- These are answers of simulated patients (E55).
+- Answers are stored as codes; what a code means (`V_10` is "N") is in the question dictionary
+  on the mapping. No view yet joins the two for a reader.
+- `completeness` does not cover `case_answers`; the loader's own check does.
+- The archive's 1 is still stored as `present` in `case_features` for these 15 columns. Reading
+  it as "symptom present" is wrong for them; modelling (M4.3) must take the answer.
+- A fresh load takes about 80 minutes. Inserting in key order would likely shorten it; that was
+  not tried, so that the committed code is the code that produced the data.
+- The second half of M2.13 (the publisher's knowledge per condition) is not started.
