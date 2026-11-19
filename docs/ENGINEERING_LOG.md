@@ -2483,3 +2483,11 @@ a second run inserts nothing.
 - A fresh load takes about 80 minutes. Inserting in key order would likely shorten it; that was
   not tried, so that the committed code is the code that produced the data.
 - The second half of M2.13 (the publisher's knowledge per condition) is not started.
+
+**Committed and indexed.** Committed as `ea0c134` and pushed; CI passed on both jobs. The code
+graph was re-indexed at `ea0c134` and reports up-to-date. Migration `0009` is applied to the main
+database. The API and the web app were not restarted: this sub-step changes neither. A second
+real run of `load-answers`, to confirm on the real data that a rerun adds nothing, was started
+after the commit and was still in its write statement when this paragraph was written; the
+crafted test proves the same on a small release. This paragraph was added in a following
+documents-only commit, after which the index was refreshed again.
