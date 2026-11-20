@@ -2763,3 +2763,11 @@ expected two sentences from its symptom statement and got one.
   not changed here: a change would alter the stored claims of those statements, and that is the
   owner's decision (a small follow-up: a single capital or a unit before a full stop ends the
   sentence when a new sentence plainly follows; the claims of about 10 statements made again).
+
+**Committed and indexed.** M2.6 is two commits. `8bb8039` holds the sub-step; CI failed on it
+in the backend job's PostgreSQL step (BUG-023, above), the web job passed. `1aa2ef8` holds the
+correction; CI passed on both jobs (run 44670136494). A pushed commit is not rewritten, so the
+correction is a second commit and not an amended first one. The code graph was re-indexed at
+`1aa2ef8` and reports up-to-date. The API and the web app were not restarted: this sub-step
+changes neither. Migration `0010` is applied to the main database. This paragraph was added in a
+following documents-only commit, after which the index was refreshed again.
