@@ -141,6 +141,7 @@ uv run python -m feeltriva_ingestion link-ontologies           # candidate HPO a
 uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent (needs the ICD key)
 uv run python -m feeltriva_ingestion suggest-relations         # possible synonyms and subtypes for review (nothing merged)
 uv run python -m feeltriva_ingestion extract-claims            # statements split into single claims with spans (pending); --remake after a change of the rules
+uv run python -m feeltriva_api.rule_drafts                     # the draft urgency rules, checked against the feature vocabulary and stored pending
 ```
 
 Run the PostgreSQL suite **without** `-m "not archives"` at least once per sub-step when the

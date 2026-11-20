@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.6c (2026-11-20).
+Last updated after sub-step M2.10 (2026-11-20).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -195,7 +195,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | E5 | Leave-source-out and external clinician-adjudicated tests | Missing / External | | M4.5 (widened), M6.2 |
 | E6 | Selection on validation only; calibration and abstention on their own partition; freeze before final test | Missing | | M4.5 |
 | E7 | Class support and cluster-bootstrap confidence intervals; sparse slices marked inconclusive | Missing | Baseline has none | M4.5 |
-| E8 | Urgency evaluated separately with adjudicated labels | External | No urgency labels exist. Urgency rules will be drafted by the assistant on the owner's instruction (E39), which is not the same as adjudicated labels | M2.10, M6.2 |
+| E8 | Urgency evaluated separately with adjudicated labels | External | No urgency labels exist. Urgency rules will be drafted by the assistant on the owner's instruction (E39), which is not the same as adjudicated labels. The draft exists since M2.10 (20 rules, pending); it has not been tried on any case, because no urgency labels exist | M2.10, M6.2 |
 | N1 | Next experiment: verify zero semantics and label origins | Partial | Archive 15: a 0 on a yes/no question is the source's documented "no" (M2.12); 15 questions are not yes/no. Archive 12: a zero is a term not listed. Archives 11 and 16: the files give no evidence; the owner's decision E53 applies. Label origin known for archive 15 only | M2.7, M2.12, M4.2 |
 | N2 | Next: inspect feature relationships and source artefacts (accuracy rises when features are hidden; falls with more data) | Missing | | M4.2 |
 | N3 | Next: regularised linear baseline and boosted challenger on controlled splits | Missing | | M4.4 |
@@ -317,7 +317,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | U8 | Consent taken from users (E32) | Missing | M3.16 |
 | U9 | Conversations kept 30 days (E33) | Missing | C8 |
 | U10 | Feature meanings derived from the supplied data (E34) | Done as proposals; 51 headings listed for the owner | M2.7 |
-| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Missing | M2.10 |
+| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Drafted, pending | 20 rules from published warning signs, each with its basis, stored `pending` and not served (M2.10). The owner's approval, and the path that records it, are M2.5 | M2.10; M2.5 |
 | U12 | Claude API as the language model (E46) | Missing | M5.1 |
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |

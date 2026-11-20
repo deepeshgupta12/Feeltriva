@@ -3148,3 +3148,119 @@ whose items share the first words of the first item are about 24, not 15.
 modules are below the size it can read. The API and the web app were not restarted: this
 sub-step changes neither. No migration. This paragraph was added in a following documents-only
 commit, after which the index was refreshed again.
+
+### M2.10 — Urgency rule set, first draft
+
+Owner's go-ahead of 2026-11-20 ("Please proceed ahead"), after agreeing to leave the marked lists
+of M2.6c to review. Owner decision E39: the assistant drafts the urgency rules.
+
+**What the handoff asks, checked before the work.** "Run approved rules on every new/corrected
+message, before general candidate ranking" (`docs/01`, FR04). "Use a bounded declarative AST ...
+No clinical thresholds or emergency phone numbers have been invented in this handoff: a reviewer
+must author jurisdiction-specific content" (`docs/03`). "Actual emergency instructions, contact
+numbers and location-dependent services must come from approved backend content" (`docs/06`).
+"Use clearly synthetic nonmedical test concepts to exercise escalation" for code tests
+(`docs/05`). An out-of-scope user "still receives approved escalation/navigation text"
+(`docs/01`). E39 replaces the reviewer as author with the assistant; nothing else is relaxed.
+
+**What was built.**
+
+- `packages/clinical/feeltriva_clinical/drafts/urgency_draft.json`: the draft, `urgency-draft-1`.
+  20 rules (12 emergency, 8 urgent) over 85 features of the vocabulary; 19 sources; a list of
+  warning signs it does not cover; five open points for the owner.
+- `feeltriva_clinical/urgency_draft.py` (pure): the draft's form, `check_draft`, `load_draft`,
+  `review_document`. A draft and its rules can only have the status `pending`.
+- `services/api/feeltriva_api/rule_drafts.py`: `python -m feeltriva_api.rule_drafts` checks every
+  feature of the draft against the vocabulary in the database (identifier and name) and stores
+  one `rule_bundles` row and one `clinical_rules` row per rule, all `pending`. It never changes a
+  rule or a bundle that a reviewer has decided. `models.py` gains `ClinicalRule` for the table
+  that has existed since migration 0001; no migration was needed.
+- `docs/review/urgency_rules_draft.md`: the draft as a document for the owner, generated from the
+  file; a test keeps the two the same.
+- Decision E75 records how the draft was made.
+
+**How the basis was gathered.** Each page was fetched to a scratch directory outside the
+repository and turned into plain text by a small script. The draft was then built by a script
+that refuses to write the file unless every quoted line is found word for word in its page and
+every "last reviewed" date is the page's own. The same script takes each feature from a dump of
+the vocabulary and stops on an unknown identifier. Nothing about any user or case left this
+machine: only public pages were requested.
+
+| Source | Pages | Used for |
+|---|---:|---|
+| NHS website (England), Open Government Licence v3.0 | 16 | the warning signs and the two levels ("call 999" and "urgent appointment") |
+| Kerala Police, Government of Kerala | 1 | the emergency number 112 |
+| Dhubri Medical College & Hospital (Government of Assam), JIPMER | 2 | the Tele MANAS helpline 14416 |
+
+**What could not be read.** `112.gov.in` (certificate error), `mha.gov.in` and `pib.gov.in` (HTTP
+403) and `telemanas.mohfw.gov.in` (an empty page shell) refused automated reading, by both ways
+tried. The numbers are therefore quoted from the three government pages above and marked in the
+draft for the owner to confirm on the official pages. No readable official page states the
+ambulance number 108, and it differs between states, so the draft does not use it.
+
+**The rules.** Emergency (checked first): chest pain with signs of a heart attack; severe
+breathing difficulty; signs of a stroke; seizure; loss of consciousness with other warning
+signs; bleeding that is heavy or will not stop; vomiting blood with other warning signs;
+coughing up blood with other warning signs; signs of a severe allergic reaction; thoughts of
+suicide or self-harm; stiff neck or headache with signs of a serious infection; bleeding in
+pregnancy with fainting or dizziness. Urgent: chest pain; breathing difficulty; fainting;
+vomiting blood; coughing up blood; black stools or bloody diarrhoea; confusion; bleeding in
+pregnancy. No rule uses a number as a threshold: each asks only whether features are present.
+
+**Real run** (`python -m feeltriva_api.rule_drafts`, main database):
+
+| Run | Result |
+|---|---|
+| first | all 85 features found under the names the draft gives; 20 rules inserted; stored: bundle `pending`, 20 rules, 20 `pending`; 0 differences |
+| second | 0 inserted, 0 updated, 20 unchanged; 0 differences |
+
+Checked afterwards: 12 emergency and 8 urgent rules, all `pending`, bundle not approved; the
+API's database role gets "permission denied" when it tries to set a rule to approved; `/readyz`
+still reports `clinical_mode: false`, release `fixture-rules-0`, `synthetic_release: true`. The
+API and the web app were not restarted: nothing they load changed.
+
+**Impact analysis.** New code only. It calls `validate_ast` and `evaluate` (both LOW) and adds a
+model class beside `RuleBundle` (MEDIUM; not changed). No HIGH or CRITICAL symbol is touched.
+`detect_changes` before commit: one tracked file changed (`models.py`, a class appended at its
+end), no existing symbol touched, risk low. The code index's keyword search reported its index
+missing at the start of this sub-step; it was rebuilt in full (`gitnexus analyze --force`).
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 58 files |
+| `uv run pytest -m "not archives"` (SQLite) | 219 passed, 56 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 284 passed |
+
+The nine new tests prove: the draft is whole, pending, and every rule has an NHS basis, a
+reason and two levels in the right order; every rule fires on its case, stays silent on its
+other case, and never fires when nothing is known or everything is merely not asked; the texts
+name no number but 112 and 14416, each with its source; a draft cannot be given the status
+approved; the draft file cannot be loaded as a release, and a bundle built from it is refused in
+clinical mode; five kinds of broken draft are refused with their reason; the review document is
+exactly what the draft generates. With an invented draft over invented features: stored pending
+once; a second run changes nothing; a rule a reviewer decided is not rewritten while a pending
+one is; a decided bundle is not rewritten at all; a missing feature or a feature under another
+name stores nothing. The model is checked against the migration by the existing schema test.
+
+**Bugs.** None in committed code. Found before commit: the test on telephone numbers was written
+with a pattern that could never match, so it passed without checking anything; corrected, and it
+now finds 112 in 20 texts and 14416 in one.
+
+**Limits, stated plainly.**
+
+- The assistant is not a clinician, and no clinician has seen the rules. The warning signs come
+  from an English public health website, not from an Indian clinical source.
+- The rules have not been tried on a single real case. No urgency labels exist, so how often
+  they would fire wrongly or miss is not known. The case files cannot be used for it: a disease
+  label says nothing about urgency (`docs/01`, evaluation rule 8).
+- The vocabulary records that a symptom is present, not how severe or how sudden it is. Where
+  that decides the level, the draft escalates; this will over-escalate.
+- Several features of different archives mean the same thing and are joined with "or" inside the
+  rules, because no synonym has been approved yet. A feature added later is not picked up.
+- A rule fires only on features recorded as present. Free text a user types reaches a rule only
+  through extraction and confirmation, which are separate steps.
+- The numbers 112 and 14416 were not read on the central government's own pages. 108 is absent.
+- There is no way yet to approve a rule: that, and publishing a release from approved rules, is
+  M2.5. Until then the draft cannot be served, whatever its content.

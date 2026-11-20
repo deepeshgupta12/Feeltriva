@@ -329,3 +329,19 @@ class TerminologyLink(Base):
     detail: Mapped[Any] = mapped_column(Json, default=dict)
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
     reviewer: Mapped[str | None] = mapped_column(Text)
+
+
+class ClinicalRule(Base):
+    """A rule of a rule bundle (urgency or scope), kept for review (M2.10). Serving never reads this table:
+    it reads a published release bundle, and only an approved one in clinical mode."""
+
+    __tablename__ = "clinical_rules"
+    rule_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    bundle_id: Mapped[str] = mapped_column(ForeignKey("rule_bundles.bundle_id"))
+    rule_type: Mapped[str] = mapped_column(Text)
+    applicability: Mapped[Any] = mapped_column(Json)
+    condition_ast: Mapped[Any] = mapped_column(Json)
+    action: Mapped[Any] = mapped_column(Json)
+    evidence_ids: Mapped[Any] = mapped_column(Json)
+    priority: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
