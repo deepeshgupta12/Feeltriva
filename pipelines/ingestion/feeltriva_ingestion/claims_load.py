@@ -51,8 +51,14 @@ def feature_names(cur: Any) -> dict[str, list[str]]:
     return names
 
 
-def extract_claims(database_url: str | None = None, statement_ids: list[str] | None = None) -> dict[str, Any]:
-    """Store the claims of every statement (or of the given ones: used by tests) as pending rows."""
+def extract_claims(
+    database_url: str | None = None, statement_ids: list[str] | None = None, remake: bool = False
+) -> dict[str, Any]:
+    """Store the claims of every statement (or of the given ones: used by tests) as pending rows.
+
+    A statement that holds a claim the rules do not give (made by earlier rules, or from an earlier text of the
+    statement) is never mixed with new claims: nothing is added to it and it is reported. With `remake`, the claims
+    of such a statement are deleted and made again, unless a reviewer has decided on one of them."""
     if database_url is None:
         app = Settings()
         database_url = app.migration_database_url or app.database_url
@@ -120,17 +126,19 @@ def extract_claims(database_url: str | None = None, statement_ids: list[str] | N
             with cur.copy("COPY tmp_claims FROM STDIN") as copy:
                 for row in rows:
                     copy.write_row(row)
+            ids = [row[0] for row in statements]
+            result["earlier"], result["remade"], held = _earlier(cur, ids, remake)
             # Sentences first: a list item points at the sentence it belongs to.
             for kind in (SENTENCE, LIST_ITEM):
                 cur.execute(
                     """INSERT INTO statement_claims (claim_id, statement_id, parent_claim_id, kind, span_start, span_end,
                                                      claim_text, rule, cues, proposed_feature_id)
-                       SELECT * FROM tmp_claims WHERE kind = %s ON CONFLICT (claim_id) DO NOTHING""",
-                    (kind,),
+                       SELECT * FROM tmp_claims WHERE kind = %s AND statement_id <> ALL(%s::text[])
+                       ON CONFLICT (claim_id) DO NOTHING""",
+                    (kind, held),
                 )
                 result["inserted"] += cur.rowcount
             cur.execute("ANALYZE statement_claims")
-            ids = [row[0] for row in statements]
             cur.execute(
                 """SELECT count(*), count(*) FILTER (WHERE c.status = 'pending'),
                           count(*) FILTER (WHERE c.status <> 'pending' AND c.reviewer IS NULL),
@@ -177,6 +185,18 @@ def check(result: dict[str, Any]) -> list[str]:
         diffs.append(f"{stored['decided_without_reviewer']} claims were decided without a recorded reviewer")
     if stored["without_a_source"]:
         diffs.append(f"{stored['without_a_source']} claims belong to a statement that has no source record")
+    earlier, remade = result["earlier"], result["remade"]
+    waiting = earlier["statements"] - earlier["reviewed_statements"] - remade["statements"]
+    if waiting:
+        diffs.append(
+            f"{waiting} statements hold claims that the rules do not give (made by earlier rules, or from an earlier "
+            "text of the statement); nothing was added to them: run extract-claims --remake"
+        )
+    if earlier["reviewed_statements"]:
+        diffs.append(
+            f"{earlier['reviewed_statements']} statements hold claims that the rules do not give and a reviewer's "
+            "decision; they are left as they are"
+        )
     return diffs
 
 
@@ -194,5 +214,48 @@ def report(result: dict[str, Any]) -> list[str]:
     lines.append(
         f"list items of symptom statements, by feature whose name they are exactly: {dict(sorted(result['features'].items()))}"
     )
+    earlier, remade = result["earlier"], result["remade"]
+    lines.append(
+        f"stored claims that the rules do not give: {earlier['claims']} in {earlier['statements']} statements "
+        f"({earlier['reviewed_statements']} of them with a reviewer's decision); made again now: "
+        f"{remade['statements']} statements, {remade['deleted']} claims deleted"
+    )
     lines.append(f"inserted now: {result['inserted']}; stored: {result['stored']}")
     return lines
+
+
+def _earlier(cur: Any, ids: list[str], remake: bool) -> tuple[dict[str, int], dict[str, int], list[str]]:
+    """Statements that hold a claim the rules (in tmp_claims) do not give: what was found, what was made again, and
+    the statements to which nothing may be added.
+
+    A stored claim is given by the rules when they give a claim with the same span, the same text and the same
+    sentence above it. The label of the rules' version is not compared: a claim made by earlier rules that the
+    present rules give unchanged stays as it is, with the label it was made under. With `remake`, every claim of
+    such a statement is deleted so that the caller stores the present ones, but never when one of its claims
+    carries a reviewer's decision."""
+    cur.execute(
+        """SELECT c.statement_id, count(*) FILTER (WHERE t.claim_id IS NULL),
+                  bool_or(c.status <> 'pending' OR c.reviewer IS NOT NULL)
+           FROM statement_claims c
+           LEFT JOIN (SELECT DISTINCT claim_id, claim_text, parent_claim_id FROM tmp_claims) t
+                  ON t.claim_id = c.claim_id AND t.claim_text = c.claim_text
+                 AND t.parent_claim_id IS NOT DISTINCT FROM c.parent_claim_id
+           WHERE c.statement_id = ANY(%s)
+           GROUP BY c.statement_id HAVING count(*) FILTER (WHERE t.claim_id IS NULL) > 0""",
+        (ids,),
+    )
+    found = cur.fetchall()
+    reviewed = [statement for statement, _claims, decided in found if decided]
+    free = [statement for statement, _claims, decided in found if not decided]
+    earlier = {
+        "claims": sum(claims for _statement, claims, _decided in found),
+        "statements": len(found),
+        "reviewed_statements": len(reviewed),
+    }
+    remade = {"statements": 0, "deleted": 0}
+    if remake and free:
+        # One statement: a list item and the sentence it points at go together.
+        cur.execute("DELETE FROM statement_claims WHERE statement_id = ANY(%s)", (free,))
+        remade = {"statements": len(free), "deleted": cur.rowcount}
+        free = []
+    return earlier, remade, reviewed + free

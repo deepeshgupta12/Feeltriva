@@ -24,15 +24,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-VERSION = "claims-1"
+VERSION = "claims-2"  # claims-2 (M2.6a): what ends a sentence after a single letter or an abbreviation
 SENTENCE, LIST_ITEM = "sentence", "list_item"
 MAX_ITEM_WORDS = 8  # a longer "item" is a clause, not an item of a list
 MIN_WORDS_BEFORE_COLON = 3  # "B: Better ..." is a label; "There are three kinds: ..." is a lead-in
 MIN_ITEMS = 3  # "A and B" is not split: two things joined by "and" are too often one thing
 
-# A full stop after one of these is not the end of a sentence.
+# A full stop after one of these is not the end of a sentence. "etc" is not listed: a full stop after it is
+# looked at only when a capital or a digit follows, and there it ends the sentence ("the lips, tongue, etc. The").
 _ABBREVIATIONS = frozenset(
-    "e.g i.e etc vs dr mr mrs ms prof st fig no approx al ca cf inc ltd jr sr vol pp sp spp var incl".split()
+    "e.g i.e vs dr mr mrs ms prof st fig no approx al ca cf inc ltd jr sr vol pp sp spp var incl".split()
 )
 _BOUNDARY = re.compile(r"[.!?]+[\"')\]]*\s+(?=[\"'(\[]?[A-Z0-9])")
 # The word before a full stop. Only a whole word counts: the letters that end a token of letters and
@@ -113,10 +114,8 @@ def sentences(text: str) -> list[tuple[int, int]]:
     """Spans of the sentences of a text. Together they hold every character that is not white space."""
     masked, spans, start = _mask(text), [], 0
     for match in _BOUNDARY.finditer(masked):
-        before = _WORD_BEFORE.search(masked[start : match.start()])
-        word = before.group(1).lower().rstrip(".") if before else ""
-        if word in _ABBREVIATIONS or (before and len(before.group(1)) == 1):
-            continue  # an abbreviation, or a single letter such as the "B." of a species name
+        if _continues(masked[start : match.start()]):
+            continue  # an abbreviation, or an initial such as the "B." of "B. Example"
         end = match.start() + len(match.group().rstrip())
         spans.append((start, end))
         start = match.end()
@@ -252,3 +251,35 @@ def item_name(text: str) -> str:
     if words and words[0] in ("a", "an", "the"):
         words = words[1:]
     return " ".join(words)
+
+
+# Words after which a single capital is a label and not an initial: "vitamin C.", "type B.", "hepatitis A.".
+_LETTERED = frozenset(
+    "vitamin vitamins hepatitis influenza type types subtype subtypes group groups class classes grade grades "
+    "stage stages category categories strain strains serotype serotypes serogroup serogroups form forms variant "
+    "variants level levels phase phases".split()
+)
+_PREVIOUS_WORD = re.compile(r"([A-Za-z]+)\s+$")
+
+
+def _continues(before: str) -> bool:
+    """Whether the full stop after this text belongs to an abbreviation or an initial, so the sentence goes on.
+
+    It is asked only where a capital or a digit follows the full stop. Measured on the stored statements (M2.6a):
+    the earlier rule kept every single letter and every listed abbreviation inside its sentence, and ten pairs of
+    real sentences stayed together. A single letter is taken for an initial ("J. Example", "B. Example") unless it is
+    plainly something else: a lower-case letter ("lower case d."), the end of a unit or label joined by a sign
+    ("mmol/L.", "40 °C."), the last of a series ("A, B, C, and D.") or a label after a word that takes one
+    ("vitamin C."). A listed abbreviation is written in lower case or with one capital ("No.", "Ms."); the same
+    letters all in capitals are an acronym ("MS.") and end the sentence."""
+    found = _WORD_BEFORE.search(before)
+    if not found:
+        return False
+    word = found.group(1)
+    if len(word) > 1:
+        return word.lower().rstrip(".") in _ABBREVIATIONS and not word.isupper()
+    head = before[: found.start(1)]
+    if word.islower() or head.endswith(("/", "°")):
+        return False
+    previous = _PREVIOUS_WORD.search(head)
+    return not (previous and previous.group(1).lower() in _LETTERED | {"and", "or"})

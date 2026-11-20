@@ -51,6 +51,12 @@ def main() -> int:
         default=None,
         help="rows per transaction (default 20,000 cases / 250,000 feature values)",
     )
+    parser.add_argument(
+        "--remake",
+        action="store_true",
+        help="extract-claims: delete and make again the claims of statements that hold a claim the rules no longer "
+        "give; a statement with a reviewer's decision is left",
+    )
     args = parser.parse_args()
     started = time.monotonic()
     try:
@@ -463,7 +469,7 @@ def main() -> int:
             from .claims_load import extract_claims
             from .claims_load import report as report_claims
 
-            result = extract_claims()
+            result = extract_claims(remake=args.remake)
             print("\n".join(report_claims(result)))
             diffs = check_claims(result)
             for diff in diffs[:20]:

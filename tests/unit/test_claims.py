@@ -146,3 +146,31 @@ def test_a_token_of_letters_and_digits_ends_its_sentence_whatever_its_last_lette
         "Type-B. Burgdorferi.",
     ):
         assert len(sentences(sample)) == 1, sample
+
+
+def test_a_single_letter_or_an_abbreviation_that_plainly_ends_a_sentence_does_end_it():
+    # M2.6a: measured on the stored statements, ten pairs of sentences were kept together by a single letter or
+    # an abbreviation before the full stop. Invented sentences of the same shapes.
+    for sample in (
+        "They sell vitamin C. Early buyers get a hat.",  # a label after a word that takes one
+        "There are four kinds of hat: types A, B, C, and D. Birds wear the first.",  # the last of a series
+        "It comes as A or B. Then it is packed.",
+        "The tank holds 135 units/L. Above that it spills.",  # the end of a unit joined by a sign
+        "The oven goes from 37 °C to 40 °C. Then it cools.",
+        "It is written with a lower case d. It later changed.",  # an initial is a capital
+        "The club is called MS. Roughly half the town joined.",  # an acronym, not the title "Ms."
+        "It covers hats, scarves, etc. The list goes on.",
+    ):
+        assert len(sentences(sample)) == 2, sample
+    # An initial and an abbreviation written as one still do not end a sentence.
+    for sample in (
+        "The bacterium B. Example was found.",
+        "It was seen by J. Example in May.",
+        "She met Ms. Example and Dr. Other.",
+        "It ranks No. 4 in the list.",
+        "Tools of one kind i.e. ENT tools are listed.",
+    ):
+        assert len(sentences(sample)) == 1, sample
+    # The series becomes a list once its sentence ends where it should.
+    text = "There are four kinds of hat: types A, B, C, and D. Birds wear the first."
+    assert [claim.text for claim in split(text)[0] if claim.kind == LIST_ITEM] == ["types A", "B", "C", "D"]

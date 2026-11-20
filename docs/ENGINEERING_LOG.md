@@ -2771,3 +2771,109 @@ correction is a second commit and not an amended first one. The code graph was r
 `1aa2ef8` and reports up-to-date. The API and the web app were not restarted: this sub-step
 changes neither. Migration `0010` is applied to the main database. This paragraph was added in a
 following documents-only commit, after which the index was refreshed again.
+
+### M2.6a — Sentence ends after a single letter or an abbreviation; claims made again after a rule change
+
+Owner's go-ahead of 2026-11-20: "We will follow your recommendation" on the 10 pairs of sentences
+that M2.6 measured as kept together, after the owner had run the six M2.6 tests with the
+expected results.
+
+**What changed.**
+
+- `claims.py`: `sentences` asks a new function `_continues` whether a full stop belongs to an
+  abbreviation or an initial. A single capital is taken for an initial ("J. Example") unless it
+  is plainly something else: a lower-case letter, the end of a unit or label joined by "/" or
+  "°", the last of a series after "and" or "or", or a label after a word that takes one
+  (`_LETTERED`: vitamin, type, hepatitis, group, stage and the like). A listed abbreviation
+  written all in capitals is an acronym and ends the sentence. "etc" left the list of
+  abbreviations. The rules are `claims-2`.
+- `claims_load.py`: `extract_claims` has a `remake` option and a helper `_earlier`. A statement
+  holding a claim the rules do not give gets nothing added and is reported. With `--remake` its
+  claims are deleted and made again, unless a reviewer has decided on one of them. `check`
+  reports both cases; `report` prints one more line.
+- `__main__.py`: the option `--remake` (28.4 KB; the index limit is 32 KB).
+- Decision E72 records the rules. Nothing else in the schema, the API or the web app changed.
+
+**The rule was set on the real data first, read-only.** The proposed rule was run beside the
+stored one over all 2,952 statements: 9 statements change, covering the 10 sentence ends, and
+each change was read. After the code was written, the implemented rule and the dry-run version
+gave the same claims for every statement.
+
+| Sentence end now recognised | Real case |
+|---|---|
+| a label after a word that takes one | "... a lack of vitamin C. Early symptoms ..." |
+| the last of a series | "... types A, B, C, and D. Aquatic birds ...", "... A, B, C, D, and E. HDV is ..." |
+| a unit or label joined by a sign | "... 135–145 mmol/L. Hypernatremia ...", "... above 145 mmol/L. Severe ...", "... below 120 mEq/L. Symptoms ...", "... to 40 °C. Symptoms ..." |
+| a lower-case letter | "... a lower case d. It later ..." |
+| an acronym in capitals | "... symptoms of MS. Roughly 65% ..." |
+| "etc." before a capital | "... the lips, tongue, etc. The study ..." |
+
+Still kept inside their sentence, all rightly: "world No. 4", "No. 202", "i.e. ENT".
+
+**Real run.**
+
+| Step | Result |
+|---|---|
+| `extract-claims` with the new rules, before any remake | inserted 0; "12 stored claims in 9 statements that the rules do not give" (9 joined sentences and 3 list items whose sentence changed); 2 differences, exit code 1, as intended |
+| `extract-claims --remake` | 9 statements made again: 58 claims deleted, 80 stored; 0 differences |
+| `extract-claims` again | inserted 0, nothing to make again, 0 differences |
+
+| | Before | After |
+|---|---:|---:|
+| claims, all pending | 8,862 | 8,884 |
+| sentences | 6,210 | 6,220 |
+| list items | 2,652 | 2,664 |
+| enumerations | 625 | 628 |
+| list items carrying a proposed feature | 113 | 113 |
+
+Three sentences that now stand alone are enumerations: "A | B | C | D | E" (hepatitis
+viruses), "types A | B | C | D" (influenza) and "absent | mild | severe". The 80 new claims carry
+`claims-2` (41 sentences, 39 list items); the other 8,804 are what `claims-2` gives too and keep
+`claims-1`, the label they were made under. Checked read-only afterwards: the claims the rules
+give and the stored claims are the same 8,884; no list item lies outside its own sentence; no
+claim has a reviewer or a decision.
+
+**Impact analysis.** `sentences`: **CRITICAL** (1 direct caller, `split`; 5 flows; reached from
+`extract_claims`, from `_claims` and `gather` of the completeness check, and from `main`).
+Reported to the owner before the edit with the plan per caller: no caller changes its code; the
+results change for the 9 statements only, which is the purpose, and stored claims and rules are
+compared afterwards for every statement. `extract_claims`, `check`, `report` and `main`: LOW,
+one caller each. `detect_changes` before commit: 13 symbols, summary risk "high" by count (`main`
+starts many flows). Compared with the last commit statement by statement: changed are `main`
+(one option added, one call), `sentences`, `_ABBREVIATIONS`, `VERSION`, `extract_claims`,
+`check` and `report`; added are `_continues`, `_LETTERED`, `_PREVIOUS_WORD` and `_earlier`.
+`_BOUNDARY`, `started`, `entries`, `params`, `app`, `database_url` and `scope` are listed
+although identical (the line-range artefact).
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 55 files |
+| `uv run pytest -m "not archives"` (SQLite) | 203 passed, 55 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 267 passed |
+| `completeness` on the real data, after the remake | 236 checks, 230 ok, 0 mismatches, 6 left to later (464 s); claims of the symptom statements: 1,080 expected, 1,080 stored |
+
+The two new tests prove: each of the six kinds of sentence end, with invented sentences; an
+initial and an abbreviation written as one still do not end a sentence; a series becomes a
+list once its sentence ends where it should; claims of earlier rules are found by span, text
+and sentence; nothing is added to a statement that holds one; `--remake` deletes and stores
+again; a statement with a reviewer's decision is left, also with `--remake`; a claim the newer
+rules give unchanged keeps its label; a further run changes nothing.
+
+**Bugs.** None found in this sub-step.
+
+**Limits, stated plainly.**
+
+- The words after which a letter is a label are a short list. A sentence ending in a capital
+  letter after another word ("... called plan B. Then ...") is still joined to the next one;
+  none is in the stored statements.
+- A person's initial after "and" or "or" ("... and J. Example ...") would now end a sentence
+  wrongly. None is in the stored statements.
+- "No." before a capital or a digit never ends a sentence, so "... the answer was no. Then ..."
+  stays joined. None is in the stored statements.
+- The wrong splits of M2.6 remain (about 2 in 30 split sentences), for example "Legionella may
+  occur with abdominal pain | diarrhea | confusion". This sub-step changed sentence ends only.
+- `--remake` never touches a reviewed statement, so after reviews begin a rule change leaves
+  such statements on the earlier rules and the command reports them as a difference each run.
+  Carrying a decision over is M2.5 (added to its row).

@@ -16,6 +16,7 @@ from feeltriva_api.models import (
     Statement,
     StatementSource,
 )
+from feeltriva_ingestion import claims
 from feeltriva_ingestion.claims import VERSION
 from feeltriva_ingestion.claims_load import check, claim_id, extract_claims, report
 from feeltriva_ingestion.completeness import _claims
@@ -172,3 +173,73 @@ def test_a_stored_claim_that_is_no_longer_its_statement_s_text_is_reported(store
         tx.execute(text("UPDATE statements SET text_content = 'Use two coats.' WHERE statement_id = :s"), {"s": ids[1]})
     changed = extract_claims(url, ids)
     assert "1 stored claims are not their statement's text at their offsets" in check(changed)
+
+
+def test_claims_the_rules_no_longer_give_are_made_again_only_when_asked_and_never_after_a_decision(
+    stored, owner_db, monkeypatch
+):
+    url, ids, tag = os.environ["TEST_MIGRATION_DATABASE_URL"], stored["ids"], stored["tag"]
+
+    def labels():
+        with owner_db.transaction(None) as tx:
+            rows = tx.execute(
+                text("SELECT statement_id, rule, status::text FROM statement_claims WHERE statement_id = ANY(:s)"),
+                {"s": ids},
+            ).all()
+        return sorted((row[0], row[1], row[2]) for row in rows)
+
+    # Earlier rules: another version, under which no sentence was ended inside a statement.
+    monkeypatch.setattr(claims, "VERSION", "claims-0")
+    monkeypatch.setattr(claims, "sentences", lambda body: [(0, len(body))])
+    early = extract_claims(url, ids)
+    assert check(early) == [] and early["inserted"] == 5 and early["earlier"]["statements"] == 0
+    monkeypatch.undo()
+
+    # The present rules, not asked to make anything again. The first statement holds a sentence and an item the rules
+    # no longer give, and two items that now belong to another sentence: nothing is added to it, and it is reported.
+    # The second statement's one claim is what the present rules give too: it stays, with the label it was made under.
+    plain = extract_claims(url, ids)
+    assert plain["inserted"] == 0 and plain["stored"]["rows"] == 5
+    assert plain["earlier"] == {"claims": 4, "statements": 1, "reviewed_statements": 0}
+    assert plain["remade"] == {"statements": 0, "deleted": 0}
+    assert any(
+        "1 statements hold claims that the rules do not give" in diff and "--remake" in diff for diff in check(plain)
+    )
+    assert any("4 in 1 statements" in line for line in report(plain))
+
+    # A reviewer has decided on one of them: the statement is left as it is, also when asked to make it again.
+    with owner_db.transaction(None) as tx:
+        tx.execute(
+            text(
+                """UPDATE statement_claims SET status = 'approved', reviewer = 'dev-reviewer:test'
+                   WHERE statement_id = :s AND claim_text = :t"""
+            ),
+            {"s": ids[0], "t": f"a hat {tag}"},
+        )
+    kept = extract_claims(url, ids, remake=True)
+    assert kept["inserted"] == 0 and kept["remade"] == {"statements": 0, "deleted": 0}
+    assert kept["earlier"] == {"claims": 4, "statements": 1, "reviewed_statements": 1}
+    diffs = check(kept)
+    assert any(
+        "1 statements hold claims that the rules do not give and a reviewer's decision" in diff for diff in diffs
+    )
+    assert not any("--remake" in diff for diff in diffs)
+    assert (ids[0], "claims-0:enumeration", "approved") in labels()
+
+    # Without a decision, the statement's claims are deleted and the present ones stored.
+    with owner_db.transaction(None) as tx:
+        tx.execute(
+            text("UPDATE statement_claims SET status = 'pending', reviewer = NULL WHERE statement_id = :s"),
+            {"s": ids[0]},
+        )
+    remade = extract_claims(url, ids, remake=True)
+    assert remade["remade"] == {"statements": 1, "deleted": 4} and remade["inserted"] == 5
+    assert check(remade) == [] and remade["stored"]["rows"] == 6 and remade["stored"]["pending"] == 6
+    assert labels() == sorted(
+        [(ids[0], f"{VERSION}:sentence", "pending")] * 2
+        + [(ids[0], f"{VERSION}:enumeration", "pending")] * 3
+        + [(ids[1], "claims-0:sentence", "pending")]
+    )
+    # Nothing is left to make again.
+    again = extract_claims(url, ids, remake=True)
+    assert again["inserted"] == 0 and again["earlier"]["statements"] == 0 and check(again) == []
