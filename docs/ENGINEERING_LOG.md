@@ -2882,3 +2882,132 @@ rules give unchanged keeps its label; a further run changes nothing.
 44675052520). The code graph was re-indexed at `f5f3528` and reports up-to-date. The API and
 the web app were not restarted: this sub-step changes neither. No migration. This paragraph was
 added in a following documents-only commit, after which the index was refreshed again.
+
+### M2.6b — Wrong lists and the remaining sentence ends corrected
+
+Owner's instruction of 2026-11-20 on the two limits reported after M2.6a: "Fix these" (the wrong
+splits; the sentence ends the rule still got wrong). Done as one sub-step because both change
+the claim rules and need one remake.
+
+**Every stored list was read, not a sample.** M2.6 had estimated "about 2 in 30" from a
+hand-read of 30. All 628 stored lists were written out with their items marked in place and
+read. 59 were plainly wrong (9%), so the estimate was too low. What was found:
+
+| What was wrong | Example (items between bars) | Lists |
+|---|---|---:|
+| An item only goes on with the item before it | heart failure \| due to dilated cardiomyopathy \| cardiac arrest | 13 |
+| Describing words that share the noun of the last item | a red \| warm \| swollen \| painful leg | 9 |
+| The last item runs on into the rest of the sentence | ... \| feeling tired may develop | 9 |
+| A middle item only says more about the item before it | fever \| often greater than 40 °C (104 °F) \| cough | 7 |
+| An item is a whole clause | Legionella may occur with abdominal pain \| diarrhea \| confusion | 4 |
+| An item begins with a preposition or "to" among items that do not | difficulty walking \| speaking \| with sensations | 6 |
+| "between ... and", "either ... or" read as the end of a list | the valve between the stomach \| the duodenum | 4 |
+| An item is only a joining word | fever \| and \| less commonly \| seizures | 3 |
+| The list began at a lead-in inside an item | (a round red face due to) facial plethora \| a fat lump ... | 2 |
+| An unclosed bracket; a remark after a dash | artificial UV radiation (e.g | 2 |
+
+**What changed in `claims.py`.**
+
+- `_enumeration`: the last "and"/"or" after "between", "either", "both" or "whether" is no list
+  end; "is"/"are" is no lead-in in a sentence that opens with "although", "though", "while" or
+  "whereas"; the first lead-in that gives a list is taken, and the list after a lead-in inside
+  an item is preferred when there is one; the items are tested by the new `_checked`.
+- `_checked` (new, with `_clause_at` and `_words`): the tests of the table above, each with a
+  closed word list. The last item ends before a remark after a dash, and before the verb that
+  follows a list which can be the subject of its sentence (after "such as", "including",
+  "which includes"). After "include" or "are" a verb after the last item refuses the list.
+- `_continues` and `sentences`: the text after the full stop is looked at too. A single capital
+  ends the sentence before a word that opens a sentence and is never a name ("plan B. Then"),
+  after a common word in lower case ("plan B. Aquatic ..."), and as the last of a series of
+  letters; it does not after "by", "of", "from" and the like, after "and"/"or" when no series
+  stands before ("Smith and J. Example"), or beside another initial. "No." is the abbreviation
+  only before a digit.
+- The rules are `claims-3`. The module is 25.1 KB; the index limit is 32 KB, so the next change
+  to these rules should come with a split into two modules.
+
+**The rules were corrected twice after reading what they did, before any data was touched.**
+A read-only run compared the new rules with the stored claims for every statement and wrote
+out every list that was dropped, changed or added; all were read.
+
+- The first version refused "is"/"are" as a lead-in after any opening "If", "When" or
+  "Although". That dropped a right list ("If this progresses to severe dengue the symptoms are
+  ..."). Narrowed to "although", "though", "while", "whereas".
+- The first version cut a verb after the last item of every list. That added two wrong lists:
+  "Symptoms include eye pain, eye redness, floaters and blurred vision, and ophthalmic
+  examination may show ..." made "ophthalmic examination" a symptom. The cut is now made only
+  where the list can be the subject of the sentence.
+- One existing unit test pinned "the list starts at the last lead-in". Its case (an item holding
+  one example, "a scarf such as wool") still gives the same list; the comment was corrected.
+
+**Real run.**
+
+| Step | Result |
+|---|---|
+| `extract-claims`, before any remake | 26 list items added to 7 statements whose stored claims all still hold (7 new lists); "193 stored claims in 61 statements that the rules do not give"; 1 difference, exit code 1, as intended |
+| `extract-claims --remake` | 61 statements made again: 531 claims deleted, 355 stored; 0 differences |
+| `extract-claims` again | inserted 0, nothing to make again, 0 differences |
+
+| | Before | After |
+|---|---:|---:|
+| claims, all pending | 8,884 | 8,734 |
+| sentences | 6,220 | 6,220 |
+| list items | 2,664 | 2,514 |
+| lists | 628 | 585 |
+| list items carrying a proposed feature | 113 | 106 |
+
+Of the 628 lists: 48 wrong ones are no longer split (the sentence stays whole), 11 are corrected
+(9 last items shortened, 2 lists now begin where they should), 2 mostly right ones are no longer
+split, and 7 right ones are new. Checked read-only afterwards: the claims the rules give and
+the stored claims are the same 8,734; none of 47 marker texts of the wrong lists is stored any
+more; no list item lies outside its own sentence; no claim has a reviewer or a decision. The
+sentences of all 2,952 statements are the same as before: the new sentence-end rules change
+none of the stored statements. 381 claims in 68 statements carry `claims-3`; the others are
+what `claims-3` gives too and keep the label they were made under.
+
+**Impact analysis.** `_enumeration`: **HIGH** (1 direct caller, `list_items`; reached from
+`split`, `extract_claims` and the completeness check). `_continues`: **HIGH** (1 direct caller,
+`sentences`). `sentences`: **CRITICAL**. Reported to the owner before the edit with the plan
+per caller: no caller changes its code; results change only where the rules decide differently,
+and every such list was read before the remake. `detect_changes` before commit: 14 symbols,
+summary risk "high" by count. Compared with the last commit: changed are `VERSION`,
+`_CLAUSE_START`, `_continues`, `_enumeration` and `sentences`; 29 names are new; `list_items`,
+`MAX_ITEM_WORDS`, `MIN_WORDS_BEFORE_COLON` and `_NEGATION` are listed although identical (the
+line-range artefact). In the test file four tests are new and no existing test changed its code.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 55 files |
+| `uv run pytest -m "not archives"` (SQLite) | 207 passed, 55 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 271 passed |
+| the two loader test sentences with 339,808 tag endings each | the expected sentences and items every time |
+| `completeness` on the real data, after the remake | 236 checks, 230 ok, 0 mismatches, 6 left to later (697 s); claims of the symptom statements: 1,040 expected, 1,040 stored |
+
+The four new tests prove, with invented sentences: each kind of refused list and its reason;
+the look-alikes that stay lists (a frequency word before an item, a list of places, an item
+with its own "that is", a list of colours, "If ... the symptoms are"); the first lead-in, and
+the list after a lead-in inside an item; the last item ending before the sentence's verb or a
+dash remark, and still being the statement's own text at its offsets; the new sentence ends and
+the initials that do not end a sentence.
+
+**Bugs.** None in committed code. The two faults of the first version of the rules were found
+in the read-only run and corrected before the remake (described above).
+
+**Limits, stated plainly.**
+
+- 19 of the 585 lists are still imperfect, in ways wording alone cannot tell: 15 where the
+  first item carries words the others share ("infection with viruses | bacteria | fungi |
+  parasites", "injury to the tibia | femur | knee ligaments"), and 4 others (a chain of
+  explanations read as a list, "certain liver | kidney | hereditary disorders", a list at the
+  end of a source text that was cut off, and places listed inside one item).
+- Two mostly right lists are no longer split ("... such as from lung, breast, thyroid, kidney
+  and prostate"; "feeling tired, weak, short of breath, or having decreased ability to
+  exercise"). Their sentences stay whole.
+- The word lists are closed. New text will bring describing words, verbs after a list and
+  continuing words that are not in them; such lists will be split wrongly until the lists are
+  extended, and only reading finds them.
+- The sentence rule still cannot tell every initial from a label: "The bacterium B. Example"
+  stays one sentence only because "bacterium" is in a short list, and "Plan B. Aquatic ..." at
+  the start of a sentence stays joined.
+- Every item of every list is still pending, with its whole sentence beside it.

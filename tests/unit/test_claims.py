@@ -42,14 +42,14 @@ def test_an_enumeration_with_a_lead_in_gives_one_claim_per_item():
         "snow",
     ]
     assert _items("There are three kinds: small, medium, and large.")[0] == ["small", "medium", "large"]
-    # The list starts at the last lead-in that still leaves three items: here the second part of the sentence.
+    # The list starts at a lead-in that leaves three items: here the one in the second part of the sentence.
     assert _items("Some can be taken by mouth, and these include alpha, beta, gamma and delta.")[0] == [
         "alpha",
         "beta",
         "gamma",
         "delta",
     ]
-    # ... and at the earlier one when the later would leave too few.
+    # An item may hold one example of its own; a lead-in that opens a list of its own is tested further down.
     assert _items("Signs include a hat, a scarf such as wool, and gloves.")[0] == [
         "a hat",
         "a scarf such as wool",
@@ -174,3 +174,111 @@ def test_a_single_letter_or_an_abbreviation_that_plainly_ends_a_sentence_does_en
     # The series becomes a list once its sentence ends where it should.
     text = "There are four kinds of hat: types A, B, C, and D. Birds wear the first."
     assert [claim.text for claim in split(text)[0] if claim.kind == LIST_ITEM] == ["types A", "B", "C", "D"]
+
+
+def test_what_is_not_an_item_of_a_list_is_refused_and_says_why():
+    # M2.6b: every stored list was read (628); each case below is the shape of a wrong list that was found.
+    refused = {
+        # the "item" only goes on with the one before it
+        "Signs may include a torn hat, due to strong wind or heavy rain.": "an item goes on with the item before it",
+        "It is characterized by long walks, lasting days to weeks, and in some cases months.": (
+            "an item goes on with the item before it"
+        ),
+        # ... or says more about it
+        "Signs include a hat, often larger than a boat, a scarf, and gloves.": (
+            "an item says more about the item before it"
+        ),
+        "Signs include a hat, a scarf, with ribbons, or gloves.": "an item begins with a preposition",
+        # a whole clause: the lead-in stood in the subject, or the sentence is a row of clauses
+        "Storms caused by wind may occur with rain, hail, or snow.": "an item holds a clause",
+        "It drops due to rain, the wind is strong, and snow falls.": "an item holds a clause",
+        # after "include" the verb has been said: a verb after the last item opens a new clause
+        "Signs include a hat, a scarf, and a coat may show wear.": "an item holds a clause",
+        "It is characterized by cold – failure to keep a hat, a scarf, or a glove.": "a remark after a dash",
+        "It is caused by a gap, the space between the hat and the scarf.": (
+            "the last 'and' or 'or' belongs to 'between', 'either' or 'both'"
+        ),
+        "It results from wind, either in the hills or elsewhere on the plain.": (
+            "the last 'and' or 'or' belongs to 'between', 'either' or 'both'"
+        ),
+        "It is characterized by hats, scarves, and, less commonly, gloves and coats.": "an item is only a joining word",
+        "Things such as hats, scarves, and gloves (e.g.": "a bracket is not closed",
+        # words that describe, sharing the noun of the last item
+        "Signs include a red, warm, and soft hat.": "the items share one noun",
+        "It results from a mix of genetic, environmental, and social factors.": "the items share one noun",
+        "The aims are to lessen signs such as cold and wet, to prevent harm, and to keep warm.": (
+            "an item begins like a clause"
+        ),
+        # "be" in a clause that only leads up to the main one is no lead-in
+        "Although few hats and treatments have shown to be helpful to wear, some scarves show promise, warmth, and style.": (
+            "no lead-in"
+        ),
+    }
+    for text, reason in refused.items():
+        assert _items(text) == ([], reason), text
+
+
+def test_what_looks_alike_and_is_a_list_stays_one():
+    kept = {
+        "Signs include a hat, a scarf, and occasionally gloves.": ["a hat", "a scarf", "occasionally gloves"],
+        "Signs include a hat, a scarf, or in rare cases gloves.": ["a hat", "a scarf", "in rare cases gloves"],
+        # every item names a place: a list of places
+        "It is found in places such as the wrists, between fingers, or along the waistline.": [
+            "the wrists",
+            "between fingers",
+            "along the waistline",
+        ],
+        "Signs include a hat, a scarf that is red, and gloves.": ["a hat", "a scarf that is red", "gloves"],
+        "It can be many colours, including brown, red, and gray.": ["brown", "red", "gray"],
+        "If it gets worse the symptoms are a hat, a scarf, and gloves.": ["a hat", "a scarf", "gloves"],
+        # the first lead-in is taken: "due to" stands inside an item
+        "Signs may include a tall hat, a round red face due to cold air, a scarf, and gloves.": [
+            "a tall hat",
+            "a round red face due to cold air",
+            "a scarf",
+            "gloves",
+        ],
+        # ... unless an item holds a lead-in that opens a list of its own
+        "Signs include a hat, fluids such as water, juice, and broth.": ["water", "juice", "broth"],
+    }
+    for text, items in kept.items():
+        assert _items(text) == (items, ""), text
+
+
+def test_the_last_item_ends_where_the_sentence_goes_on():
+    # The list is the subject: the verb after it belongs to the sentence, not to the last item.
+    shortened = {
+        "Things such as hats, scarves, and gloves may appear.": ["hats", "scarves", "gloves"],
+        "Things such as hats, scarves, and warm gloves play a role.": ["hats", "scarves", "warm gloves"],
+        "A plan, which includes hats, scarves and gloves has been made.": ["hats", "scarves", "gloves"],
+        # a remark after a dash is not part of the last item
+        "These include hats, scarves, and gloves—the warmest of all.": ["hats", "scarves", "gloves"],
+    }
+    for text, items in shortened.items():
+        assert _items(text) == (items, ""), text
+    text = "Things such as hats, scarves, and gloves may appear."
+    claims, _reasons = split(text)
+    assert [(claim.kind, claim.text) for claim in claims] == [
+        (SENTENCE, text),
+        (LIST_ITEM, "hats"),
+        (LIST_ITEM, "scarves"),
+        (LIST_ITEM, "gloves"),
+    ]
+    assert all(text[claim.start : claim.end] == claim.text for claim in claims)
+
+
+def test_more_sentence_ends_after_a_single_letter_and_more_initials():
+    # M2.6b: a label after any common word, the word "no", and an initial after "and" or beside another initial.
+    for sample in (
+        "They chose plan B. Then they left.",
+        "They chose plan B. Aquatic birds agreed.",
+        "The answer was no. Then they left.",
+    ):
+        assert len(sentences(sample)) == 2, sample
+    for sample in (
+        "It was found by Smith and J. Example in May.",
+        "It was J. K. Example who came.",
+        "He met John F. Example there.",
+        "It ranks No. 4 in the list.",
+    ):
+        assert len(sentences(sample)) == 1, sample
