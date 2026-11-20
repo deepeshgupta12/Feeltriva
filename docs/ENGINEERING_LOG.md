@@ -2877,3 +2877,8 @@ rules give unchanged keeps its label; a further run changes nothing.
 - `--remake` never touches a reviewed statement, so after reviews begin a rule change leaves
   such statements on the earlier rules and the command reports them as a difference each run.
   Carrying a decision over is M2.5 (added to its row).
+
+**Committed and indexed.** Committed as `f5f3528` and pushed; CI passed on both jobs (run
+44675052520). The code graph was re-indexed at `f5f3528` and reports up-to-date. The API and
+the web app were not restarted: this sub-step changes neither. No migration. This paragraph was
+added in a following documents-only commit, after which the index was refreshed again.
