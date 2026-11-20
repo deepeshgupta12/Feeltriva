@@ -243,3 +243,25 @@ def test_claims_the_rules_no_longer_give_are_made_again_only_when_asked_and_neve
     # Nothing is left to make again.
     again = extract_claims(url, ids, remake=True)
     assert again["inserted"] == 0 and again["earlier"]["statements"] == 0 and check(again) == []
+
+
+def test_a_stored_claim_whose_cues_are_not_what_the_rules_give_is_made_again(stored, owner_db):
+    # M2.6c: the wording cues of a claim are part of what the rules give.
+    url, ids = os.environ["TEST_MIGRATION_DATABASE_URL"], stored["ids"]
+    assert check(extract_claims(url, ids)) == []
+    with owner_db.transaction(None) as tx:
+        tx.execute(
+            text("UPDATE statement_claims SET cues = '{}'::jsonb WHERE statement_id = :s AND kind = 'list_item'"),
+            {"s": ids[0]},
+        )
+    plain = extract_claims(url, ids)
+    assert plain["inserted"] == 0 and plain["earlier"] == {"claims": 3, "statements": 1, "reviewed_statements": 0}
+    assert any("--remake" in diff for diff in check(plain))
+    remade = extract_claims(url, ids, remake=True)
+    assert remade["remade"] == {"statements": 1, "deleted": 5} and remade["inserted"] == 5 and check(remade) == []
+    with owner_db.transaction(None) as tx:
+        cues = tx.execute(
+            text("SELECT DISTINCT cues FROM statement_claims WHERE statement_id = :s AND kind = 'list_item'"),
+            {"s": ids[0]},
+        ).all()
+    assert [row[0] for row in cues] == [{"hedge": ["may"]}]

@@ -228,17 +228,17 @@ def _earlier(cur: Any, ids: list[str], remake: bool) -> tuple[dict[str, int], di
     """Statements that hold a claim the rules (in tmp_claims) do not give: what was found, what was made again, and
     the statements to which nothing may be added.
 
-    A stored claim is given by the rules when they give a claim with the same span, the same text and the same
-    sentence above it. The label of the rules' version is not compared: a claim made by earlier rules that the
-    present rules give unchanged stays as it is, with the label it was made under. With `remake`, every claim of
+    A stored claim is given by the rules when they give a claim with the same span, the same text, the same
+    sentence above it and the same wording cues. The label of the rules' version is not compared: a claim made by
+    earlier rules that the present rules give unchanged stays as it is, with the label it was made under. With `remake`, every claim of
     such a statement is deleted so that the caller stores the present ones, but never when one of its claims
     carries a reviewer's decision."""
     cur.execute(
         """SELECT c.statement_id, count(*) FILTER (WHERE t.claim_id IS NULL),
                   bool_or(c.status <> 'pending' OR c.reviewer IS NOT NULL)
            FROM statement_claims c
-           LEFT JOIN (SELECT DISTINCT claim_id, claim_text, parent_claim_id FROM tmp_claims) t
-                  ON t.claim_id = c.claim_id AND t.claim_text = c.claim_text
+           LEFT JOIN (SELECT DISTINCT claim_id, claim_text, parent_claim_id, cues FROM tmp_claims) t
+                  ON t.claim_id = c.claim_id AND t.claim_text = c.claim_text AND t.cues = c.cues
                  AND t.parent_claim_id IS NOT DISTINCT FROM c.parent_claim_id
            WHERE c.statement_id = ANY(%s)
            GROUP BY c.statement_id HAVING count(*) FILTER (WHERE t.claim_id IS NULL) > 0""",

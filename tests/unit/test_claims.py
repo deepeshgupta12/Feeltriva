@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from feeltriva_ingestion.claims import LIST_ITEM, SENTENCE, VERSION, cues, item_name, list_items, sentences, split
+from feeltriva_ingestion.claims import (
+    CUT_OFF_WORDS,
+    LIST_ITEM,
+    SENTENCE,
+    VERSION,
+    cues,
+    item_name,
+    list_items,
+    sentences,
+    split,
+)
 
 
 def _items(text):
@@ -282,3 +292,57 @@ def test_more_sentence_ends_after_a_single_letter_and_more_initials():
         "It ranks No. 4 in the list.",
     ):
         assert len(sentences(sample)) == 1, sample
+
+
+def test_a_preposition_after_the_lead_in_does_not_belong_to_the_first_item():
+    # M2.6c: "such as from A, B and C" lists A, B and C.
+    assert _items("It spreads from a place such as from hills, valleys, lakes and woods.") == (
+        ["hills", "valleys", "lakes", "woods"],
+        "",
+    )
+    # Places that all go on with the first item are not items of a list.
+    assert _items("Signs include fat pads along the collar, on the neck, and on the face.") == (
+        [],
+        "the other items go on with the first item",
+    )
+    # After "feeling tired", a describing word goes on with "feeling", not with the noun of the last item.
+    assert _items("Signs are often vague such as feeling tired, weak, short of breath, or having less strength.") == (
+        ["feeling tired", "weak", "short of breath", "having less strength"],
+        "",
+    )
+
+
+def test_a_text_cut_off_by_its_source_is_marked_and_its_cut_item_is_not_kept():
+    # M2.6c: one source cuts its texts at a fixed number of words. Such a text has exactly that many words and no
+    # full stop; its last sentence is not whole, and the last item of a list in it is a fragment.
+    tail = "Signs include a hat, a scarf, gloves, and a family"
+    lead = " ".join(["Word"] * (CUT_OFF_WORDS - len(tail.split()))) + "."
+    cut = f"{lead} {tail}"
+    assert len(cut.split()) == CUT_OFF_WORDS
+    claims, _reasons = split(cut)
+    last = [claim for claim in claims if claim.kind == SENTENCE][-1]
+    assert last.text == tail and last.cues == {"cut_off": [f"{CUT_OFF_WORDS} words"]}
+    items = [claim for claim in claims if claim.kind == LIST_ITEM]
+    assert [claim.text for claim in items] == ["a hat", "a scarf", "gloves"]
+    assert all(claim.cues == last.cues and claim.parent == (last.start, last.end) for claim in items)
+    # Only the last sentence is marked.
+    assert [claim.cues for claim in claims if claim.kind == SENTENCE][0] == {}
+    # The same words with a full stop, and a shorter text without one, are whole.
+    for whole in (cut + ".", tail):
+        claims, _reasons = split(whole)
+        assert [claim.text for claim in claims if claim.kind == LIST_ITEM] == ["a hat", "a scarf", "gloves", "a family"]
+        assert all("cut_off" not in claim.cues for claim in claims)
+
+
+def test_a_list_whose_first_item_holds_a_preposition_is_marked_for_the_reviewer():
+    # M2.6c: "infection with A, B, or C" and "loss of X, Y, and Z" have one wording and two meanings. The wording is
+    # recorded on the items; nothing is decided.
+    claims, _reasons = split("It is caused by infection with moths, beetles, or ants.")
+    assert [(claim.text, claim.cues) for claim in claims] == [
+        ("It is caused by infection with moths, beetles, or ants.", {}),
+        ("infection with moths", {"first_item_preposition": ["with"]}),
+        ("beetles", {"first_item_preposition": ["with"]}),
+        ("ants", {"first_item_preposition": ["with"]}),
+    ]
+    claims, _reasons = split("Signs may include a hat (as in winter), a scarf, and gloves.")
+    assert {repr(claim.cues) for claim in claims} == {"{'hedge': ['may']}"}

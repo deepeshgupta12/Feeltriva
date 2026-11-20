@@ -3016,3 +3016,129 @@ in the read-only run and corrected before the remake (described above).
 44691863751). The code graph was re-indexed at `5043c13` and reports up-to-date. The API and
 the web app were not restarted: this sub-step changes neither. No migration. This paragraph was
 added in a following documents-only commit, after which the index was refreshed again.
+
+### M2.6c — What was left of the wrong lists: fixed where wording can tell, marked where it cannot
+
+Owner's question of 2026-11-20 on the four limits reported after M2.6b: "Are the above issues
+not fixed??". They were not: they were what remained. This sub-step fixes the parts that have a
+sign in the wording and marks the rest for the reviewer. M2.10 was not started.
+
+**What each limit turned out to be.**
+
+| Limit reported after M2.6b | What was done |
+|---|---|
+| Two mostly right lists no longer split | Both are lists again: "lung \| breast \| thyroid \| kidney \| prostate" and "feeling tired \| weak \| short of breath \| having decreased ability to exercise" |
+| A list at the end of a source text that was cut off ("... and a family") | The cut is recognised and the fragment is not kept |
+| Places listed inside one item ("fat pads along the collarbone \| on the back of the neck \| on the face") | No longer split |
+| Lists whose other items share the first words of the first item ("infection with viruses \| bacteria \| fungi") | Not decidable by wording; marked for the reviewer |
+| Closed word lists; "Plan B. Aquatic ..." against "John F. Example ..." | Limits of any wording rule; unchanged and said so |
+
+**Measured before deciding.**
+
+- Every description of `diseases_main.csv` has exactly 120 words (85 statements; 79 end without
+  a full stop, 6 happen to end with one). The source cuts its texts at 120 words. No other
+  stored statement has 120 words and no full stop, and the 138 other statements that end
+  without a full stop are short phrases, not cut texts. So "exactly 120 words and no full stop"
+  finds the cut texts and nothing else. One cut-off last sentence holds a list.
+- 79 of the 585 lists had a first item that holds a preposition. "infection with viruses,
+  bacteria, fungi" and "loss of appetite, nausea, vomiting" are worded alike, so no rule can
+  tell which lists share the first words. M2.6b had counted 15 such lists; reading the lists
+  that are now marked found 21, and 3 more that the mark does not catch. The count of 15 was
+  too low.
+
+**What changed.**
+
+- `claims.py`, `_checked`: a preposition at the start of the first item, when no other item
+  begins with one, goes with the lead-in and the item begins after it; a list whose other items
+  all begin with a preposition while the first item holds one is refused ("the other items go
+  on with the first item"); a describing word alone does not refuse a list whose first item
+  begins with a verb form in "-ing".
+- `claims.py`, `split`: the last sentence of a cut-off text gets the cue `cut_off`, and the
+  last item of a list in it is not kept; the items of a list whose first item holds a
+  preposition get the cue `first_item_preposition` with the prepositions found. New helpers
+  `_cut_off`, `_bare`, `_first_item_cue`; new constant `CUT_OFF_WORDS = 120`.
+- `claims_load.py`, `_earlier`: the cues are compared too, so a claim whose cues are not what
+  the rules give is renewed by `--remake`.
+- The rules are `claims-4`. Decision E74 records all of this. The plan row of M2.4 now requires
+  the review screens to show both marks.
+- **The sentence rules moved to `claim_sentences.py`, unchanged.** With these changes
+  `claims.py` had reached 27.8 KB of the 32 KB the code index can read, and the M2.6b entry had
+  said the next change must come with a split. 13 names moved (`_mask`, `sentences`,
+  `_continues` and their constants); `claims.py` imports the two it uses. Proved to change
+  nothing: one digest over every claim the rules give for all 2,952 statements (span, text,
+  rule, sentence above, cues) is the same before and after the move, and the 13 names are
+  identical to the last commit. `claims.py` is now 22.2 KB, `claim_sentences.py` 6.4 KB.
+
+**Read before any data was touched.** The new rules were compared read-only with the stored
+claims: exactly five lists change their items, all as intended (the fragment "a family"
+dropped; the two lists back; the "fat pads" sentence whole; one more list recovered, "cataract
+surgery | a perforating wound or ulcer | congenital anomaly"). The 78 marked lists were read.
+
+**Real run.**
+
+| Step | Result |
+|---|---|
+| `extract-claims`, before any remake | 12 list items added to 3 statements whose stored claims all still hold; "453 stored claims in 140 statements that the rules do not give" (5 with other items, the rest with new marks); 1 difference, exit code 1, as intended |
+| `extract-claims --remake` | 140 statements made again: 1,505 claims deleted, 1,501 stored; 0 differences |
+| `extract-claims` again | inserted 0, nothing to make again, 0 differences |
+
+| | Before | After |
+|---|---:|---:|
+| claims, all pending | 8,734 | 8,742 |
+| sentences | 6,220 | 6,220 |
+| list items | 2,514 | 2,522 |
+| lists | 585 | 587 |
+| last sentences marked `cut_off` | 0 | 79 |
+| lists marked `first_item_preposition` | 0 | 78 (361 items) |
+| list items carrying a proposed feature | 106 | 106 |
+
+Checked read-only afterwards: for all 8,742 claims the span, the text and the cues stored are
+what the rules give; no list item lies outside its own sentence; no claim has a reviewer or a
+decision; none of the fragments "a family", "from lung", "in cataract surgery" is stored.
+
+**Impact analysis.** `split`: **CRITICAL** (4 direct callers; reached from `extract_claims`,
+the completeness check and `main`). `_checked` and `_mask`: **HIGH**. `_earlier`: LOW. Reported
+to the owner before the edit with the plan per caller: no caller changes its code; every list
+that changes was read before the remake; the move changes no claim. `detect_changes` before
+commit: 28 symbols, summary risk "high"; most are listed because the move shifted their lines.
+Compared with the last commit name by name: 13 names moved and are identical; changed are
+`VERSION`, `_PREPOSITION`, `_checked`, `split` and, in the loader, `_earlier`; 7 names are new;
+no existing test changed its code and 4 tests are new.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 56 files |
+| `uv run pytest -m "not archives"` (SQLite) | 210 passed, 56 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 275 passed |
+| the loader test sentences with 339,808 tag endings | what the tests expect every time |
+| `completeness` on the real data, after the remake | 236 checks, 230 ok, 0 mismatches, 6 left to later (590 s); claims of the symptom statements: 1,037 expected, 1,037 stored |
+
+The four new tests prove, with invented sentences: the preposition after the lead-in; places
+going on with the first item refused; the list after "feeling tired"; a cut-off text marked on
+its last sentence only, its cut item not kept, and the same words with a full stop or in a
+shorter text left whole; the mark on every item of a list whose first item holds a preposition
+and on no other claim; a stored claim with other cues found, left alone without `--remake` and
+renewed with it.
+
+**Bugs.** None found in this sub-step. One count reported to the owner was wrong: the lists
+whose items share the first words of the first item are about 24, not 15.
+
+**Limits, stated plainly.**
+
+- About 24 of the 587 lists have a first item that carries words the other items share. They
+  are stored as before. 21 of them are among the 78 marked lists; 3 are not marked (the shared
+  word is not a preposition: "abnormal muscle tone | reflexes | ..."). The mark does not say a
+  list is wrong: by the same reading about 57 of the 78 marked lists are right.
+- Two lists are still wrong with no sign in the wording: a chain of explanations read as a
+  list ("Yellow fever virus (YFV) | an enveloped RNA virus ... | the type species | namesake
+  ...") and "certain liver | kidney | hereditary disorders".
+- The recovered list "cataract surgery | a perforating wound or ulcer | congenital anomaly"
+  stands in a sentence that says "surgical removal, such as in cataract surgery": its first
+  item is an example of a cause, the other two are causes.
+- The 120-word limit is a fact about one source. Another source with another limit would not
+  be recognised; the constant and its measurement are in the code.
+- The word lists are closed, and a label or an initial after the first word of a sentence
+  cannot be told apart. Unchanged.
+- Nobody sees the marks yet: the review screens are M2.4.

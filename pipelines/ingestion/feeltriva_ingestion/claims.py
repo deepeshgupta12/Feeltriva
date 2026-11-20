@@ -15,7 +15,8 @@ applicability stays empty until a reviewer sets it.
 The rules are deliberately narrow. A sentence that is not clearly an enumeration is left whole.
 Nothing here is medical knowledge, and nothing it produces is approved.
 
-This module is pure: it reads no file and no database.
+Where a sentence ends is decided in `claim_sentences.py`. Both modules are pure: they read no file and no
+database.
 """
 
 from __future__ import annotations
@@ -24,23 +25,17 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .claim_sentences import _mask, sentences
+
 # claims-2 (M2.6a): what ends a sentence after a single letter or an abbreviation.
 # claims-3 (M2.6b): what is not an item of a list, after every stored list was read; more sentence ends.
-VERSION = "claims-3"
+# claims-4 (M2.6c): a text cut off by its source; a preposition after the lead-in; what a reviewer should check.
+VERSION = "claims-4"
 SENTENCE, LIST_ITEM = "sentence", "list_item"
 MAX_ITEM_WORDS = 8  # a longer "item" is a clause, not an item of a list
 MIN_WORDS_BEFORE_COLON = 3  # "B: Better ..." is a label; "There are three kinds: ..." is a lead-in
 MIN_ITEMS = 3  # "A and B" is not split: two things joined by "and" are too often one thing
 
-# A full stop after one of these is not the end of a sentence. "etc" is not listed: a full stop after it is
-# looked at only when a capital or a digit follows, and there it ends the sentence ("the lips, tongue, etc. The").
-_ABBREVIATIONS = frozenset(
-    "e.g i.e vs dr mr mrs ms prof st fig no approx al ca cf inc ltd jr sr vol pp sp spp var incl".split()
-)
-_BOUNDARY = re.compile(r"[.!?]+[\"')\]]*\s+(?=[\"'(\[]?[A-Z0-9])")
-# The word before a full stop. Only a whole word counts: the letters that end a token of letters and
-# digits ("794f", "2a") are not a word, so such a token ends its sentence (BUG-023).
-_WORD_BEFORE = re.compile(r"(?<![A-Za-z0-9])([A-Za-z.]+)$")
 # What introduces an enumeration. A strong lead-in may stand in any part of the sentence; a weak
 # one ("is", "are") counts only in the first part, where it cannot be a clause inside an item.
 _STRONG = re.compile(
@@ -95,41 +90,6 @@ class Claim:
     rule: str
     parent: tuple[int, int] | None = None  # the span of the sentence a list item belongs to
     cues: dict[str, Any] = field(default_factory=dict)
-
-
-def _mask(text: str) -> str:
-    """The text with everything inside brackets replaced by underscores, same length: commas and
-    full stops inside a remark in brackets do not split anything."""
-    out, depth = [], 0
-    for char in text:
-        if char in "([":
-            depth += 1
-            out.append("_")
-        elif char in ")]":
-            depth = max(0, depth - 1)
-            out.append("_")
-        else:
-            out.append("_" if depth else char)
-    return "".join(out)
-
-
-def sentences(text: str) -> list[tuple[int, int]]:
-    """Spans of the sentences of a text. Together they hold every character that is not white space."""
-    masked, spans, start = _mask(text), [], 0
-    for match in _BOUNDARY.finditer(masked):
-        if _continues(masked[start : match.start()], masked[match.end() :]):
-            continue  # an abbreviation, or an initial such as the "B." of "B. Example"
-        end = match.start() + len(match.group().rstrip())
-        spans.append((start, end))
-        start = match.end()
-    spans.append((start, len(text)))
-    trimmed = []
-    for begin, end in spans:
-        piece = text[begin:end]
-        left, right = len(piece) - len(piece.lstrip()), len(piece.rstrip())
-        if right > left:
-            trimmed.append((begin + left, begin + right))
-    return trimmed
 
 
 def _trim(text: str, begin: int, end: int) -> tuple[int, int]:
@@ -240,15 +200,21 @@ def split(text: str) -> tuple[list[Claim], dict[str, int]]:
     sentences with a comma were not split."""
     claims: list[Claim] = []
     reasons: dict[str, int] = {}
-    for start, end in sentences(text):
+    spans = sentences(text)
+    for number, (start, end) in enumerate(spans):
         noticed = cues(text[start:end])
-        claims.append(Claim(SENTENCE, start, end, text[start:end], f"{VERSION}:sentence", None, noticed))
         items, reason = list_items(text, start, end)
+        if number == len(spans) - 1 and _cut_off(text):
+            # The source cut the text here: the sentence is not whole, and the last item of its list is a fragment.
+            noticed = {**noticed, "cut_off": [f"{CUT_OFF_WORDS} words"]}
+            items = items[:-1]
+        claims.append(Claim(SENTENCE, start, end, text[start:end], f"{VERSION}:sentence", None, noticed))
         if reason and reason != "no comma":
             reasons[reason] = reasons.get(reason, 0) + 1
+        listed = {**noticed, **_first_item_cue(text, items)}
         for begin, finish in items:
             claims.append(
-                Claim(LIST_ITEM, begin, finish, text[begin:finish], f"{VERSION}:enumeration", (start, end), noticed)
+                Claim(LIST_ITEM, begin, finish, text[begin:finish], f"{VERSION}:enumeration", (start, end), listed)
             )
     return claims, reasons
 
@@ -260,77 +226,6 @@ def item_name(text: str) -> str:
         words = words[1:]
     return " ".join(words)
 
-
-# Words after which a single capital is a label and not an initial: "vitamin C.", "type B.", "hepatitis A.".
-_LETTERED = frozenset(
-    "vitamin vitamins hepatitis influenza type types subtype subtypes group groups class classes grade grades "
-    "stage stages category categories strain strains serotype serotypes serogroup serogroups form forms variant "
-    "variants level levels phase phases".split()
-)
-_PREVIOUS_WORD = re.compile(r"([A-Za-z]+)\s+$")
-
-
-def _continues(before: str, after: str = "") -> bool:
-    """Whether the full stop between `before` and `after` belongs to an abbreviation or an initial, so the
-    sentence goes on.
-
-    It is asked only where a capital or a digit follows the full stop. Measured on the stored statements (M2.6a):
-    the first rule kept every single letter and every listed abbreviation inside its sentence, and ten pairs of
-    real sentences stayed together. A single capital is taken for an initial ("J. Example", "B. Example") unless
-    it is plainly something else. In this order:
-
-    - a lower-case letter ("lower case d.") or the end of a unit joined by a sign ("mmol/L.", "40 °C.") ends;
-    - one of several initials ("J. K. Example") goes on;
-    - before a word that opens a sentence and is never a name ("plan B. Then ...") it ends;
-    - after "and" or "or" it ends when it is the last of a series of letters ("A, B, and D."), and goes on
-      when it is not ("Smith and J. Example");
-    - after a word that takes a letter as a label ("vitamin C."), or after any other word in lower case that
-      does not usually stand before a name ("plan B."), it ends. After "by", "of", "from" and the like, after a
-      capitalised word, and where nothing stands before it, it is an initial.
-
-    A listed abbreviation is written in lower case or with one capital ("No.", "Ms."); the same letters all in
-    capitals are an acronym ("MS.") and end the sentence. "No." is the abbreviation only before a digit."""
-    found = _WORD_BEFORE.search(before)
-    if not found:
-        return False
-    word, after = found.group(1), after.lstrip("\"'_([ ")
-    if len(word) > 1:
-        plain = word.lower().rstrip(".")
-        if plain == "no":
-            return not word.isupper() and after[:1].isdigit()
-        return plain in _ABBREVIATIONS and not word.isupper()
-    head = before[: found.start(1)]
-    if word.islower() or head.endswith(("/", "°")):
-        return False
-    if _INITIAL_BEFORE.search(head) or _INITIAL_AFTER.match(after):
-        return True
-    if _OPENER.match(after):
-        return False
-    previous = _PREVIOUS_WORD.search(head)
-    if not previous:
-        return True
-    last = previous.group(1)
-    if last.lower() in ("and", "or"):
-        return not _SERIES_BEFORE.search(head)
-    if last.lower() in _LETTERED:
-        return False
-    return not last.islower() or last in _BEFORE_A_NAME
-
-
-_INITIAL_BEFORE = re.compile(r"(?<![A-Za-z0-9])[A-Z]\.\s*$")
-_INITIAL_AFTER = re.compile(r"[A-Z]\.(?:\s|$)")
-_SERIES_BEFORE = re.compile(r"(?<![A-Za-z0-9])[A-Z],?\s+(?:and|or)\s+$")
-# Words that open a sentence and are never a name.
-_OPENER = re.compile(
-    r"(?:The|This|These|Those|It|Its|They|Their|He|She|His|Her|We|Our|There|Then|Thus|Therefore|However|Moreover|"
-    r"Furthermore|Also|In|On|At|For|From|With|Without|By|As|If|When|While|Where|After|Before|During|Since|Until|"
-    r"Although|Though|Because|But|And|Or|So|Yet|Some|Many|Most|Other|Others|Another|Each|Every|All|Both|Such|No|"
-    r"Not|A|An)\b"
-)
-# Words in lower case after which a single capital is still an initial: "by J. Example", "the bacterium B. Example".
-_BEFORE_A_NAME = frozenset(
-    "by with of from to after see per named bacterium bacteria species genus organism pathogen parasite fungus".split()
-)
 
 # What is not an item of a list (claims-3). Every stored list was read (628); each test below removes a kind of
 # wrong list that was found, and the word lists are closed and about wording, not medicine.
@@ -357,11 +252,12 @@ _PREFIX = re.compile(
     r"in\s+(?:some|rare|severe|extreme|most|many|certain)\s+cases,?\s+)+",
     re.IGNORECASE,
 )
-_PREPOSITION = re.compile(
-    r"(?:in|on|at|of|with|without|within|between|among|through|during|before|after|along|around|behind|under|over|"
-    r"above|below|by|from|for|into|onto|upon|near|across|against|about|outside|inside|beyond)\s",
-    re.IGNORECASE,
+_PREPOSITIONS = (
+    "in|on|at|of|with|without|within|between|among|through|during|before|after|along|around|behind|under|over|"
+    "above|below|by|from|for|into|onto|upon|near|across|against|about|outside|inside|beyond"
 )
+_PREPOSITION = re.compile(rf"(?:{_PREPOSITIONS})\s", re.IGNORECASE)
+_PREPOSITION_INSIDE = re.compile(rf"\s({_PREPOSITIONS}|to)\s", re.IGNORECASE)
 # An item that begins like this goes on with the item before it: "heart failure, due to ...", "..., leading to ...".
 _GOES_ON = re.compile(
     r"(?:such as|including|includes?|namely|e\.g|i\.e|due to|secondary to|related to|leading to|"
@@ -428,6 +324,10 @@ def _checked(text: str, items: list[tuple[int, int]], subject: bool) -> tuple[li
     if subject and verb is not None and not adverbial:  # "... and feeling tired may develop"
         finish = begin + verb
     items = [*items[:-1], _trim(text, begin, finish)]
+    lead = _PREPOSITION.match(text[items[0][0] : items[0][1]])
+    if lead and not any(_PREPOSITION.match(_bare(text[a:b])) for a, b in items[1:]):
+        # "such as from lung, breast, thyroid, ...": the preposition goes with the lead-in; the item begins after it
+        items = [_trim(text, items[0][0] + lead.end(), items[0][1]), *items[1:]]
     pieces = [text[a:b] for a, b in items]
     words = [_words(piece) for piece in pieces]
     counts = [len(_mask(piece).replace("_", " ").split()) for piece in pieces]
@@ -445,19 +345,52 @@ def _checked(text: str, items: list[tuple[int, int]], subject: bool) -> tuple[li
         return [], "an item is only a joining word"  # "fever, and, less commonly, seizures"
     if any(_QUALIFIER.match(piece) for piece in pieces[1:-1]):
         return [], "an item says more about the item before it"
-    bare = [_PREFIX.sub("", piece, count=1) if _PREFIX.match(piece) else piece for piece in pieces]
+    bare = [_bare(piece) for piece in pieces]
     if any(_GOES_ON.match(piece) for piece in bare):
         return [], "an item goes on with the item before it"
-    led = sum(1 for piece in bare if _PREPOSITION.match(piece))
-    if 0 < led < len(bare) - 1:  # all, or all but one: a list of places or times ("the wrists, between fingers, ...")
+    led = [bool(_PREPOSITION.match(piece)) for piece in bare]
+    if 0 < sum(led) < len(bare) - 1:  # all, or all but one: a list of places or times ("the wrists, between fingers")
         return [], "an item begins with a preposition"
+    if not led[0] and all(led[1:]) and _PREPOSITION_INSIDE.search(_mask(pieces[0])):
+        # "fat pads along the collarbone, on the back of the neck, and on the face": places of the one first item
+        return [], "the other items go on with the first item"
     if any(_clause_at(found)[0] is not None for found in words):
         return [], "an item holds a clause"  # "dehydration, peripheral pulse is rapid, and ..."
     if len(words[-1]) > 1:
         alone = [found[1:] if found[0][1] in _ARTICLE else found for found in words[:-1]]
         first = words[0]
-        if any(len(found) == 1 and found[0][1] in _DESCRIBING for found in alone) or (
+        # After "feeling tired", "weak" goes on with "feeling", not with the noun of the last item.
+        after_a_verb = len(first) > 1 and first[0][1].endswith("ing")
+        if (not after_a_verb and any(len(found) == 1 and found[0][1] in _DESCRIBING for found in alone)) or (
             len(first) > 1 and first[-1][1] in _DESCRIBING and first[-2][1] in _BEFORE_A_DESCRIPTION
         ):
             return [], "the items share one noun"  # "a mix of genetic, environmental, and neurological factors"
     return items, ""
+
+
+# The source diseases_main.csv cuts its descriptions at 120 words: all 85 of them have exactly 120 words, and 79
+# end without a full stop (measured in M2.6c). No other stored statement has 120 words and no full stop at its end.
+CUT_OFF_WORDS = 120
+_ENDS = re.compile(r"[.!?][\"')\]]*\s*$")
+
+
+def _cut_off(text: str) -> bool:
+    """Whether the text was cut off by its source: it has exactly the source's limit of words and no full stop."""
+    return len(text.split()) == CUT_OFF_WORDS and not _ENDS.search(text)
+
+
+def _bare(piece: str) -> str:
+    """An item without the words that may stand before it ("occasionally", "in rare cases")."""
+    return _PREFIX.sub("", piece, count=1) if _PREFIX.match(piece) else piece
+
+
+def _first_item_cue(text: str, items: list[tuple[int, int]]) -> dict[str, Any]:
+    """What a reviewer of a list should check, when the first item holds a preposition.
+
+    "infection with viruses, bacteria, fungi" and "loss of appetite, nausea, vomiting" have the same wording: in
+    the first the other items share the first words of the first item, in the second they do not. Only the
+    meaning tells them apart, so the wording is recorded and nothing is decided."""
+    if not items:
+        return {}
+    found = sorted({match.group(1).lower() for match in _PREPOSITION_INSIDE.finditer(_mask(text[slice(*items[0])]))})
+    return {"first_item_preposition": found} if found else {}

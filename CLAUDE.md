@@ -105,7 +105,8 @@ Changes to shared modules and contracts deserve the most care: `specs/openapi.js
 Known limits of the graph in this repository (measured, see the engineering log, entry G):
 
 - GitNexus cannot parse a source file larger than 32 KB; the file then silently has no call
-  edges. Keep modules below that size (this is why the assessment service is split in three).
+  edges. Keep modules below that size (this is why the assessment service is split in three
+  and the claim rules in two, `claims.py` and `claim_sentences.py`).
 - REST route → service edges are resolved. MCP tool → `AssessmentService` edges are **not**
   (inherited methods called across package roots), and tests reach the service over HTTP, so
   they never appear as callers. Any change to a public `AssessmentService` method therefore

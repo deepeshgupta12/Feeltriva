@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.6b (2026-11-20).
+Last updated after sub-step M2.6c (2026-11-20).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -74,7 +74,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Done | 960 lexical groups, never merged. 467 suggestions in the review queue (118 possible synonyms, 349 possible subtypes), each with both terms and its reasons; an added word is never treated as a synonym (M2.8; 47 of the synonym suggestions come from two labels sharing one HPO or MONDO term, M2.14 and M2.15). Acting on an accepted suggestion is M2.5 | M1.3, M2.8; M2.5 |
 | D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | All 223 `E_*` questions have a proposed kind taken from the publisher's own dictionary (110 symptom, 86 history, 26 exposure or lifestyle, 1 measurement; M2.12); an antecedent is never proposed as a symptom. **Missing:** approval | M1.3, M2.7, M2.12; M2.5 |
 | D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
-| D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Done as pending claims | Done for statements (no duplicates found). 8,734 single claims, each a span of its statement, stored `pending` in `statement_claims` (M2.6, M2.6a, M2.6b); nothing is written to evidence before review | M1.4, M2.6; M2.5 |
+| D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Done as pending claims | Done for statements (no duplicates found). 8,742 single claims, each a span of its statement, stored `pending` in `statement_claims` (M2.6, M2.6a, M2.6b, M2.6c); nothing is written to evidence before review | M1.4, M2.6; M2.5 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
 | D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping release, hashes, audit. No split manifest, no publishing | M1.2, M1.3; M4.3, M2.5 |
