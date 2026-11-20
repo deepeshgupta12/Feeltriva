@@ -129,3 +129,20 @@ def test_every_claim_is_its_statement_s_own_text_and_a_list_item_belongs_to_its_
 def test_an_item_is_compared_with_a_feature_name_without_its_article_and_bracket():
     assert item_name("a Red-Scarf (worn loosely)") == "red scarf"
     assert item_name("The hat") == "hat" and item_name("gloves") == "gloves"
+
+
+def test_a_token_of_letters_and_digits_ends_its_sentence_whatever_its_last_letters_are():
+    # BUG-023: the letters ending such a token were read as a single-letter word or an abbreviation,
+    # so the sentence was not ended. The first text is the one a CI run failed on.
+    text = "Signs may include a hat b7c75f794f, a scarf b7c75f794f (red), and gloves b7c75f794f. It ends."
+    assert [text[start:end] for start, end in sentences(text)] == [text[:-9], "It ends."]
+    for sample in ("The code is 794f. It ends.", "Fill in form 2a. Then sign it.", "It is model x9ca. Next one."):
+        assert len(sentences(sample)) == 2, sample
+    # A letter standing alone and a real abbreviation still do not end a sentence, also after a bracket or a hyphen.
+    for sample in (
+        "It was B. burgdorferi again.",
+        "See e.g. Those listed.",
+        "A cap (cf. Hats) fits.",
+        "Type-B. Burgdorferi.",
+    ):
+        assert len(sentences(sample)) == 1, sample

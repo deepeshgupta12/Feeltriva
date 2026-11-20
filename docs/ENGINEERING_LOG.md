@@ -31,6 +31,7 @@ command output, not estimated.
 | BUG-020 | M2.8 | Two labels that share only a catch-all ICD-11 code were suggested as synonyms (chronic and diabetic kidney disease) | Fixed before commit |
 | BUG-021 | M2.11 / M2.14 | The self-check of `link-vocabularies` reported any link that was not `pending` as a difference, so the command would fail as soon as a reviewer decided one link | Fixed |
 | BUG-022 | M2.16 / M2.17 | Where the name search already held the ICD-11 code that MONDO leads to, the note on that row did not keep the foundation entity MONDO names | Fixed |
+| BUG-023 | M2.6 | The sentence rule read the letters that end a token of letters and digits ("794f", "2a") as a single-letter word or an abbreviation, so a sentence ending in such a token was not ended. Found by CI on the M2.6 commit: the test sentence ends in a random tag | Fixed |
 
 ## Entries
 
@@ -2706,3 +2707,59 @@ without the new facts and was updated; it now also covers the two new checks.
   how to carry decisions across a rule change is not built.
 - The full completeness check now takes 14 to 38 minutes on this machine, depending on what
   else uses the database.
+
+**After the commit: CI failed on `8bb8039`, and why (BUG-023).** The web job passed. The backend
+job failed in its PostgreSQL step: 1 failed, 253 passed, 1 skipped. The failing test was the new
+`test_claims_are_stored_pending_with_their_span_their_sentence_and_a_feature_named_exactly`: it
+expected two sentences from its symptom statement and got one.
+
+- **Cause.** The test's sentence ends in a random ten-character tag, in that run `b7c75f794f`.
+  To decide whether a full stop ends a sentence, `sentences` looked at the letters just before
+  it. It took only the last run of letters, here the "f" after "794", for a single-letter word
+  such as the "B." of a species name, and did not end the sentence. The same happened for a
+  token ending in "ca" or "cf" after a digit, which are in the list of abbreviations. The rule
+  was wrong, not only the test: "form 2a." or a laboratory name written with a digit and a final
+  letter would also have kept two sentences together.
+- **Why it was not seen locally.** The tag is random. The test fails for about one tag in four
+  (a digit followed by one last letter). The local runs before the commit happened to draw other
+  tags. Reproduced afterwards with CI's exact sentence: one sentence instead of two.
+- **Resolution.** One pattern in `claims.py`: the word before a full stop counts only when no
+  letter or digit stands directly before it. A letter standing alone and a real abbreviation
+  still do not end a sentence. A unit test was added at the end of `tests/unit/test_claims.py`
+  with CI's sentence, three more tokens of that shape and four cases that must stay one sentence.
+  The test sentence of the loading test was then tried with 339,808 tags (every ending of one
+  to four characters and 200,000 random ones): two sentences and three items every time.
+- **Effect on the stored claims: none, measured before the edit.** A read-only run cut all
+  2,952 stored statements by the old pattern and by the new one: 0 statements differ, 8,862
+  claims either way. After the edit `extract-claims` inserted nothing (8,862 rows, all pending);
+  the claims part of the completeness check gives 1,079 expected and 1,079 stored for the
+  symptom statements; over all statement types the claims by the rules and the stored claims
+  are the same 8,862. The rule version stays `claims-1`: no stored claim differs and none has
+  been reviewed. The full completeness check (14 to 38 minutes) was not run again; its claims
+  part was run directly on the real data, and nothing else it reads has changed.
+- **Impact analysis.** `sentences`: **CRITICAL** (1 direct caller, `split`; 5 flows; reached from
+  `extract_claims`, from `_claims` and `gather` of the completeness check, and from `main`).
+  Reported to the owner before the edit with the plan per caller: no caller changes, and each
+  must give the same result on the real data, which was measured as above. `detect_changes`
+  before commit: risk low, one symbol listed, `_STRONG`, the pattern defined directly below
+  the changed one; its text is identical in the diff (the known line-range artefact).
+- **Tests actually run after the fix.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 55 files |
+| `uv run pytest -m "not archives"` (SQLite) | 202 passed, 54 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 265 passed |
+| the same without the object store variable | 264 passed, 1 skipped (the real-store test) |
+
+- **A limit this shows, measured on the stored statements.** A letter standing alone before a
+  full stop never ends a sentence, and neither does a listed abbreviation. That was meant for
+  names such as "B. Example" and for "No. 4". Counted read-only over the 2,952 statements: a
+  single letter keeps a full stop inside a sentence 8 times, and all 8 are real sentence ends
+  ("types A, B, C, and D.", "vitamin C.", "mmol/L." twice, "mEq/L.", "40 °C.", "lower case d.",
+  "A, B, C, D, and E."); an abbreviation does so 5 times, 3 rightly ("No. 4", "No. 202", "i.e.
+  ENT") and 2 wrongly ("symptoms of MS.", "tongue, etc."). So 10 pairs of sentences out of
+  6,210 sentences are kept together as one claim. Nothing is lost and all are pending. It is
+  not changed here: a change would alter the stored claims of those statements, and that is the
+  owner's decision (a small follow-up: a single capital or a unit before a full stop ends the
+  sentence when a new sentence plainly follows; the claims of about 10 statements made again).

@@ -35,7 +35,9 @@ _ABBREVIATIONS = frozenset(
     "e.g i.e etc vs dr mr mrs ms prof st fig no approx al ca cf inc ltd jr sr vol pp sp spp var incl".split()
 )
 _BOUNDARY = re.compile(r"[.!?]+[\"')\]]*\s+(?=[\"'(\[]?[A-Z0-9])")
-_WORD_BEFORE = re.compile(r"([A-Za-z.]+)$")
+# The word before a full stop. Only a whole word counts: the letters that end a token of letters and
+# digits ("794f", "2a") are not a word, so such a token ends its sentence (BUG-023).
+_WORD_BEFORE = re.compile(r"(?<![A-Za-z0-9])([A-Za-z.]+)$")
 # What introduces an enumeration. A strong lead-in may stand in any part of the sentence; a weak
 # one ("is", "are") counts only in the first part, where it cannot be a clause inside an item.
 _STRONG = re.compile(
