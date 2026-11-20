@@ -3011,3 +3011,8 @@ in the read-only run and corrected before the remake (described above).
   stays one sentence only because "bacterium" is in a short list, and "Plan B. Aquatic ..." at
   the start of a sentence stays joined.
 - Every item of every list is still pending, with its whole sentence beside it.
+
+**Committed and indexed.** Committed as `5043c13` and pushed; CI passed on both jobs (run
+44691863751). The code graph was re-indexed at `5043c13` and reports up-to-date. The API and
+the web app were not restarted: this sub-step changes neither. No migration. This paragraph was
+added in a following documents-only commit, after which the index was refreshed again.
