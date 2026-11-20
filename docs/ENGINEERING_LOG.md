@@ -3142,3 +3142,9 @@ whose items share the first words of the first item are about 24, not 15.
 - The word lists are closed, and a label or an initial after the first word of a sentence
   cannot be told apart. Unchanged.
 - Nobody sees the marks yet: the review screens are M2.4.
+
+**Committed and indexed.** Committed as `46bee9d` and pushed; CI passed on both jobs (run
+44701018793). The code graph was re-indexed at `46bee9d` and reports up-to-date; both rule
+modules are below the size it can read. The API and the web app were not restarted: this
+sub-step changes neither. No migration. This paragraph was added in a following documents-only
+commit, after which the index was refreshed again.
