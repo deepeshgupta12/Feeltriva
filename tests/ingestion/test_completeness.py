@@ -591,10 +591,27 @@ def test_narrative_rows_are_compared_with_their_statements(tmp_path, owner_db):
         "disease_cross": {},
         "reference": {"disease": {}},
         "evidence": {"mentions_expected": 2, "mentions": 2, "mentions_unexpected": 0, "mentions_not_pending": 0},
+        "claims": {
+            "statements": 4,
+            "expected": 9,
+            "stored_as_expected": 9,
+            "unexpected": 0,
+            "not_their_text": 0,
+            "decided_without_reviewer": 0,
+        },
     }
     _statement_file(report, world, ("archive(13).zip", "symptoms.csv"), info)
     assert _mismatches(report) == ["statements already approved (imported text stays pending until reviewed)"]
-    assert {check.row for check in report.checks} == {12} and [check.row for check in report.deferred] == [12]
+    # The single claims are checked since M2.6: nothing in this row is left for a later sub-step.
+    assert {check.row for check in report.checks} == {12} and report.deferred == []
+    # A claim that is missing, and one the rules do not make, are both mismatches.
+    report = Report(mapping_table())
+    world["claims"] = {**world["claims"], "stored_as_expected": 8, "unexpected": 1}
+    _statement_file(report, world, ("archive(13).zip", "symptoms.csv"), info)
+    assert _mismatches(report)[1:] == [
+        "single claims of the symptom statements, each a span of its statement, in the review queue",
+        "claims that are not their statement's text, are not made by the rules, or were decided by no reviewer",
+    ]
 
 
 # -- narrative text files -------------------------------------------------------------------------

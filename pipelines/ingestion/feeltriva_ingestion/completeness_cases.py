@@ -60,7 +60,9 @@ ROLE_ROWS: dict[tuple[str, str], dict[str, int]] = {
     (A16, "disease_description"): {"mappings": 26, "statement": 26, "provenance": 27},
 }
 TEXT_ROW = 14
-ATOMIC_CLAIMS = "M2.6"
+# The single claims of the statements are checked since M2.6. Statements from the text files come after
+# the chunks have been reviewed, which the approval workflow owns.
+TEXT_STATEMENTS = "the review of the text chunks (M2.5)"
 # M2.7 stored proposals; what is left is the owner's review of them and the approval workflow.
 FEATURE_MEANINGS = "the owner's review of the M2.7 proposals (approval: M2.5)"
 

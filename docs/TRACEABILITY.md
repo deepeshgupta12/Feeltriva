@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.13b (2026-11-19).
+Last updated after sub-step M2.6 (2026-11-19).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -74,7 +74,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | D4 | Lexical normalisation only for disease labels; subtypes preserved; suggested synonyms to review | Done | 960 lexical groups, never merged. 467 suggestions in the review queue (118 possible synonyms, 349 possible subtypes), each with both terms and its reasons; an added word is never treated as a synonym (M2.8; 47 of the synonym suggestions come from two labels sharing one HPO or MONDO term, M2.14 and M2.15). Acting on an accepted suggestion is M2.5 | M1.3, M2.8; M2.5 |
 | D5 | Feature prefixes stripped only as candidates; `E_*` classified by clinical meaning; history never treated as an active symptom | Partial | All 223 `E_*` questions have a proposed kind taken from the publisher's own dictionary (110 symptom, 86 history, 26 exposure or lifestyle, 1 measurement; M2.12); an antecedent is never proposed as a symptom. **Missing:** approval | M1.3, M2.7, M2.12; M2.5 |
 | D6 | Repeated feature columns merged only after review; conflicts explicit; never OR-ed | Done | Each position kept. Where positions disagree for a case, every position is stored with its raw value and `conflict = true` (242,468 case-header conflicts, 484,936 rows); counts per header equal the handoff's audit | M1.3, M1.8 |
-| D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Partial | Done for statements (no duplicates found). No atomic claims extracted | M1.4; M2.6 |
+| D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Done as pending claims | Done for statements (no duplicates found). 8,862 single claims, each a span of its statement, stored `pending` in `statement_claims` (M2.6); nothing is written to evidence before review | M1.4, M2.6; M2.5 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
 | D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping release, hashes, audit. No split manifest, no publishing | M1.2, M1.3; M4.3, M2.5 |
@@ -96,9 +96,9 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | T9 | 13 `summary` → `statements(description)` | Done | 85 | M1.4 |
 | T10 | 13 `word_count`, `url` → raw metadata, `source_url` | Done | URL kept; `word_count` recorded beside the description statement and on each chunk; it equals the measured word count of the body in all 85 files | M1.4, M1.10 |
 | T11 | 13 `causes.csv` joined on native ID, name checked | Done | 714; no mismatch | M1.4 |
-| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; 575 pending proposals where a known feature term is mentioned, each tied to its statement with the text span. A mention is not an assertion. **Missing:** the mapping table asks for atomic feature relations in the review queue; splitting statements into atomic claims is M2.6 | M1.4, M1.11; M2.6 |
+| T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; 575 pending proposals where a known feature term is mentioned, each tied to its statement with the text span. A mention is not an assertion. The 712 statements are split into 727 sentences and 352 list items, all pending; 113 list items are exactly the name of one feature and carry it as a proposal (M2.6). **Missing:** review and approval, which turn a claim into evidence | M1.4, M1.11, M2.6; M2.5 |
 | T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
-| T14 | 13 text files → records; statements and chunks after review, with offsets | Partial | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served. **Missing:** statements extracted from the text files (M2.6) and the review itself (M2.5) | M1.3, M1.10; M2.6, M2.5 |
+| T14 | 13 text files → records; statements and chunks after review, with offsets | Partial | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served. **Missing:** statements extracted from the text files (M2.5) and the review itself (M2.5) | M1.3, M1.10; M2.5, M2.5 |
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
 | T16 | 14 `Age` numeric; unit to be confirmed before clinical use | Partial | Value kept exactly as supplied; unit left empty on the cases. A proposed unit (years) with its basis is stored on the source (M2.7). **Missing:** the owner's confirmation; no source documentation states the unit | M1.7, M2.7; owner review, M2.5 |
 | T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |

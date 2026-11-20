@@ -2592,3 +2592,117 @@ nothing on the real data, and it costs as much as the first load: every one of t
 answers is offered to the table again and refused one by one. Left as it is. If the loader is
 to be rerun routinely, it should first compare what is stored with what it read and skip the
 write when they agree; that is a change of its own and has not been made.
+
+### M2.6 — Single claims from the narrative statements, in the review queue
+
+Owner's go-ahead of 2026-11-19 ("proceed with M2.6").
+
+**What the handoff asks, checked before the work.** "Extract atomic claims only into a review
+queue" (`docs/01`); for the symptom statements "narrative claim first; extract atomic feature
+relations into review queue" (`docs/04`); "atomic statement extraction into pending status,
+with source spans and URLs" (`docs/05`); the reviewer's view shows "original statement, source
+URL/locator, proposed atomic claim, applicability, status" (`docs/06`). The figures cross-check
+had assigned the empty applicability to this sub-step.
+
+**What was built.**
+
+- `claims.py` (pure rules): `sentences`, `list_items`, `cues`, `split`, `item_name`.
+- `claims_load.py`: `extract_claims`, `check`, `report`. New command
+  `python -m feeltriva_ingestion extract-claims`.
+- Migration `0010`: table `statement_claims` (statement, kind, the two offsets, the text, the
+  rule, wording cues, a proposed feature, applicability, review status). Import-only.
+- Completeness check: `_claims` recomputes the claims of the symptom statements by the rules and
+  compares them with what is stored; the line that said "not started" became two checks. The
+  remaining narrative item (statements from the text files, after their review) is now listed
+  under the approval workflow.
+
+**What a claim is (decision E71).** A piece of a stored statement between two offsets, never new
+wording: every sentence, and each item of a sentence that is plainly an enumeration with a
+lead-in. A list item of a symptom statement that is exactly the name of one feature carries
+that feature as a proposal. No language model is used. Nothing is written to the evidence table.
+
+**The rules were set by reading real results, in three rounds of a read-only dry run:**
+
+| Round | Enumerations | List items | What reading a sample showed, and the change |
+|---|---:|---:|---|
+| 1 | 806 | 3,378 | "Severe dengue is a life-threatening emergency, requiring hospitalization and ..." cut into three items. "is"/"are" now introduce a list only for a plural of listed things and not before a verb form |
+| 2 | 654 | 2,818 | "red, itchy, and watery eyes" broken up; a list ending "A and B such as C or D" split at the wrong word. Two guards: a list inside the list, and an unclear end |
+| 3 | 625 | 2,651 | An adverb after "are"; "as well as" at the start of an item. Two small rules |
+| stored, then read again | 623 | 2,646 | "coma; death can ensue" kept as the last item; a label "B:" taken for a lead-in. A semicolon now divides the sentence; a colon needs three words before it. The 8,856 unreviewed claims were deleted and made again |
+
+**Real run** (`extract-claims`, 3 seconds; a second run inserted nothing):
+
+| Statement type | Statements | Sentences | Enumerations | List items |
+|---|---:|---:|---:|---:|
+| description | 905 | 4,120 | 487 | 2,017 |
+| cause | 714 | 729 | 40 | 184 |
+| symptom | 712 | 727 | 69 | 352 |
+| treatment | 621 | 634 | 29 | 99 |
+| all | 2,952 | 6,210 | 625 | 2,652 |
+
+8,862 claims, all pending, each exactly its statement's text at its offsets; the sentences hold
+all the text of every statement. 3,065 sentences with a comma were left whole, and why is
+counted (no final "and"/"or" 1,553; no lead-in 1,250; an item too long 110; unclear end 85;
+fewer than three items 38; a list inside the list 19; an item beginning like a clause 17).
+Sentences carrying a wording cue: hedge 2,716, negation 654, a group of people 364. Of the 352
+list items of symptom statements, 113 are exactly the name of one feature and carry it, 8 fit
+several features and carry none, 231 fit none.
+
+**Read by hand.** Of 30 stored split sentences drawn at random (before the last two rule
+changes), 26 were right and 4 wrong or partly wrong; the last two rules fix 2 of those. What
+remains: adjectives that share one noun ("flaky, scaly, greasy, and ... itchy and inflamed
+skin") and a list nested in another ("..., such as in cataract surgery, a perforating wound or
+ulcer, or congenital anomaly"). About 2 in 30.
+
+**Impact analysis.** `gather`: 1 caller, LOW. `main`: 1 caller, LOW. `_statement_file`: **HIGH**
+(1 caller, `emit`; reached from `run_completeness` and `main`; 3 flows). Reported to the owner
+before editing, with the plan per caller: `emit` unchanged; the full completeness run must still
+pass; `main` gets one branch. `_texts`: **HIGH** for the same reason; its one changed argument
+(the owner label of an item that stays deferred) was edited before its impact analysis was run,
+which was then run and is recorded here as a slip in the process. `detect_changes` before commit:
+`main`, `gather`, `_statement_file` and the updated test, summary risk "high"; `_acceptance` and
+the variables it listed are the line-shift artefact. Compared with the last commit: in
+`_statement_file` one statement was removed and three added; in `gather` one; in `_texts` one;
+in `main` one command branch was added and the other 18 are identical; `evidence.py` and
+`vocabulary.py` are untouched.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 55 files |
+| `uv run pytest -m "not archives"` (SQLite) | 201 passed, 54 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included | 264 passed |
+| `uv run pytest tests/mcp` | 5 passed |
+| Migration `0010` on a scratch database: head, down to `0009`, head | table present, absent, present; never readable by the API role |
+| `completeness` on the real data, after the final rules | 236 checks, 230 ok, 0 mismatches, 6 left to later (2,257 s); claims of the symptom statements: 1,079 expected, 1,079 stored |
+
+The tests prove: the sentences hold all the text and keep their offsets; an abbreviation, a
+single letter and a full stop inside brackets do not end a sentence; an enumeration gives one
+claim per item, with brackets kept in the item; the list starts at the last lead-in that leaves
+three items; "is"/"are" only for a plural of listed things; every reason for leaving a sentence
+whole; a semicolon divides the sentence; a short label before a colon is no lead-in; cues are
+read from the wording; a list item belongs to its sentence; claims are stored pending with
+span, rule, cues and source; a feature is proposed only for an exact, single name; a second run
+stores nothing and a reviewer's decision stays; a claim that is no longer its statement's text
+is reported; the completeness facts notice a missing claim, a changed one and an unsigned decision.
+
+**Bugs.** None in committed code. One existing completeness test built its input by hand
+without the new facts and was updated; it now also covers the two new checks.
+
+**Limits, stated plainly.**
+
+- The rules know nothing about medicine. About 2 in 30 split sentences are split wrongly; every
+  item is pending and its whole sentence is kept beside it.
+- Most sentences with a comma are left whole (3,065). That is by design: a sentence left whole
+  loses nothing.
+- Two-item lists ("A and B") are not split.
+- Applicability is still empty everywhere: the cues say what the wording contains, and a
+  reviewer decides.
+- No reviewer route for claims yet: they can be read with SQL; the screens and their route are
+  M2.4. Approval, and writing an approved claim to evidence, are M2.5.
+- The claim rules carry a version (`claims-1`). If they change after claims have been reviewed,
+  the reviewed claims stay and the completeness check will list them as not made by the rules;
+  how to carry decisions across a rule change is not built.
+- The full completeness check now takes 14 to 38 minutes on this machine, depending on what
+  else uses the database.

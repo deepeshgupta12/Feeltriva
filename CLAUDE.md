@@ -139,6 +139,7 @@ uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-1
 uv run python -m feeltriva_ingestion link-ontologies           # candidate HPO and MONDO terms from hp.json and mondo.owl in data/raw (offline)
 uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent (needs the ICD key)
 uv run python -m feeltriva_ingestion suggest-relations         # possible synonyms and subtypes for review (nothing merged)
+uv run python -m feeltriva_ingestion extract-claims            # statements split into single claims with spans (pending)
 ```
 
 Run the PostgreSQL suite **without** `-m "not archives"` at least once per sub-step when the

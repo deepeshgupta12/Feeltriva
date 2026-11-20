@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 from .chunks import CATEGORY_FLAG, TEXT_ARCHIVE
 from .completeness_cases import (
-    ATOMIC_CLAIMS,
     TEXT_ROW,
+    TEXT_STATEMENTS,
     case_file_rows,
     disease_mapping_rows,
     name_of,
@@ -209,7 +209,21 @@ def _statement_file(report: Report, world: dict[str, Any], key: tuple[str, str],
             evidence["mentions_unexpected"] + evidence["mentions_not_pending"],
             "rule",
         )
-        report.later(row, "statements split into atomic, reviewable feature relations", "not started", ATOMIC_CLAIMS)
+        claims = world["claims"]
+        report.check(
+            row,
+            "single claims of the symptom statements, each a span of its statement, in the review queue",
+            claims["expected"],
+            claims["stored_as_expected"],
+            "stored statements, recomputed",
+        )
+        report.check(
+            row,
+            "claims that are not their statement's text, are not made by the rules, or were decided by no reviewer",
+            0,
+            claims["not_their_text"] + claims["unexpected"] + claims["decided_without_reviewer"],
+            "rule",
+        )
     if "no_evidence" in roles:
         report.check(
             roles["no_evidence"],
@@ -277,7 +291,7 @@ def _texts(report: Report, world: dict[str, Any]) -> None:
         row,
         "statements extracted from the text files after review",
         f"{world['text_statements']} statements",
-        ATOMIC_CLAIMS,
+        TEXT_STATEMENTS,
     )
 
 

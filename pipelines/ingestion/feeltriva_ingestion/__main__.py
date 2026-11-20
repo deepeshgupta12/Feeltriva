@@ -1,6 +1,6 @@
 """CLI: python -m feeltriva_ingestion {verify|audit|load|load-cases|load-features|load-lists|load-chunks|search-text|
 load-evidence|store-archives|completeness|derive-meanings|load-release|load-answers|load-conditions|
-link-vocabularies|link-ontologies|import-identifiers|suggest-relations}"""
+link-vocabularies|link-ontologies|import-identifiers|suggest-relations|extract-claims}"""
 
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ def main() -> int:
             "link-ontologies",
             "import-identifiers",
             "suggest-relations",
+            "extract-claims",
         ],
     )
     parser.add_argument("query", nargs="?", help="search-text: words to search for in the narrative chunks")
@@ -452,6 +453,26 @@ def main() -> int:
                 + (
                     "every condition and every listed question is stored as what the source says, pending review; "
                     "nothing is approved"
+                    if not diffs
+                    else f"{len(diffs)} differences"
+                )
+            )
+            return 1 if diffs else 0
+        if args.command == "extract-claims":
+            from .claims_load import check as check_claims
+            from .claims_load import extract_claims
+            from .claims_load import report as report_claims
+
+            result = extract_claims()
+            print("\n".join(report_claims(result)))
+            diffs = check_claims(result)
+            for diff in diffs[:20]:
+                print("DIFF", diff)
+            print(
+                f"{time.monotonic() - started:.0f}s; "
+                + (
+                    "every statement has its sentences, every claim is its statement's own text at its offsets, and "
+                    "all wait for review"
                     if not diffs
                     else f"{len(diffs)} differences"
                 )

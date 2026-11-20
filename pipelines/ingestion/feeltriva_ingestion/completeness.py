@@ -516,6 +516,7 @@ def gather(
         "text_statements": text_statements,
         "feature_rows": feature_rows,
         "evidence": _evidence(cur, files, source_id(TEXT_ARCHIVE, "symptoms.csv")),
+        "claims": _claims(cur, source_id(TEXT_ARCHIVE, "symptoms.csv")),
         "archives": _archives(cur, raw_dir, manifest, settings, s3),
     }
 
@@ -564,3 +565,41 @@ def run_completeness(
     emit(report, world)
     report.close()
     return report
+
+
+def _claims(cur: Any, narrative_sid: str) -> dict[str, int]:
+    """The single claims of the symptom statements (M2.6): recomputed from the stored statements by the rules,
+    and compared with what is stored."""
+    from .claims import split
+    from .claims_load import claim_id
+
+    cur.execute(
+        """SELECT DISTINCT st.statement_id, st.text_content
+           FROM statements st JOIN statement_sources ss USING (statement_id)
+           JOIN source_records r USING (record_id)
+           WHERE st.statement_type = 'symptom' AND r.source_id = %s""",
+        (narrative_sid,),
+    )
+    statements = dict(cur.fetchall())
+    expected = {
+        claim_id(statement_id, claim.kind, claim.start, claim.end)
+        for statement_id, text in statements.items()
+        for claim in split(text)[0]
+    }
+    cur.execute(
+        """SELECT c.claim_id, c.status::text, c.reviewer,
+                  substr(st.text_content, c.span_start + 1, c.span_end - c.span_start) = c.claim_text
+           FROM statement_claims c JOIN statements st USING (statement_id) WHERE c.statement_id = ANY(%s)""",
+        (list(statements),),
+    )
+    stored = {row[0]: row[1:] for row in cur.fetchall()}
+    return {
+        "statements": len(statements),
+        "expected": len(expected),
+        "stored_as_expected": len(expected & set(stored)),
+        "unexpected": len(set(stored) - expected),
+        "not_their_text": sum(1 for _status, _reviewer, same in stored.values() if not same),
+        "decided_without_reviewer": sum(
+            1 for status, reviewer, _same in stored.values() if status != "pending" and not reviewer
+        ),
+    }
