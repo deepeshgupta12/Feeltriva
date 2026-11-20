@@ -3264,3 +3264,8 @@ now finds 112 in 20 texts and 14416 in one.
 - The numbers 112 and 14416 were not read on the central government's own pages. 108 is absent.
 - There is no way yet to approve a rule: that, and publishing a release from approved rules, is
   M2.5. Until then the draft cannot be served, whatever its content.
+
+**Committed and indexed.** Committed as `92c284c` and pushed; CI passed on both jobs (run
+44729100873). The code graph was re-indexed at `92c284c` and reports up-to-date. The API and the
+web app were not restarted: nothing they load changed. No migration. This paragraph was added in
+a following documents-only commit, after which the index was refreshed again.
