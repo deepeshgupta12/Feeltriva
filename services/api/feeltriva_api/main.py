@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import disease_merges, releases
+from . import disease_merges, published_mappings, releases
 from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
@@ -333,6 +333,49 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             )
         )
 
+    @app.get("/internal/v1/review/features")
+    def review_features(
+        who: Who,
+        status: str | None = None,
+        kind: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            published_mappings.list_features(
+                container.db, who, status=status, kind=kind, q=q, limit=limit, offset=offset
+            )
+        )
+
+    @app.get("/internal/v1/review/diseases")
+    def review_diseases(
+        who: Who, status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0
+    ) -> JSONResponse:
+        return JSONResponse(
+            published_mappings.list_diseases(container.db, who, status=status, q=q, limit=limit, offset=offset)
+        )
+
+    @app.get("/internal/v1/review/mapping-releases")
+    def review_mapping_releases(who: Who) -> JSONResponse:
+        return JSONResponse(published_mappings.list_published(container.db, who))
+
+    @app.get("/internal/v1/review/mapping-releases/preview")
+    def review_mapping_release_preview(who: Who, mapping_release_id: str) -> JSONResponse:
+        return JSONResponse(published_mappings.preview(container.db, who, mapping_release_id))
+
+    @app.post("/internal/v1/review/mapping-releases")
+    def review_mapping_release_publish(body: MappingPublish, who: Who) -> JSONResponse:
+        return JSONResponse(
+            published_mappings.publish(container.db, who, mapping_release_id=body.mapping_release_id, note=body.note)
+        )
+
+    @app.post("/internal/v1/review/mapping-releases/current")
+    def review_mapping_release_current(body: ReleaseSwitch, who: Who) -> JSONResponse:
+        return JSONResponse(
+            published_mappings.make_current(container.db, who, release_id=body.release_id, note=body.note)
+        )
+
     return app
 
 
@@ -340,3 +383,11 @@ def app_factory() -> FastAPI:
     """uvicorn entry point: `uvicorn feeltriva_api.main:app_factory --factory`."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     return create_app()
+
+
+# Request bodies added after the first ones stand here, at the end of the module, so that the lines above keep
+# their numbers. The routes are defined when create_app runs, by which time these classes exist.
+class MappingPublish(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mapping_release_id: str
+    note: str = Field(min_length=1, max_length=4000)

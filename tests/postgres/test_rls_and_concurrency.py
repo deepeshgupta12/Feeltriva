@@ -74,7 +74,8 @@ def test_rls_blocks_inserting_rows_for_another_owner_or_session(db, api: Api, ot
 
 def test_application_role_cannot_alter_reference_or_schema(db):
     for statement in (
-        "UPDATE features SET status = 'approved'",
+        "UPDATE features SET preferred_name = 'x'",
+        "DELETE FROM features",
         "DELETE FROM rule_bundles",
         "INSERT INTO diseases(disease_id, preferred_name, status) VALUES ('x', 'x', 'approved')",
         "DROP TABLE sessions",
@@ -83,6 +84,12 @@ def test_application_role_cannot_alter_reference_or_schema(db):
     ):
         with pytest.raises(DBAPIError, match="permission denied|must be owner"), db.transaction("dev:x") as tx:
             tx.execute(text(statement))
+    # Since migration 0014 a reviewer decides a feature through the review path, so the role may set a feature's
+    # status, but only in a reviewer's transaction: in a user's transaction the statement changes no row.
+    with db.transaction("dev:x") as tx:
+        before = tx.execute(text("SELECT count(*) FROM features WHERE status = 'approved'")).scalar_one()
+        assert tx.execute(text("UPDATE features SET status = 'approved'")).rowcount == 0
+        assert tx.execute(text("SELECT count(*) FROM features WHERE status = 'approved'")).scalar_one() == before
 
 
 def test_concurrent_writers_on_one_version_exactly_one_wins(client, api: Api):

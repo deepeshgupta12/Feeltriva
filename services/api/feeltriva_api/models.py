@@ -376,3 +376,19 @@ class DiseaseHistory(Base):
     reviewer: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+
+
+class PublishedMapping(Base):
+    """A published snapshot of what was approved in a mapping working set (M2.5c2). Never edited or deleted:
+    the database refuses it. Only `is_current` changes, and at most one release is current."""
+
+    __tablename__ = "published_mappings"
+    __table_args__ = (UniqueConstraint("mapping_release_id", "number"),)
+    release_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    working_id: Mapped[str] = mapped_column("mapping_release_id", ForeignKey("mapping_releases.release_id"))
+    number: Mapped[int] = mapped_column(Integer)
+    content: Mapped[Any] = mapped_column(Json)
+    sha256: Mapped[str] = mapped_column(Text)
+    published_by: Mapped[str] = mapped_column(Text)
+    published_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)

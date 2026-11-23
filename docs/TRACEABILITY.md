@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5c1 (2026-11-23).
+Last updated after sub-step M2.5c2 (2026-11-23).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -77,7 +77,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Done as pending claims | Done for statements (no duplicates found). 8,742 single claims, each a span of its statement, stored `pending` in `statement_claims` (M2.6, M2.6a, M2.6b, M2.6c); nothing is written to evidence before review | M1.4, M2.6; M2.5 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
-| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping release, hashes, audit. No split manifest, no publishing | M1.2, M1.3; M4.3, M2.5 |
+| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping working set, hashes, audit. What is approved can be published as an immutable, numbered mapping release with the SHA-256 of its sources and the count of what is still undecided, with rollback (M2.5c2); nothing is approved, so none is published. No split manifest | M1.2, M1.3, M2.5c2; M4.3 |
 | Demog. | Sex/gender counts are row counts, never combined as priors; identity, case ID, clinical sex context and gender identity kept separate | Done | Stored as supplied with the original field name; counts equal the handoff | M1.7 |
 | Zones | Four storage zones: raw immutable objects, normalised relational data, reviewed serving knowledge, private session data | Partial | Raw objects (M1.12), relational data and session data exist. No reviewed serving knowledge yet | M1.12; M2.5; C |
 
@@ -217,7 +217,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | Layer | Required | Status | Missing part | Sub-step |
 |---|---|---|---|---|
 | Ingestion | Traversal/size, checksums, malformed rows, duplicate headings, Unicode, missing values, idempotent rerun, schema drift | Done | Every loader that reads columns now refuses a file whose columns changed, before writing anything (`tests/ingestion/test_schema_drift.py`); text outside ASCII is covered in the archive, list and narrative tests | M1.1 – M1.13 |
-| Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym and subtype suggestions are tested (M2.8). Missing: ambiguity, redirect and merge tests | M2.5, M2.8 |
+| Mapping | Synonyms vs subtypes, ambiguous mappings, stable IDs, redirects, conflict preservation, full union | Partial | Synonym and subtype suggestions are tested (M2.8); merges, splits and redirects are tested (M2.5c1), and a published mapping release resolves a merged label to the kept one (M2.5c2). Missing: ambiguity tests | M2.5, M2.8 |
 | ML | Split leakage, target leakage, train-only transforms, coverage, calibration isolation, OOD, partial observations, per-source and subgroup | Missing | All | M4 |
 | Rules | Approved fixtures, boundary ages, unknown inputs, contradictions, precedence, missing bundle | Partial | Clinician-approved fixtures | M3.1; M6.2 |
 | Conversation | Negation, temporality, experiencer, uncertainty, mixed complaints, repeats, unknowns, non-English, correction | Partial | Temporality, experiencer, non-English | M5.1, M5.5 |

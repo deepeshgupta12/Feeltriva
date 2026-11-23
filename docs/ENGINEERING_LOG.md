@@ -3783,3 +3783,106 @@ both jobs, run 45121017064). The code graph was re-indexed after each and report
 `edd3e87`. Migration `0013` is applied to the main database. The API was restarted for the new
 routes of M2.5c1; the web app was not, because nothing it loads changed. This paragraph was added
 in a following documents-only commit, after which the index was refreshed again.
+
+### M2.5c2 — Approving features and diseases; the mapping release
+
+Owner's go-ahead of 2026-11-23: "Please proceed with M2.5c2 and M2.5c3 together". The two were
+done one after the other, each with its own commit. This entry is M2.5c2.
+
+**What the handoff asks, checked before the work.** "Produce immutable mapping version, split
+manifest, source hashes and audit report. Publish only approved mappings/evidence to clinical
+serving" (`docs/01` §4, rule 10). "Versioned disease/feature mapping release with unresolved
+queue" (`docs/01`, stage 3). "Disease → source aliases, scoped by mapping release" and the export
+`reviewed_disease_catalog` (IDs, names, aliases, definitions) from an approved mapping release
+(`docs/04`). "Immutable mapping/knowledge releases" (`docs/05`). Codes of outside vocabularies
+are internal (E63). The split manifest belongs to the model data (M4.3) and is not part of this.
+
+**What was built.**
+
+- Migration `0014`: the API's role may set the status of a feature, only in a reviewer
+  transaction, and no other column. Table `published_mappings` (working set, number, content,
+  SHA-256, publisher, time, current), with a trigger that refuses every edit and deletion and an
+  index that allows one current release. The API's role may read, publish and switch, only in a
+  reviewer transaction.
+- `publishing.py` (new): what the mapping release and the knowledge release share: numbering,
+  fingerprint, "not twice", current, rollback, the decision record.
+- `published_mappings.py` (new): `feature` and `disease` as review targets; the guard for merged
+  labels; `list_features`, `list_diseases`; what a release holds; `preview`, `publish`,
+  `make_current`, `list_published`.
+- `main.py`: `GET /internal/v1/review/features`, `GET .../diseases`,
+  `GET .../mapping-releases`, `GET .../mapping-releases/preview`, `POST .../mapping-releases`,
+  `POST .../mapping-releases/current`. Reviewers only.
+- `models.py`: `PublishedMapping`.
+
+**What a mapping release holds** (decision E83). The approved features; the approved diseases
+with their synonyms and the redirects of merged labels; the approved mappings of one working set
+whose disease or feature is approved too; the sources of those mappings with their SHA-256; how
+much was still undecided. An approved mapping whose target is not approved is held back and
+counted. No code of an outside vocabulary. The only thing that refuses a release is that no
+feature and no disease is approved.
+
+**Real run.** Migration applied to the main database (head `0014`). The API was restarted for the
+new routes. As reviewer: the list of features answers with the real features and their status
+(968 pending); the preview of `mapping-lexical-0` says not publishable, "no feature and no disease
+is approved", undecided 968 features, 960 disease labels, 3,117 and 1,962 mappings; publishing is
+refused with `release_not_publishable` and writes nothing; a user gets 403. Nothing was decided
+and nothing was published: 0 rows in `published_mappings`. The 85 features the urgency rules name
+are all pending.
+
+**Impact analysis.** `create_app`: LOW (one caller, `app_factory`). `record_review`: LOW; it is
+not changed, the two new targets are entered in its table. `_page`: CRITICAL by count (six list
+routes use it); it is called, not changed. `Feature` and `Disease`: MEDIUM; read, not changed.
+`test_application_role_cannot_alter_reference_or_schema`: LOW. `detect_changes` before commit:
+"medium", 8 names in 3 files. Compared with the last commit by syntax tree: changed are
+`create_app` (six routes added) and the one test; `PublishedMapping` and `MappingPublish` are
+new; `app_factory`, `sid`, `barrier`, `codes`, `write` and
+`test_concurrent_writers_on_one_version_exactly_one_wins` are listed only because lines above
+them moved.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 65 files |
+| `uv run pytest -m "not archives"` (SQLite) | 237 passed, 60 skipped |
+| `uv run pytest` (SQLite, archives included) | 243 passed, 63 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 306 passed |
+| Migration `0014` on a scratch database: head, down to `0013`, head | table and policies present, absent, present |
+
+The five new tests prove, with invented rows: a user can neither list nor decide; a reviewer
+approves and rejects a feature and a disease and the list shows who decided; a merged label is
+not decided; a release holds the approved features and diseases and not the rejected or pending
+ones; the kept label carries its standard name with the merged label and the former name as
+synonyms, the same as the history route gives; a mapping of a merged label keeps its own label
+and says which label it resolves to; an approved mapping whose target is not approved is held
+back and counted; the notes that said "pending" are not in the release; the source is listed
+with its SHA-256; the same content is not published twice; on a database of its own, with
+nothing approved, publishing is refused and writes nothing; a second release leaves the first
+unchanged and a rollback makes the first current again, with every step recorded; on PostgreSQL
+a published release cannot be edited or deleted even by the schema owner, a transaction that is
+not a reviewer's can neither publish, switch nor decide a feature, and a reviewer's cannot
+change a feature's name.
+
+**An older test changed, deliberately.** The first run of the PostgreSQL suite gave 305 passed,
+1 failed: `test_application_role_cannot_alter_reference_or_schema` expected "permission denied"
+for `UPDATE features SET status = 'approved'` by the API's role. That was true until this
+migration. A reviewer's decision on a feature is written by the API's role, so the role now has
+that one permission, and row-level security lets it act only in a reviewer transaction. The test
+now states the new guarantee: changing a feature's name and deleting a feature are still refused
+with "permission denied", and the status update in a user's transaction changes no row. The same
+change was made for diseases in migration 0013 and for rules in 0011. This widens what the API's
+role can do in the database by one column, and it is the reason the role is trusted to say
+"reviewer" only for a verified reviewer.
+
+**Bugs.** None found in the code of this sub-step.
+
+**Limits, stated plainly.**
+
+- Nothing is approved, so no mapping release exists. Deciding 968 features and 960 disease labels
+  is the reviewer's work; there is no way yet to decide many at once.
+- The serving bundle does not read the mapping release yet (M2.5f). Clinical mode is off.
+- Features and diseases are not scoped to a working set: a release holds every approved feature
+  and disease, and the approved mappings of the one working set it is published from.
+- Approved vocabulary links are not part of a release (E83, E63).
+- One mapping release is current across all working sets. There is one working set.
+- A feature cannot be merged into another; only disease labels can (M2.5c1).
