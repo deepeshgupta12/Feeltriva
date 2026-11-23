@@ -3614,3 +3614,27 @@ the lines they covered were rewritten, which left four style findings; fixed bef
 is applied to the main database. The API was restarted for the new routes; the web app was not,
 because nothing it loads changed. This paragraph was added in a following documents-only commit,
 after which the index was refreshed again.
+
+### M2.5b1 — Release 1 of the urgency rules published
+
+Owner's instruction of 2026-11-23. Asked "Publish release 1? Run the command above, or tell me to
+publish it for you. Publishing serves nothing; it only makes these rules the current release",
+the owner answered "yes" (decision E80).
+
+**What was done.** One request to `POST /internal/v1/review/releases` as `dev-reviewer:owner`,
+with a note quoting the question and the answer and saying the assistant entered it on the
+owner's instruction. No code changed.
+
+**State afterwards.** `rule_releases` holds one row: `urgency-draft.r1`, number 1, current,
+published by `dev-reviewer:owner` at 2026-11-23 05:08:34 UTC, SHA-256
+`60998fe967cb05e59e381869ec37aa40c397d5e03d8c72f06e7d3ffc796c8358`, for the rule file
+`19147c0f...0193`: 20 rules, 0 questions, 19 sources, 85 features. One decision record
+(`release_published`). A second request to publish answers `release_already_published`.
+`/readyz`: clinical mode off, release `fixture-rules-0`, synthetic. Nothing is served.
+
+**Tests.** No code changed, so the suites of M2.5b stand (SQLite 227 passed, 58 skipped;
+PostgreSQL 294 passed). The release tests were run again after the publication: 3 passed, 1
+skipped on SQLite.
+
+**Limits.** The release cannot be removed. It is not served: clinical mode is off, and the bundle
+the service would load does not exist yet (M2.5f). No doctor has reviewed the rules it holds.
