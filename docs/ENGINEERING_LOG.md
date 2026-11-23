@@ -3522,3 +3522,89 @@ a difference (written in M2.10, when nothing could be decided). Corrected here.
 web app were not restarted: the service reads the rule file from disk at each approval, and
 nothing else it loads changed. No migration. This paragraph was added in a following
 documents-only commit, after which the index was refreshed again.
+
+### M2.5b — Publishing a rule release, rollback, and what clinical mode loads
+
+Owner's go-ahead of 2026-11-23: "proceed ahead with M2.5B".
+
+**What the handoff asks, checked before the work.** "Publish and roll back mapping, knowledge and
+rule/question releases", immutable once published (plan row, from `docs/05`); clinical
+suggestions "disabled unless an approved rule bundle, knowledge release, model scope, ownership
+checks and runtime health" are in place (`docs/03`). The rule release is one of three kinds; the
+other two are M2.5c.
+
+**What was built.**
+
+- Migration `0012`: table `rule_releases` (release, bundle, number, content, SHA-256, rule-file
+  fingerprint, publisher, time, current). A trigger refuses every UPDATE of a published release
+  except of `is_current`, and every DELETE. A partial unique index allows one current release.
+  The API's role may read, insert and change `is_current`, and the last two only in a reviewer
+  transaction.
+- `releases.py` (new): `preview`, `publish`, `make_current`, `list_releases`, `verify_published`.
+- `main.py`: `GET /internal/v1/review/releases`, `GET .../releases/preview`,
+  `POST .../releases` (publish), `POST .../releases/current` (rollback). Reviewers only.
+- `container.py`: in clinical mode `build_container` calls `verify_published`; the API and the
+  MCP server both start through it.
+- `models.py`: `RuleRelease`.
+
+**What a release holds.** The approved rules of the bundle in the order they are checked; its
+approved questions; the sources those rules name, with their quotes, page review dates and
+licences, taken from the rule file; the features the rules name, with their names; the bundle's
+version, the rule file's fingerprint, and who approved the bundle and when. Rejected rules are
+left out. The SHA-256 is taken over this content in a fixed form.
+
+**Real run.** Migration applied to the main database (head `0012`). The API was restarted for the
+new routes. As reviewer: the preview of `urgency-draft` says `publishable: true`, no problems,
+it would be release 1 with 20 rules, 0 questions, 19 sources and 85 features. No release was
+published: the list is empty. A user gets 403. `verify_published` on the main database refuses
+with "clinical mode requires a current published rule release; 0 releases exist and none is
+current". `/readyz` still reports clinical mode off and the synthetic release.
+
+**Not published, on purpose.** A release can never be removed again, and publishing is done
+under a reviewer's own name. The owner was asked to build M2.5b, not to publish. The owner can
+publish with one request, or tell the assistant to (decision E79, point 7).
+
+**A gap in the plan, found and reported.** A published rule release is not yet what the service
+loads. The bundle that clinical mode loads must also hold approved features (they belong to the
+mapping release, M2.5c) and four response texts that nobody has written or approved. No sub-step
+covered assembling that bundle or the texts. Added: sub-step M2.5f and open decision D-R1.
+
+**Impact analysis.** `build_container`: LOW (callers: the API's `create_app`, the MCP server and
+the test fixture). `create_app`: LOW. `detect_changes` before commit: "medium", eight names:
+`build_container` (the check), `create_app` (four routes), and `_error`, `app_factory` and four
+variables of `main.py`, which moved because two request models were added above them; their text
+is unchanged.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 61 files |
+| `uv run pytest -m "not archives"` (SQLite) | 227 passed, 58 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 294 passed |
+| Migration `0012` on a scratch database: head, down to `0011`, head | table and trigger present, absent, present |
+
+The four new tests prove, with an invented bundle: a user can neither list nor publish; an
+undecided bundle previews with each obstacle named and is refused; an approved bundle publishes
+as release 1 with only its approved rules, their sources and features, the publisher's name and
+the rule file's fingerprint; the same content is refused a second time; after the approval is
+withdrawn, a rule rejected and the bundle approved again, release 2 becomes current and release
+1 keeps its three rules; a rollback makes release 1 current again and is recorded; clinical mode
+accepts exactly the published rules and refuses a changed text, a missing rule and the sample
+release; on PostgreSQL the schema owner cannot edit a release's content, fingerprint or
+publisher, nor delete it, and a transaction that is not a reviewer's can neither publish nor
+switch the current release.
+
+**Bugs.** None in committed code. While tidying the test file I removed lint exemptions before
+the lines they covered were rewritten, which left four style findings; fixed before commit.
+
+**Limits, stated plainly.**
+
+- Nothing is published. The approved rules are one request away from being release 1.
+- Clinical mode cannot start, and will not be able to after a release is published either,
+  until the serving bundle exists (M2.5f): approved features and approved response texts.
+- The check at start-up compares rules. It does not yet compare questions, features or
+  evidence with a release; those belong to the other kinds of release.
+- A rollback changes which release is current. A service already running keeps the bundle it
+  loaded until it is restarted.
+- One release is current for the whole system, not one per bundle: there is one rule set.

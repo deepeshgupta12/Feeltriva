@@ -345,3 +345,20 @@ class ClinicalRule(Base):
     evidence_ids: Mapped[Any] = mapped_column(Json)
     priority: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
+
+
+class RuleRelease(Base):
+    """A published snapshot of the approved rules of a bundle (M2.5b). Never edited or deleted: the database
+    refuses it. Only `is_current` changes, and at most one release is current."""
+
+    __tablename__ = "rule_releases"
+    __table_args__ = (UniqueConstraint("bundle_id", "number"),)
+    release_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    bundle_id: Mapped[str] = mapped_column(ForeignKey("rule_bundles.bundle_id"))
+    number: Mapped[int] = mapped_column(Integer)
+    content: Mapped[Any] = mapped_column(Json)
+    sha256: Mapped[str] = mapped_column(Text)
+    rule_file_fingerprint: Mapped[str | None] = mapped_column(Text)
+    published_by: Mapped[str] = mapped_column(Text)
+    published_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from . import releases
 from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
@@ -30,6 +31,18 @@ class ReviewDecision(BaseModel):
     target_id: str
     note: str = Field(min_length=1, max_length=4000)
     status: str | None = None
+
+
+class ReleasePublish(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    bundle_id: str
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class ReleaseSwitch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    release_id: str
+    note: str = Field(min_length=1, max_length=4000)
 
 
 def _error(request: Request, status: int, code: str, message: str, retryable: bool) -> JSONResponse:
@@ -256,6 +269,22 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         return JSONResponse(
             list_rules(container.db, who, bundle_id=bundle_id, status=status, limit=limit, offset=offset)
         )
+
+    @app.get("/internal/v1/review/releases")
+    def review_releases(who: Who) -> JSONResponse:
+        return JSONResponse(releases.list_releases(container.db, who))
+
+    @app.get("/internal/v1/review/releases/preview")
+    def review_release_preview(who: Who, bundle_id: str) -> JSONResponse:
+        return JSONResponse(releases.preview(container.db, who, bundle_id))
+
+    @app.post("/internal/v1/review/releases")
+    def review_release_publish(body: ReleasePublish, who: Who) -> JSONResponse:
+        return JSONResponse(releases.publish(container.db, who, bundle_id=body.bundle_id, note=body.note))
+
+    @app.post("/internal/v1/review/releases/current")
+    def review_release_current(body: ReleaseSwitch, who: Who) -> JSONResponse:
+        return JSONResponse(releases.make_current(container.db, who, release_id=body.release_id, note=body.note))
 
     @app.post("/internal/v1/review/decisions")
     def review_decision(body: ReviewDecision, who: Who) -> JSONResponse:
