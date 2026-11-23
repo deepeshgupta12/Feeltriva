@@ -32,6 +32,7 @@ command output, not estimated.
 | BUG-021 | M2.11 / M2.14 | The self-check of `link-vocabularies` reported any link that was not `pending` as a difference, so the command would fail as soon as a reviewer decided one link | Fixed |
 | BUG-022 | M2.16 / M2.17 | Where the name search already held the ICD-11 code that MONDO leads to, the note on that row did not keep the foundation entity MONDO names | Fixed |
 | BUG-023 | M2.6 | The sentence rule read the letters that end a token of letters and digits ("794f", "2a") as a single-letter word or an abbreviation, so a sentence ending in such a token was not ended. Found by CI on the M2.6 commit: the test sentence ends in a random tag | Fixed |
+| BUG-024 | M2.5c1 | Two merge or split events written within one second came back in the wrong order on SQLite, because the history was ordered by a time the database filled in | Fixed before commit |
 
 ## Entries
 
@@ -3697,3 +3698,80 @@ review document is exactly what the file generates.
 - Nothing stores an approved text yet, and no route records the approval: that is M2.5f, with
   the serving bundle.
 - English only.
+
+### M2.5c1 — Disease redirects with merge and split history
+
+Owner's go-ahead of 2026-11-23: "proceed ahead with M2.5c as well". M2.5c held three pieces of
+work and is done in three parts (decision E82): M2.5c1 redirects with history; M2.5c2 approving
+features and diseases, and the mapping release; M2.5c3 the knowledge release. Only M2.5c1 was
+done here.
+
+**What the handoff asks, checked before the work.** "Add disease redirects, merge/split history,
+reviewer identity and immutable mapping/knowledge releases" (`docs/05`). "Preserve subtype,
+acuity and severity distinctions. Suggested synonyms go to review" and original source rows and
+names are preserved (`docs/01` §4). Owner's rules for merges (E62): the name kept is the most
+accurate standard name, and every merged label is saved as a synonym of it.
+
+**What was built.**
+
+- Migration `0013`: table `disease_history` (merge or split, the two labels, detail, reviewer,
+  reason, time), which a trigger makes append-only. The API's role may change a disease's
+  `redirected_to`, `preferred_name` and `status`, and add a history row, only in a reviewer
+  transaction. Reading is as before.
+- `disease_merges.py` (new): `merge`, `split`, `state`.
+- `main.py`: `POST /internal/v1/review/disease-merges`, `POST .../disease-splits`,
+  `GET .../diseases/{id}/history`. Reviewers only.
+- `models.py`: `DiseaseHistory`.
+
+**How a merge works.** The merged label stays in the database, points at the kept label and is
+marked retired. Its name is listed as a synonym of the kept label. The reviewer may give the kept
+label its standard name; its former name then stays a synonym. Labels merged earlier into the
+merged label follow it to the kept one, so no chain forms. A label is not merged twice, and
+nothing is merged into a label that is itself merged. A split takes a merged label out again and
+gives it back the status it had.
+
+**Real run.** Migration applied to the main database (head `0013`). The API was restarted for the
+new routes. As reviewer: the history of the real label "common cold" answers with the label
+itself, no synonyms and no events; a user gets 403; a merge of a label into itself is refused.
+Nothing was merged: 0 history rows, 0 redirected labels, the 466 suggestions still pending.
+
+**Impact analysis.** `create_app`: LOW. `detect_changes` before commit: "medium", 14 names in
+`main.py`: `create_app` (three routes added) and the names below the two new request models,
+whose text is unchanged. `models.py` gained a class at its end.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 63 files |
+| `uv run pytest -m "not archives"` (SQLite) | 233 passed, 59 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 301 passed |
+| Migration `0013` on a scratch database: head, down to `0012`, head | table and policies present, absent, present |
+
+The four new tests prove, with invented labels: a user can neither merge nor read the history; a
+merge keeps the merged label with its own name, pointing at the kept one, and records who and
+why; its name is listed as a synonym; a label is not merged twice nor into a merged label; the
+kept label can take a standard name and its former name stays a synonym; a label merged earlier
+follows; a split restores the label and its status and the history keeps both events; on
+PostgreSQL the history cannot be changed or deleted even by the schema owner, a transaction that
+is not a reviewer's changes no disease, and a reviewer's cannot rewrite a definition.
+
+**Bugs.**
+
+- **BUG-024 — two events in the same second came back in the wrong order.** Found by the tests
+  on SQLite: the history was ordered by a time the database filled in, which SQLite keeps to the
+  second. The time is now set by the code to the microsecond. Fixed before commit; the tests were
+  then run three times on SQLite and once on PostgreSQL.
+
+**Limits, stated plainly.**
+
+- No label has been merged. Which labels are the same disease is a reviewer's decision, one
+  merge at a time; the 466 suggestions only propose.
+- A merge does not move mappings, evidence or links from the merged label to the kept one. They
+  stay on the label they were loaded with and are reached through the redirect. Views that
+  gather them under the kept label are M2.9.
+- Approving a suggestion does not merge, and a merge does not mark a suggestion: the two are not
+  yet connected.
+- Features cannot be merged; only disease labels.
+- After a split, labels that had followed the split label into the kept one stay with the kept
+  label.

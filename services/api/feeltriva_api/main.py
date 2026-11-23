@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import releases
+from . import disease_merges, releases
 from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
@@ -31,6 +31,20 @@ class ReviewDecision(BaseModel):
     target_id: str
     note: str = Field(min_length=1, max_length=4000)
     status: str | None = None
+
+
+class DiseaseMerge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_disease_id: str
+    target_disease_id: str
+    note: str = Field(min_length=1, max_length=4000)
+    kept_name: str | None = None
+
+
+class DiseaseSplit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    disease_id: str
+    note: str = Field(min_length=1, max_length=4000)
 
 
 class ReleasePublish(BaseModel):
@@ -269,6 +283,27 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         return JSONResponse(
             list_rules(container.db, who, bundle_id=bundle_id, status=status, limit=limit, offset=offset)
         )
+
+    @app.get("/internal/v1/review/diseases/{disease_id}/history")
+    def review_disease_history(disease_id: str, who: Who) -> JSONResponse:
+        return JSONResponse(disease_merges.state(container.db, who, disease_id))
+
+    @app.post("/internal/v1/review/disease-merges")
+    def review_disease_merge(body: DiseaseMerge, who: Who) -> JSONResponse:
+        return JSONResponse(
+            disease_merges.merge(
+                container.db,
+                who,
+                source_id=body.source_disease_id,
+                target_id=body.target_disease_id,
+                note=body.note,
+                kept_name=body.kept_name,
+            )
+        )
+
+    @app.post("/internal/v1/review/disease-splits")
+    def review_disease_split(body: DiseaseSplit, who: Who) -> JSONResponse:
+        return JSONResponse(disease_merges.split(container.db, who, disease_id=body.disease_id, note=body.note))
 
     @app.get("/internal/v1/review/releases")
     def review_releases(who: Who) -> JSONResponse:

@@ -362,3 +362,17 @@ class RuleRelease(Base):
     published_by: Mapped[str] = mapped_column(Text)
     published_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class DiseaseHistory(Base):
+    """One merge or split of disease labels, with who did it and why (M2.5c1). Never changed or deleted."""
+
+    __tablename__ = "disease_history"
+    event_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    action: Mapped[str] = mapped_column(Text)
+    disease_id: Mapped[str] = mapped_column(ForeignKey("diseases.disease_id"))
+    other_id: Mapped[str] = mapped_column(ForeignKey("diseases.disease_id"))
+    detail: Mapped[Any] = mapped_column(Json, default=dict)
+    reviewer: Mapped[str] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
