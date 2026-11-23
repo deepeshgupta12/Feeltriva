@@ -3638,3 +3638,62 @@ skipped on SQLite.
 
 **Limits.** The release cannot be removed. It is not served: clinical mode is off, and the bundle
 the service would load does not exist yet (M2.5f). No doctor has reviewed the rules it holds.
+
+### M2.5f1 — The four response texts drafted
+
+Owner's decision of 2026-11-23 on D-R1: "yes" to "I can draft them for your approval, as I did the
+urgency rules ... you approve every word" (decision E81).
+
+**What the handoff asks, checked before the work.** Results show "urgency/next step first, then
+up to three provisional explanations"; no "uncalibrated probability percentages" (`docs/01`,
+FR08); no autonomous diagnosis or medication advice (`docs/01`, excluded from v1); explanation
+"cannot change approved urgency"; the frontend shows "backend-provided action" text only
+(`docs/06`). The bundle format calls these "reviewer-authored response texts. The service never
+composes care guidance itself."
+
+**Where each text is shown** (read in `service_results.py` before writing): `confirm_details`
+when something understood from the person's words is not yet confirmed; `provisional_next_step`
+above possible explanations; `insufficient_information` when no explanation can be given;
+`system_unavailable` when the assessment could not be completed.
+
+**What was built.**
+
+- `packages/clinical/feeltriva_clinical/drafts/response_texts_draft.json`:
+  `response-texts-draft-1`, the four texts, each with when it is shown and why it is worded so,
+  and four open points.
+- `feeltriva_clinical/response_texts.py` (pure): the draft's form, `check_texts`,
+  `load_response_texts`, `as_templates`, `review_document`. A draft can only be `pending`.
+- `docs/review/response_texts_draft.md`, generated from the file; a test keeps them the same.
+
+**What the texts do and do not say.** None names an illness, a medicine or a percentage. Three of
+them end with "In an emergency call 112 or go to the nearest hospital emergency department."; 112
+is the only number, and the check accepts a number only while the owner has confirmed it in the
+urgency rule file. The text shown when nothing is found says "This does not mean that nothing is
+wrong." The text shown on a failure says "Nothing has been concluded about your symptoms."
+
+**Impact analysis.** New code only. It reads `Templates` and `load_draft` (both LOW) and changes
+no existing symbol.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 62 files |
+| `uv run pytest -m "not archives"` (SQLite) | 230 passed, 58 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 297 passed |
+
+The three new tests prove: the draft holds exactly the four texts of a release, pending, in the
+form a bundle holds them; it cannot be given the status approved; a missing text, a number the
+owner has not confirmed, a diagnosis, a percentage and a missing reason are each refused; the
+review document is exactly what the file generates.
+
+**Bugs.** None.
+
+**Limits, stated plainly.**
+
+- Not approved. The owner has to read and decide each text.
+- No doctor has read them. They give no medical advice beyond "see a doctor" and the emergency
+  number.
+- Nothing stores an approved text yet, and no route records the approval: that is M2.5f, with
+  the serving bundle.
+- English only.

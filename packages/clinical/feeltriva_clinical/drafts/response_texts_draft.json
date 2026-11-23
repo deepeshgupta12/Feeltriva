@@ -1,0 +1,40 @@
+{
+  "draft_id": "response-texts-draft",
+  "version": "response-texts-draft-1",
+  "status": "pending",
+  "label": "Draft written by the engineering assistant on the owner's instruction (decision E81), not by a clinician. Not approved. These texts are shown to nobody until the owner approves them and a release is served.",
+  "jurisdiction": "India",
+  "written": "2026-11-23",
+  "texts": [
+    {
+      "key": "confirm_details",
+      "shown_when": "The service has understood something from the person's own words and it has not yet been confirmed. The assessment goes no further until the person has checked it.",
+      "text": "Before we continue, please check what we understood from your description. Confirm each detail that is right and correct anything that is wrong.",
+      "why": "The handoff requires that what is understood from free text is confirmed by the person before it is used. The text asks for exactly that and says nothing about health."
+    },
+    {
+      "key": "provisional_next_step",
+      "shown_when": "The assessment has found one or more possible explanations and shows them. This text stands above them as the next step.",
+      "text": "These are possible explanations for what you described. They are not a diagnosis. Please show this summary to a doctor, who can examine you and decide what it is. If your symptoms get worse or new symptoms appear, do not wait to see a doctor. In an emergency call 112 or go to the nearest hospital emergency department.",
+      "why": "The handoff allows provisional possible explanations only, never a diagnosis, and wants the next step shown first. The text names no illness, medicine or number, sends the person to a doctor, and says what to do if things get worse."
+    },
+    {
+      "key": "insufficient_information",
+      "shown_when": "The assessment has finished and no possible explanation can be given from reviewed information.",
+      "text": "We do not have enough reviewed information to suggest a possible explanation for what you described. This does not mean that nothing is wrong. If you are worried, or your symptoms continue or get worse, please see a doctor. In an emergency call 112 or go to the nearest hospital emergency department. You can also add more details and try again.",
+      "why": "Finding nothing must not read as reassurance: the text says so in its second sentence. It gives a way forward (a doctor, or more details) and the emergency route."
+    },
+    {
+      "key": "system_unavailable",
+      "shown_when": "A technical problem keeps the assessment from being completed. The person sees this instead of a result.",
+      "text": "We could not complete this assessment because of a technical problem. Nothing has been concluded about your symptoms. Please try again in a little while. If you need help now, please see a doctor. In an emergency call 112 or go to the nearest hospital emergency department.",
+      "why": "A failure must not look like a result. The text says that nothing was concluded, and does not leave a person who needs help with only an error."
+    }
+  ],
+  "open_points": [
+    "The owner's approval of each text. Nothing here is used before it.",
+    "No doctor has read the texts. They give no medical advice beyond seeing a doctor and the emergency number, but a review is still advised with the rules.",
+    "The texts are in English only, as the product's first scope is.",
+    "Where the approved texts are stored and how the approval is recorded is built with the serving bundle (M2.5f)."
+  ]
+}
