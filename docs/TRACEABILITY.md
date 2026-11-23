@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5c2 (2026-11-23).
+Last updated after sub-step M2.5c3 (2026-11-23).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -123,10 +123,10 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | R4 | Source record → imported case | Done | M1.7 |
 | R5 | Case ↔ disease | Done | M1.7 |
 | R6 | Case ↔ feature | Done (16,013,976 rows: 14,807,481 from matrix files, 1,206,495 from lists) | M1.8, M1.9 |
-| R7 | Disease ↔ feature evidence | Done as pending proposals (22,947 rows: 575 narrative mentions, 888 questions the DDXPlus release lists per condition as symptoms or antecedents (M2.13b), 21,484 per-source co-occurrence counts with denominators; none approved) | M1.11; M2.5, M2.9 |
+| R7 | Disease ↔ feature evidence | Done as pending proposals (22,947 rows: 575 narrative mentions, 888 questions the DDXPlus release lists per condition as symptoms or antecedents (M2.13b), 21,484 per-source co-occurrence counts with denominators; none approved). A reviewer can decide an evidence row, and approved rows enter a knowledge release (M2.5c3) | M1.11, M2.5c3; M2.5e, M2.9 |
 | R8 | Disease → narrative statements | Done | M1.4, M1.5 |
 | R9 | Statement ↔ source record | Done | M1.4, M1.5 |
-| R10 | Knowledge release → evidence chunks | Done (pending release `knowledge-import-0` with 3,651 chunks; no approved release exists) | M1.10; M2.5 |
+| R10 | Knowledge release → evidence chunks | Done (pending knowledge set `knowledge-import-0` with 3,651 chunks). Approved statements and evidence can be published as an immutable knowledge release (M2.5c3); none is published. The chunks have no review status and are in no release | M1.10, M2.5c3; M2.5e |
 | R11 | Session → observations, answers, assessments | Done (moving to Cassandra) | M3.3; C |
 | R12 | Assessment → model, rules, knowledge releases | Partial (IDs recorded; no real releases) | M3.3; M2.5, L9 |
 
@@ -187,7 +187,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
 | E0 | Supplied baseline preserved as a reproducible benchmark and rejected for serving | Partial | Results stored and checked against the figures; not re-run here; not wired into serving | M4.1 |
-| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Archive 15: origin, licence (CC BY 4.0) and nature (simulated patients) established and recorded (E55). The other archives: owner's statement only (E30), no written provenance. Feature meanings proposed, pending review. Label origin unknown for archives 11 – 14 and 16 (D-O1); for archive 15 the label is the simulator's condition | M2.7, M2.12, M4.2 |
+| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Archive 15: origin, licence (CC BY 4.0) and nature (simulated patients) established and recorded (E55). The other archives: owner's statement only (E30), no written provenance. A reviewer's decision on the rights of each source can be recorded (M2.5c3); none is decided (D-S1). Feature meanings proposed, pending review. Label origin unknown for archives 11 – 14 and 16 (D-O1); for archive 15 the label is the simulator's condition | M2.7, M2.12, M4.2 |
 | E2 | Review mappings; exact and near-duplicate clusters; group by identity where available | Partial | Exact and profile clusters done | M1.7; M2.5, M4.3 |
 | E3 | Archive 15 original test kept untouched; overlap audited; contaminated result reported separately | Partial | Overlap audited and flagged (27,910 shared profiles) | M1.7; M4.3 |
 | E4 | Train, validation, separate calibration and untouched test; transforms fitted on training only; clusters kept together | Missing | | M4.3, M4.4 |
@@ -259,7 +259,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
 | M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Done | `uv run python -m feeltriva_ingestion completeness` checks four of the five criteria against the files and the audit (235 checks, 0 mismatches). Idempotent reruns cannot be checked by a read-only command; each loader's tests rerun it and expect no change | M1.1 – M1.13 |
-| M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Releases and rollback; review screens; atomic claims | M2.4 – M2.9 |
+| M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Rule, mapping and knowledge releases can be published and rolled back (M2.5b, M2.5c2, M2.5c3). Missing: serving from the current releases; review screens; claims after review | M2.4 – M2.9 |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |
 | M5 | Missing evidence abstains; explanation cannot change urgency or add a candidate; no private text in telemetry | Missing | All (abstention on missing evidence is done) | M5 |

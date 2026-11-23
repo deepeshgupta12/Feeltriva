@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     LargeBinary,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -27,7 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, synonym
 
 Json = JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 BigInt = BigInteger().with_variant(Integer(), "sqlite")
@@ -63,6 +64,8 @@ class Source(Base):
     provenance_status: Mapped[str] = mapped_column(ReviewState, default="pending")
     sha256: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    # The decision endpoint reads and sets `status` on every review target; for a source that is this column.
+    status: Mapped[str] = synonym("provenance_status")
     __table_args__ = (UniqueConstraint("source_name", "version"),)
 
 
@@ -386,6 +389,43 @@ class PublishedMapping(Base):
     __table_args__ = (UniqueConstraint("mapping_release_id", "number"),)
     release_id: Mapped[str] = mapped_column(Text, primary_key=True)
     working_id: Mapped[str] = mapped_column("mapping_release_id", ForeignKey("mapping_releases.release_id"))
+    number: Mapped[int] = mapped_column(Integer)
+    content: Mapped[Any] = mapped_column(Json)
+    sha256: Mapped[str] = mapped_column(Text)
+    published_by: Mapped[str] = mapped_column(Text)
+    published_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class DiseaseFeatureEvidence(Base):
+    """A proposed link between a disease and a feature, with what it rests on: a statement or a source record.
+
+    Written by the ingestion pipeline (M1.11, M2.13b). The API reads these rows and records a reviewer's
+    decision on them (M2.5c3), and only inside a reviewer transaction."""
+
+    __tablename__ = "disease_feature_evidence"
+    evidence_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    disease_id: Mapped[str] = mapped_column(ForeignKey("diseases.disease_id"))
+    feature_id: Mapped[str] = mapped_column(ForeignKey("features.feature_id"))
+    statement_id: Mapped[str | None] = mapped_column(ForeignKey("statements.statement_id"))
+    record_id: Mapped[str | None] = mapped_column(ForeignKey("source_records.record_id"))
+    relationship: Mapped[str] = mapped_column(Text)
+    context: Mapped[Any] = mapped_column(Json, default=dict)
+    frequency: Mapped[Any | None] = mapped_column(Numeric)
+    frequency_denominator: Mapped[int | None] = mapped_column(BigInt)
+    evidence_type: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+
+
+class PublishedKnowledge(Base):
+    """A published snapshot of the approved statements and evidence, pinned to a published mapping release
+    (M2.5c3). Never edited or deleted: the database refuses it. Only `is_current` changes."""
+
+    __tablename__ = "published_knowledge"
+    __table_args__ = (UniqueConstraint("knowledge_release_id", "number"),)
+    release_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    working_id: Mapped[str] = mapped_column("knowledge_release_id", ForeignKey("knowledge_releases.release_id"))
+    mapping_release: Mapped[str] = mapped_column(ForeignKey("published_mappings.release_id"))
     number: Mapped[int] = mapped_column(Integer)
     content: Mapped[Any] = mapped_column(Json)
     sha256: Mapped[str] = mapped_column(Text)

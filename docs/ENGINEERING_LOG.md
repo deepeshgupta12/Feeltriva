@@ -3886,3 +3886,119 @@ role can do in the database by one column, and it is the reason the role is trus
 - Approved vocabulary links are not part of a release (E83, E63).
 - One mapping release is current across all working sets. There is one working set.
 - A feature cannot be merged into another; only disease labels can (M2.5c1).
+
+### M2.5c3 — The knowledge release
+
+Second of the two sub-steps the owner named on 2026-11-23 ("Please proceed with M2.5c2 and
+M2.5c3 together"). Done after M2.5c2 was committed, with its own commit.
+
+**What the handoff asks, checked before the work.** "Immutable mapping/knowledge releases"
+(`docs/05`). Stage 4: "Verify source licences; review atomic statements" leading to an "approved
+serving corpus" (`docs/01`). "Publish only approved mappings/evidence to clinical serving"
+(`docs/01` §4). The exports `reviewed_disease_feature_edges` ("approved evidence and source use
+rights") and `retrieval_corpus` ("approved knowledge release and current applicability"), and
+"Knowledge release → evidence chunks" (`docs/04`). Every displayed claim needs a source.
+
+**What was found before building.**
+
+- Evidence rows could not be decided at all: `disease_feature_evidence` was not a review target
+  and the API's role could not change it. "Approved evidence" could not exist.
+- No source's rights have been decided: all 14 sources are `pending`, 13 have no licence
+  recorded, `permitted_uses` is empty for all. No sub-step covered "verify source licences".
+- The retrieval chunks have no review status, so none can be approved.
+
+**What was built.**
+
+- Migration `0015`: the API's role may set the status of an evidence row and the provenance
+  status of a source, only in a reviewer transaction, and no other column. Table
+  `published_knowledge` (knowledge set, pinned mapping release, number, content, SHA-256,
+  publisher, time, current), immutable by trigger, one current.
+- `published_knowledge.py` (new): `evidence` and `source` as review targets; `list_sources`,
+  `list_evidence`; what a release holds; `preview`, `publish`, `make_current`, `list_published`.
+  It uses `publishing.py` of M2.5c2 unchanged.
+- `main.py`: `GET /internal/v1/review/sources`, `GET .../evidence`,
+  `GET .../knowledge-releases`, `GET .../knowledge-releases/preview`,
+  `POST .../knowledge-releases`, `POST .../knowledge-releases/current`. Reviewers only.
+- `models.py`: `DiseaseFeatureEvidence`, `PublishedKnowledge`; `Source.status`, a second name for
+  `provenance_status`, because the decision endpoint reads and sets `status` on every target.
+
+**What a knowledge release holds, holds back and refuses** (decision E84). It holds the approved
+statements that have not expired with their source records, the approved evidence rows, and the
+sources with licence and SHA-256, pinned to the current mapping release. Held back and counted:
+content whose source is not approved; whose disease or feature is not in the pinned mapping
+release; a statement without a source; an evidence row resting on a statement that is not in the
+release. Refused: no current mapping release; the current one is of another working set; nothing
+would be in it.
+
+**Real run.** Migration applied to the main database (head `0015`). The API was restarted for the
+new routes. As reviewer: 14 sources listed, all pending, with the licence recorded for each (one
+has one: CC BY 4.0); the evidence list answers with real rows (888 of the type the DDXPlus
+release lists); the preview of `knowledge-import-0` says not publishable, "no mapping release is
+current" and "no statement and no evidence is approved", undecided 2,952 statements, 22,947
+evidence rows, 14 sources; publishing is refused with `release_not_publishable` and writes
+nothing; a user gets 403. Nothing was decided and nothing published: 0 rows in
+`published_knowledge` and `published_mappings`; rule release `urgency-draft.r1` is still current.
+
+**Impact analysis.** `create_app`: LOW. `Source`: MEDIUM by count (11 modules import the models
+module); the change adds one attribute and alters none, and the ingestion writes sources by
+column name, which the test suite on PostgreSQL confirms. `publishing.publish`: LOW; called, not
+changed. `detect_changes` before commit: "medium", 7 names in 2 files. Compared with the last
+commit by syntax tree: changed are `create_app` (six routes added) and `Source` (the second
+name); `DiseaseFeatureEvidence`, `PublishedKnowledge` and `KnowledgePublish` are new;
+`MappingPublish`, `app_factory`, `Json` and `SourceRecord` are listed only because lines above
+them moved.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 66 files |
+| `uv run pytest -m "not archives"` (SQLite) | 240 passed, 61 skipped |
+| `uv run pytest` (SQLite, archives included) | 246 passed, 64 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 310 passed, twice in a row |
+| Migration `0015` on a scratch database: head, down to `0014`, head | table and policies present, absent, present |
+
+The four new tests prove, with invented rows: a user can neither list, decide nor publish; a
+reviewer approves a source and evidence rows and the lists show it; of seven statements and six
+evidence rows, one for each case, exactly two of each are published and each of the seven ways
+of being held back is counted once; a statement of a merged label keeps its own label and says
+which label it stands under; a statement keeps its source record; the release records the SHA-256
+of its mapping release; the same content is not published twice; without a current mapping
+release, and with a mapping release of another working set, publishing is refused; a second
+release leaves the first unchanged and a rollback makes the first current again, with every step
+recorded; on PostgreSQL a published release cannot be edited or deleted even by the schema
+owner, a transaction that is not a reviewer's can neither publish, switch, nor decide a source or
+an evidence row, and a reviewer's cannot change a licence or what an evidence row says.
+
+**Found while building.**
+
+- **The `load-evidence` self-check refuses approved evidence (rest of BUG-021).** The first full
+  run on PostgreSQL gave 308 passed, 2 failed: two older tests of `load-evidence` reported
+  "sample: 30 rows not pending". The rows were the invented evidence rows my new tests had
+  approved and left in the shared test database. The self-check was written when nothing could
+  be approved and counts every evidence row that is not pending as a difference. That is the
+  part of BUG-021 already assigned to M2.5d. Done here: the new tests remove their invented
+  evidence rows, and the rows left by the earlier runs were deleted from the test database. Not
+  done here: the self-check itself. **Until M2.5d, `load-evidence` will report a difference as
+  soon as a real evidence row is approved**, as `completeness` will for an approved disease and
+  `derive-meanings` for an approved feature mapping; the M2.5d row now names all three.
+- A formatter run over whole directories also re-laid two old migrations (0001, 0003). They
+  were restored from the last commit before anything else was done; neither is in this commit.
+
+**Bugs.** None new in the code of this sub-step.
+
+**Limits, stated plainly.**
+
+- Nothing is approved and no mapping release exists, so no knowledge release exists.
+- No source's rights are decided (D-S1). Until a reviewer approves a source, every statement and
+  evidence row of it is held back from every release. That decision is the owner's; nothing in
+  the code makes it.
+- Retrieval chunks are in no release: they have no review status (now in M2.5e).
+- Claims are not in a release: what an approved claim becomes is M2.5e.
+- Statements and evidence are not scoped to a knowledge set: a release holds every approved
+  statement and evidence row that passes the checks.
+- Nothing serves from a release yet. `get_condition_information` still reads the working tables
+  (approved rows only) until the serving views (M2.9); the serving bundle is M2.5f.
+- There is no way yet to decide many rows at once: 22,947 evidence rows are decided one by one.
+- A rollback of a knowledge release does not move the mapping release; each knowledge release
+  says whether the mapping release it is pinned to is the current one.

@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import disease_merges, published_mappings, releases
+from . import disease_merges, published_knowledge, published_mappings, releases
 from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
@@ -376,6 +376,55 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             published_mappings.make_current(container.db, who, release_id=body.release_id, note=body.note)
         )
 
+    @app.get("/internal/v1/review/sources")
+    def review_sources(who: Who) -> JSONResponse:
+        return JSONResponse(published_knowledge.list_sources(container.db, who))
+
+    @app.get("/internal/v1/review/evidence")
+    def review_evidence(
+        who: Who,
+        status: str | None = None,
+        evidence_type: str | None = None,
+        disease_id: str | None = None,
+        feature_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            published_knowledge.list_evidence(
+                container.db,
+                who,
+                status=status,
+                evidence_type=evidence_type,
+                disease_id=disease_id,
+                feature_id=feature_id,
+                limit=limit,
+                offset=offset,
+            )
+        )
+
+    @app.get("/internal/v1/review/knowledge-releases")
+    def review_knowledge_releases(who: Who) -> JSONResponse:
+        return JSONResponse(published_knowledge.list_published(container.db, who))
+
+    @app.get("/internal/v1/review/knowledge-releases/preview")
+    def review_knowledge_release_preview(who: Who, knowledge_release_id: str) -> JSONResponse:
+        return JSONResponse(published_knowledge.preview(container.db, who, knowledge_release_id))
+
+    @app.post("/internal/v1/review/knowledge-releases")
+    def review_knowledge_release_publish(body: KnowledgePublish, who: Who) -> JSONResponse:
+        return JSONResponse(
+            published_knowledge.publish(
+                container.db, who, knowledge_release_id=body.knowledge_release_id, note=body.note
+            )
+        )
+
+    @app.post("/internal/v1/review/knowledge-releases/current")
+    def review_knowledge_release_current(body: ReleaseSwitch, who: Who) -> JSONResponse:
+        return JSONResponse(
+            published_knowledge.make_current(container.db, who, release_id=body.release_id, note=body.note)
+        )
+
     return app
 
 
@@ -390,4 +439,10 @@ def app_factory() -> FastAPI:
 class MappingPublish(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mapping_release_id: str
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class KnowledgePublish(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    knowledge_release_id: str
     note: str = Field(min_length=1, max_length=4000)
