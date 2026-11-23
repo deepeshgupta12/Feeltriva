@@ -3775,3 +3775,11 @@ is not a reviewer's changes no disease, and a reviewer's cannot rewrite a defini
 - Features cannot be merged; only disease labels.
 - After a split, labels that had followed the split label into the kept one stay with the kept
   label.
+
+**Committed and indexed (M2.5b1, M2.5f1, M2.5c1).** The owner named all three in one message, so
+they were done one after the other, each with its own commit: `b84ab09` (M2.5b1, documents only),
+`9512eb8` (M2.5f1; CI passed on both jobs, run 45117002469) and `edd3e87` (M2.5c1; CI passed on
+both jobs, run 45121017064). The code graph was re-indexed after each and reports up-to-date at
+`edd3e87`. Migration `0013` is applied to the main database. The API was restarted for the new
+routes of M2.5c1; the web app was not, because nothing it loads changed. This paragraph was added
+in a following documents-only commit, after which the index was refreshed again.
