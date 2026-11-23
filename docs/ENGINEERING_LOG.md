@@ -4002,3 +4002,11 @@ an evidence row, and a reviewer's cannot change a licence or what an evidence ro
 - There is no way yet to decide many rows at once: 22,947 evidence rows are decided one by one.
 - A rollback of a knowledge release does not move the mapping release; each knowledge release
   says whether the mapping release it is pinned to is the current one.
+
+**Committed and indexed (M2.5c2, M2.5c3).** The owner named both in one message, so they were
+done one after the other, each with its own commit: `78380cb` (M2.5c2; CI passed on both jobs,
+run 45166757670) and `2853a95` (M2.5c3; CI passed on both jobs, run 45169655475). The code graph
+was re-indexed after each and reports up-to-date at `2853a95`. Migrations `0014` and `0015` are
+applied to the main database. The API was restarted after each for the new routes; the web app
+was not, because nothing it loads changed. This paragraph was added in a following
+documents-only commit, after which the index was refreshed again.
