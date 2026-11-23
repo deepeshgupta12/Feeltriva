@@ -3516,3 +3516,9 @@ a difference (written in M2.10, when nothing could be decided). Corrected here.
   a verified token.
 - An approved bundle is not a release. Publishing, rollback and loading in clinical mode are
   M2.5b, and clinical mode stays off until the owner's go-live decision (E37, E40).
+
+**Committed and indexed.** Committed as `72b2b23` and pushed; CI passed on both jobs (run
+45114093737). The code graph was re-indexed at `72b2b23` and reports up-to-date. The API and the
+web app were not restarted: the service reads the rule file from disk at each approval, and
+nothing else it loads changed. No migration. This paragraph was added in a following
+documents-only commit, after which the index was refreshed again.
