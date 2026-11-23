@@ -275,6 +275,9 @@ class ReviewService:
                 raise ApiError(404, "review_target_not_found", "Review target not found.")
             previous = target.status
             if status is not None:
+                guard = _GUARDS.get(target_type)
+                if guard is not None:  # what a decision on this kind of target requires or entails
+                    guard(tx, target, status, principal)
                 target.status = status
                 if isinstance(target, Statement):
                     target.reviewed_by, target.reviewed_at = principal.subject, datetime.now(UTC)
@@ -438,3 +441,8 @@ def list_terminology_links(
 
 
 _TARGETS["terminology_link"] = (TerminologyLink, "link_id")
+
+
+# What a decision on a kind of target requires or entails beyond setting its status (M2.5a). A guard is called
+# inside the reviewer's transaction before the status is set; it raises ApiError to refuse the decision.
+_GUARDS: dict[str, Any] = {}

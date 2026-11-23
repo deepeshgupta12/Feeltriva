@@ -17,6 +17,7 @@ from .auth import Principal
 from .container import Container, build_container
 from .errors import ApiError
 from .review import list_terminology_links
+from .review_rules import list_rules
 from .service import AssessmentService
 from .settings import Settings, get_settings
 
@@ -246,6 +247,14 @@ def create_app(settings: Settings | None = None, container: Container | None = N
                 limit=limit,
                 offset=offset,
             )
+        )
+
+    @app.get("/internal/v1/review/rules")
+    def review_rules(
+        who: Who, bundle_id: str | None = None, status: str | None = None, limit: int = 50, offset: int = 0
+    ) -> JSONResponse:
+        return JSONResponse(
+            list_rules(container.db, who, bundle_id=bundle_id, status=status, limit=limit, offset=offset)
         )
 
     @app.post("/internal/v1/review/decisions")

@@ -3356,3 +3356,85 @@ no basis section, and the final text gained a line naming the NHS website and it
 45106608805). The code graph was re-indexed at `8df646b` and reports up-to-date. The API and the
 web app were not restarted: nothing they load changed. No migration. This paragraph was added in
 a following documents-only commit, after which the index was refreshed again.
+
+### M2.5a — Approval of rules, questions and bundles
+
+Owner's go-ahead of 2026-11-23: "Proceed ahead with M2.5".
+
+**M2.5 was split before any code.** Its plan row had collected requirements from eight earlier
+sub-steps. Read as a whole it holds five separate pieces of work, so it is done in five parts
+(decision E77): M2.5a approvals; M2.5b publishing a rule release, rollback and what clinical
+mode loads; M2.5c mapping and knowledge releases and disease redirects; M2.5d what a decision
+on a vocabulary link entails, and self-checks that accept decisions; M2.5e claims after review.
+Every requirement of the old row is in one of the five new rows. Only M2.5a was done here.
+
+**What the handoff asks, checked before the work.** "Human-approved rule priority handles
+conflicts" and rules as reviewed content (`docs/03`); "author question and urgency bundles"
+with the exit "approved serving corpus and rule/question release, or development-only mode"
+(`docs/01`, phase 4); clinical suggestions "disabled unless an approved rule bundle ..."
+(`docs/03`). E39: the urgency rules are served only after the owner approves them by name.
+
+**What was built.**
+
+- Migration `0011`: the API's database role may change `status` on `clinical_rules` and
+  `followup_questions`, and `status`, `approved_by`, `approved_at` on `rule_bundles`, and only
+  inside a reviewer transaction (row-level security). Reading is as before.
+- `review.py`: `record_review` calls a guard for the target type, when one is registered,
+  before it sets a status.
+- `review_rules.py` (new): the review targets `clinical_rule`, `followup_question` and
+  `rule_bundle`; the guards; `list_rules`.
+- `main.py`: `GET /internal/v1/review/rules` (reviewers only; `bundle_id`, `status`, paging).
+- Decisions use the existing `POST /internal/v1/review/decisions`. The reviewer's name is kept
+  in the decision record (`review_notes`) and, for a bundle, on the bundle with the time.
+
+**When a bundle can be approved.** Every rule and question decided and at least one rule
+approved; for a bundle stored from a rule file, the file on disk has the stored fingerprint;
+every telephone number of the file confirmed by the owner. Each failing condition answers 409
+with its own code and writes nothing. While a bundle is approved its rules cannot be decided;
+withdrawing the approval clears the name and the time.
+
+**Real run.** Migration applied to the main database (head `0011`, six policies on the three
+tables). The API was restarted, because it serves a new route. As reviewer `dev-reviewer:owner`:
+the bundle `urgency-draft` is listed with its fingerprint and 20 pending rules; a user gets 403;
+an attempt to approve the bundle answers `bundle_items_pending`, "20 rules or questions of this
+bundle are still pending", and the database holds no decision record and an unchanged bundle.
+`/readyz` still reports clinical mode off and the synthetic release.
+
+**Impact analysis.** `record_review`: LOW (one caller, the decision route; the MCP server does
+not call it, checked by search). `create_app`: LOW. `detect_changes` before commit: "medium",
+four names: `create_app` (one route added), `record_review` with its class (the guard call), and
+`review_decision`, the route below the new one, whose text is unchanged.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 60 files |
+| `uv run pytest -m "not archives"` (SQLite) | 224 passed, 57 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 290 passed |
+| Migration `0011` on a scratch database: head, down to `0010`, head | 6 policies, 0, 6 |
+
+The four new tests prove, with an invented bundle: rules are listed for reviewers only, with
+their bundle, its fingerprint and counts; a user cannot decide; a rule's decision is recorded
+with the reviewer and the note and changes only its status; a bundle is refused while a rule is
+pending, when the rule file is missing, when its fingerprint differs, when a number is not
+confirmed, and when no rule is approved; with everything in place the approval is recorded with
+name and time; an approved bundle's rule cannot be decided until the approval is withdrawn;
+on PostgreSQL, a transaction that is not a reviewer's changes no row, and a reviewer's cannot
+change a priority, a text or a manifest, or delete a rule.
+
+**Bugs.** None in committed code. While writing the tests I read the error response in the
+wrong shape; the tests were corrected.
+
+**Limits, stated plainly.**
+
+- Nothing is approved. The owner has not decided any rule, and both telephone numbers are still
+  "not yet" confirmed, so the bundle could not be approved today even with every rule decided.
+- A decision is made with a request to the API (or by the assistant on the owner's instruction,
+  as for the vocabulary links). The review screens do not show rules yet (M2.4).
+- A rule has no column for its reviewer: the name is in the decision record. The list route
+  shows the last decision of each rule from there.
+- An approved bundle is not yet a release. Publishing, rollback and loading in clinical mode are
+  M2.5b; until then an approval changes nothing a person sees.
+- The development reviewer token (`dev-reviewer:<name>`) is accepted only with mock
+  authentication. In production the reviewer's identity comes from the verified token.
