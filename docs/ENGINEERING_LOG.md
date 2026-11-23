@@ -3351,3 +3351,8 @@ no basis section, and the final text gained a line naming the NHS website and it
 - The approval record in the final text is a place to write on, not a recorded approval. The
   system records nothing until M2.5.
 - The documents are long because 85 features are spelled out. The final text is the short one.
+
+**Committed and indexed.** Committed as `8df646b` and pushed; CI passed on both jobs (run
+45106608805). The code graph was re-indexed at `8df646b` and reports up-to-date. The API and the
+web app were not restarted: nothing they load changed. No migration. This paragraph was added in
+a following documents-only commit, after which the index was refreshed again.
