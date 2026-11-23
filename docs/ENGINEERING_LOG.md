@@ -3903,7 +3903,7 @@ rights") and `retrieval_corpus` ("approved knowledge release and current applica
 
 - Evidence rows could not be decided at all: `disease_feature_evidence` was not a review target
   and the API's role could not change it. "Approved evidence" could not exist.
-- No source's rights have been decided: all 14 sources are `pending`, 13 have no licence
+- No source's rights have been decided: all 14 sources are `pending`, 11 have no licence
   recorded, `permitted_uses` is empty for all. No sub-step covered "verify source licences".
 - The retrieval chunks have no review status, so none can be approved.
 
@@ -3931,8 +3931,9 @@ release. Refused: no current mapping release; the current one is of another work
 would be in it.
 
 **Real run.** Migration applied to the main database (head `0015`). The API was restarted for the
-new routes. As reviewer: 14 sources listed, all pending, with the licence recorded for each (one
-has one: CC BY 4.0); the evidence list answers with real rows (888 of the type the DDXPlus
+new routes. As reviewer: 14 sources listed, all pending, with the licence recorded for each (three
+have one, CC BY 4.0: the DDXPlus release and the two archive-15 files traced to it; eleven have
+none); the evidence list answers with real rows (888 of the type the DDXPlus
 release lists); the preview of `knowledge-import-0` says not publishable, "no mapping release is
 current" and "no statement and no evidence is approved", undecided 2,952 statements, 22,947
 evidence rows, 14 sources; publishing is refused with `release_not_publishable` and writes
@@ -4010,3 +4011,7 @@ was re-indexed after each and reports up-to-date at `2853a95`. Migrations `0014`
 applied to the main database. The API was restarted after each for the new routes; the web app
 was not, because nothing it loads changed. This paragraph was added in a following
 documents-only commit, after which the index was refreshed again.
+
+**Correction (same day).** The entry and decision E84 first said that 13 of the 14 sources have
+no licence recorded. The owner-test run showed 3 with a licence and 11 without. Both texts were
+corrected in a documents-only commit.
