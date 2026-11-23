@@ -3438,3 +3438,9 @@ wrong shape; the tests were corrected.
   M2.5b; until then an approval changes nothing a person sees.
 - The development reviewer token (`dev-reviewer:<name>`) is accepted only with mock
   authentication. In production the reviewer's identity comes from the verified token.
+
+**Committed and indexed.** Committed as `7934502` and pushed; CI passed on both jobs (run
+45110331677). The code graph was re-indexed at `7934502` and reports up-to-date. Migration `0011`
+is applied to the main database. The API was restarted for the new route; the web app was not,
+because nothing it loads changed. This paragraph was added in a following documents-only commit,
+after which the index was refreshed again.
