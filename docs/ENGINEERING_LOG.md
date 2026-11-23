@@ -3444,3 +3444,75 @@ wrong shape; the tests were corrected.
 is applied to the main database. The API was restarted for the new route; the web app was not,
 because nothing it loads changed. This paragraph was added in a following documents-only commit,
 after which the index was refreshed again.
+
+### M2.5a1 — The owner's approval of the urgency rules recorded
+
+Owner's statement of 2026-11-23, in reply to the limit "Nothing is approved. No rule is decided
+and both phone numbers are still unconfirmed": "This is decided by me and approved. 20 rules are
+approved." Then: "please proceed ahead". Recording the approval is one sub-step; M2.5b was not
+started.
+
+**What was recorded, and how.**
+
+1. Rule file: both telephone numbers marked confirmed by the owner on 2026-11-23; the label now
+   says the rules were approved by the owner without a doctor's review; the history holds the
+   owner's words; the open points are reduced to the two that are still open (no doctor's
+   review; 108 not used). No rule changed: the digest over the 20 rules is the same before and
+   after (`7a62112eb2187838...`).
+2. `python -m feeltriva_api.rule_drafts`: the bundle, still pending, took the new fingerprint;
+   20 rules unchanged.
+3. Through `POST /internal/v1/review/decisions` as `dev-reviewer:owner`: 20 times
+   `clinical_rule` from `pending` to `approved`, then `rule_bundle` `urgency-draft` to
+   `approved`. Every note quotes the owner and says the assistant entered it on the owner's
+   instruction. The bundle approval passed all conditions of M2.5a: every rule decided, the
+   rule file is the stored one, both numbers confirmed.
+
+**State afterwards.** `clinical_rules`: 20 approved. `rule_bundles`: `urgency-draft` approved by
+`dev-reviewer:owner` at 2026-11-23 04:47:12 UTC; its stored fingerprint and the file's SHA-256
+are both `19147c0f5df211a961bd1abcdb57d1dc60520e2165100bf82f17c8bc6abd0193`. 21 decision
+records. A further attempt to decide a rule answers `bundle_already_approved`. `/readyz`:
+clinical mode off, release `fixture-rules-0`, synthetic. Nothing is published or served.
+
+**Code changed with it.**
+
+- `urgency_documents.py`: the documents no longer print a status or say "not approved". They
+  are generated from the file, which cannot know what was decided, so they now say where
+  decisions are recorded, show the owner's decision in the history, name the fingerprint an
+  approval is for, and list what is still open. The empty approval forms were removed. The
+  numbers column reads "Confirmed by the owner".
+- `rule_drafts.py`: an approved bundle whose rule file is the one approved is no longer reported
+  as a difference. Before this, the command would have ended with a difference on every run
+  after an approval. A changed file is still a difference. The summary counts approved rules.
+
+**Impact analysis.** `store_draft`, `final_document`, `_banner`: LOW. `detect_changes` before
+commit: "medium", 55 names, 30 of them headings of the two regenerated documents; in code
+`_banner`, `_numbers`, `review_document`, `final_document`, `store_draft`, `check` and `main` of
+the storing command, and the tests of both.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 60 files |
+| `uv run pytest -m "not archives"` (SQLite) | 224 passed, 57 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 290 passed |
+
+Changed tests prove: both documents are what the file generates, print no status, say where
+decisions are recorded and carry the owner's words; the file records both numbers as confirmed
+on 2026-11-23; a decided bundle with the same file is no difference and is not rewritten, with
+another file it is a difference.
+
+**Bugs.** One, found before it could occur: the storing command treated every decided bundle as
+a difference (written in M2.10, when nothing could be decided). Corrected here.
+
+**Limits, stated plainly.**
+
+- The approval was given without a doctor's review, and the rules were tried on no real case.
+  Both documents say so. Nothing about the rules' quality changed today.
+- The owner's statement does not say that the two official pages were opened. The record holds
+  the owner's words and the date, not more.
+- The approval was entered by the assistant on the owner's instruction with the development
+  reviewer identity, as for the vocabulary links (M2.17). In production the identity comes from
+  a verified token.
+- An approved bundle is not a release. Publishing, rollback and loading in clinical mode are
+  M2.5b, and clinical mode stays off until the owner's go-live decision (E37, E40).

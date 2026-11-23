@@ -91,7 +91,7 @@ class DraftNumber(_Strict):
     number: str
     what: str
     evidence_ids: list[str] = Field(min_length=1)
-    confirmed_by_owner: str = ""  # the date the owner confirmed it on the official page; empty until then
+    confirmed_by_owner: str = ""  # the date the owner confirmed the number; empty until then
 
 
 class DraftChange(_Strict):

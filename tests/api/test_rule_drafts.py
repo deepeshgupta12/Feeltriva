@@ -85,7 +85,13 @@ def test_a_draft_is_stored_pending_once_and_a_reviewers_decision_is_not_rewritte
     _features(owner_db, tag)
     first = store_draft(owner_db, _draft(tag), "digest-1")
     assert check(first) == [] and (first["inserted"], first["updated"], first["unchanged"]) == (2, 0, 0)
-    assert first["stored"] == {"bundle_status": "pending", "rules": 2, "pending": 2, "not_in_the_draft": 0}
+    assert first["stored"] == {
+        "bundle_status": "pending",
+        "rules": 2,
+        "pending": 2,
+        "approved": 0,
+        "not_in_the_draft": 0,
+    }
     assert any("inserted 2" in line for line in report(first))
     with owner_db.transaction(None, role="migration") as tx:
         bundle = tx.get(RuleBundle, f"draft-{tag}")
@@ -121,9 +127,14 @@ def test_a_draft_is_stored_pending_once_and_a_reviewers_decision_is_not_rewritte
         bundle = tx.get(RuleBundle, f"draft-{tag}")
         bundle.status, bundle.approved_by = "approved", "dev-reviewer:test"
     frozen = store_draft(owner_db, _draft(tag, "A third sample text (invented)."), "digest-3")
-    assert frozen["bundle_decided"] and "stored" not in frozen
+    assert frozen["bundle_decided"] and frozen["decided_file_is_this_file"] is False
+    assert (frozen["inserted"], frozen["updated"], frozen["unchanged"]) == (0, 0, 0)
     assert any("a reviewer has decided on this bundle" in diff for diff in check(frozen))
     assert _rows(owner_db, tag)[f"urg.{tag}.scarf"] == ("pending", "Another sample text (invented).")
+    # The same file as the one decided on is no difference: the command then only compares, and still writes nothing.
+    same = store_draft(owner_db, _draft(tag, "Another sample text (invented)."), "digest-2")
+    assert same["bundle_decided"] and same["decided_file_is_this_file"] is True and check(same) == []
+    assert any("nothing of it is rewritten; the rule file is the one decided on" in line for line in report(same))
 
 
 def test_a_draft_that_names_a_feature_the_vocabulary_does_not_hold_is_not_stored(owner_db):

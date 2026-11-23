@@ -29,6 +29,7 @@ def store_draft(db: Database, draft: UrgencyDraft, digest: str) -> dict[str, Any
         "missing_features": [],
         "renamed_features": [],
         "bundle_decided": False,
+        "decided_file_is_this_file": None,
         "inserted": 0,
         "updated": 0,
         "unchanged": 0,
@@ -49,11 +50,12 @@ def store_draft(db: Database, draft: UrgencyDraft, digest: str) -> dict[str, Any
             tx.add(RuleBundle(bundle_id=draft.draft_id, version=draft.version, status="pending", manifest_uri=manifest))
             tx.flush()
         elif bundle.status != "pending" or bundle.approved_by:
-            result["bundle_decided"] = True  # a reviewer has decided on this bundle: it is not rewritten
-            return result
+            # A reviewer has decided on this bundle: nothing of it is rewritten. The command only compares.
+            result["bundle_decided"] = True
+            result["decided_file_is_this_file"] = bundle.manifest_uri == manifest
         else:
             bundle.version, bundle.manifest_uri = draft.version, manifest
-        for rule in draft.rules:
+        for rule in [] if result["bundle_decided"] else draft.rules:
             values = {
                 "bundle_id": draft.draft_id,
                 "rule_type": rule.rule_type,
@@ -83,6 +85,9 @@ def store_draft(db: Database, draft: UrgencyDraft, digest: str) -> dict[str, Any
             "pending": tx.scalar(
                 select(func.count()).select_from(ClinicalRule).where(of_bundle, ClinicalRule.status == "pending")
             ),
+            "approved": tx.scalar(
+                select(func.count()).select_from(ClinicalRule).where(of_bundle, ClinicalRule.status == "approved")
+            ),
             "not_in_the_draft": tx.scalar(
                 select(func.count())
                 .select_from(ClinicalRule)
@@ -103,8 +108,11 @@ def check(result: dict[str, Any]) -> list[str]:
         diffs.append(
             f"{len(result['renamed_features'])} features of the draft have another name in the vocabulary; nothing stored"
         )
-    if result["bundle_decided"]:
-        diffs.append("a reviewer has decided on this bundle; it is not rewritten: a changed draft needs a new version")
+    if result["bundle_decided"] and not result["decided_file_is_this_file"]:
+        diffs.append(
+            "a reviewer has decided on this bundle and the rule file has changed since; it is not rewritten: a "
+            "changed rule set needs a new version"
+        )
     stored = result.get("stored")
     if stored:
         if stored["rules"] - stored["not_in_the_draft"] != result["rules"]:
@@ -122,6 +130,11 @@ def report(result: dict[str, Any]) -> list[str]:
             f"left because a reviewer decided {result['kept_decided']}"
         )
         lines.append(f"stored: {result['stored']}")
+    if result["bundle_decided"]:
+        same = "is" if result["decided_file_is_this_file"] else "is not"
+        lines.append(
+            f"a reviewer has decided on this bundle: nothing of it is rewritten; the rule file {same} the one decided on"
+        )
     return lines
 
 
@@ -137,11 +150,18 @@ def main(path: Path = DRAFT_PATH) -> int:
     diffs = check(result)
     for diff in diffs:
         print("DIFF", diff)
-    print(
-        "every rule names features of the vocabulary and is stored pending; nothing is approved and nothing is served"
-        if not diffs
-        else f"{len(diffs)} differences"
-    )
+    stored = result.get("stored") or {}
+    if diffs:
+        print(f"{len(diffs)} differences")
+    elif stored.get("pending") == result["rules"] and not result["bundle_decided"]:
+        print(
+            "every rule names features of the vocabulary and is stored pending; nothing is approved and nothing is served"
+        )
+    else:
+        print(
+            f"the stored rule set is the rule file: {stored.get('approved', 0)} of {result['rules']} rules approved, "
+            f"bundle {stored.get('bundle_status')}; serving does not read these tables, so nothing is served"
+        )
     return 1 if diffs else 0
 
 

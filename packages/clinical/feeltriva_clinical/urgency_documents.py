@@ -8,8 +8,9 @@ Both are generated from the draft file, so neither can say something the rules d
 - the **final text** holds only what would be published: when each rule fires and what the person
   is shown, with the record in which the owner's approval is written down.
 
-"Final" means the text is finished and ready to be approved. It does not mean approved: the rule
-set stays `pending` until an approval is recorded (M2.5), and nothing here is shown to a person.
+The documents are generated from the rule file and do not know what has been decided: decisions
+are recorded in the system (M2.5a) for the file with a given fingerprint. Nothing here is shown
+to a person.
 
 This module is pure: it reads no file and no database.
 """
@@ -68,15 +69,18 @@ def _when(node: dict[str, Any], names: dict[str, str], depth: int = 0) -> list[s
 
 def _banner(draft: UrgencyDraft) -> list[str]:
     return [
-        f"> **Status: `{draft.status}`. Not approved. Not shown to anyone.**",
+        "> **Not shown to anyone.** These rules reach a person only from a published release with clinical mode "
+        "switched on. Neither exists yet.",
         f"> {draft.label}",
+        "> Decisions on the rules are recorded in the system, with the name of who decided and the time, not in this "
+        "document. The history at the end says what the owner decided.",
     ]
 
 
 def _numbers(draft: UrgencyDraft) -> list[str]:
     sources = {source.evidence_id: source for source in draft.sources}
     lines = [
-        "| Number | What it is | Quoted from | Confirmed by the owner on the official page |",
+        "| Number | What it is | Quoted from | Confirmed by the owner |",
         "|---|---|---|---|",
     ]
     for entry in draft.numbers:
@@ -125,11 +129,11 @@ def review_document(draft: UrgencyDraft) -> str:
         f"{len(rules)} rules: {emergency} emergency and {len(rules) - emergency} urgent, over {len(draft.features)} "
         f"features of the vocabulary, resting on {len(draft.sources)} published pages.",
         "",
-        "| No. | Rule | Level | Status |",
-        "|---:|---|---|---|",
+        "| No. | Rule | Level |",
+        "|---:|---|---|",
         *[
             f"| {number_of[rule.rule_id]} | [{rule.title}](#rule-{number_of[rule.rule_id]}) | "
-            f"{_LEVELS[rule.action.urgency or '']} | `{rule.status}` |"
+            f"{_LEVELS[rule.action.urgency or '']} |"
             for rule in rules
         ],
         "",
@@ -151,7 +155,7 @@ def review_document(draft: UrgencyDraft) -> str:
         "",
         "No other number appears in any text shown. A check refuses a draft whose texts name a number not listed here.",
         "",
-        "## 5. Decisions for the owner before approval",
+        "## 5. Still open",
         "",
         *[f"{number}. {point}" for number, point in enumerate(draft.open_points, 1)],
         "",
@@ -174,9 +178,9 @@ def review_document(draft: UrgencyDraft) -> str:
             f'<a id="rule-{number}"></a>',
             f"### Rule {number}. {rule.title}",
             "",
-            "| Level | Identifier | Checked in position | Status |",
-            "|---|---|---:|---|",
-            f"| **{_LEVELS[rule.action.urgency or '']}** | `{rule.rule_id}` | {number} of {len(rules)} | `{rule.status}` |",
+            "| Level | Identifier | Checked in position |",
+            "|---|---|---:|",
+            f"| **{_LEVELS[rule.action.urgency or '']}** | `{rule.rule_id}` | {number} of {len(rules)} |",
             "",
             "**Fires when**",
             "",
@@ -202,7 +206,6 @@ def review_document(draft: UrgencyDraft) -> str:
             reviewed = f", page last reviewed {source.page_reviewed}" if source.page_reviewed else ""
             lines.append(f"- {source.publisher}, [{source.source_title}]({source.source_url}){reviewed}:")
             lines += [f"  - “{quote}”" for quote in source.quotes]
-        lines += ["", "**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:"]
     used: dict[str, list[int]] = {}
     for rule in rules:
         for feature in dict.fromkeys(_features_of(rule.condition_ast)):
@@ -262,10 +265,10 @@ def final_document(draft: UrgencyDraft, digest: str) -> str:
     names = _names(draft)
     rules = _ordered(draft)
     lines = [
-        "# Urgency rules: final text for approval",
+        "# Urgency rules: final text",
         "",
         *_banner(draft),
-        "> **Final means the text is finished and ready to be approved. It does not mean approved.**",
+        "> **An approval is for this exact text**, named by the fingerprint at the end.",
         "",
         f"Rule set `{draft.version}` for {draft.jurisdiction}. This document is generated from the rule file; the "
         f"reasons, the published basis of every rule and the cases it was checked with are in "
@@ -281,9 +284,9 @@ def final_document(draft: UrgencyDraft, digest: str) -> str:
         "The texts shown are this project's own wording and are not NHS content. Every source is listed in the "
         "review document.",
         "",
-        "## Before approval",
+        "## Still open",
         "",
-        *[f"- [ ] {point}" for point in draft.open_points],
+        *[f"- {point}" for point in draft.open_points],
         "",
         "## How the rules are applied",
         "",
@@ -320,26 +323,23 @@ def final_document(draft: UrgencyDraft, digest: str) -> str:
         "",
         *[f"- {limit}" for limit in draft.limits],
         "",
-        "## Approval record",
+        "## Approval",
+        "",
+        "An approval is given for the rule file with the fingerprint below, and is recorded in the system through "
+        "the review path with the name of who approved and the time. If the file changes, the fingerprint changes "
+        "and a new approval is needed.",
         "",
         "| | |",
         "|---|---|",
         f"| Rule set | `{draft.version}` |",
         f"| Fingerprint of the rule file (SHA-256) | `{digest}` |",
-        f"| Status in the system | `{draft.status}` |",
-        "| Reviewed by a doctor (name, date) | |",
-        "| Approved by the owner (name, date) | |",
-        "| Recorded in the system | Not yet possible: the approval path is built in sub-step M2.5 |",
+        "| Where the approval is recorded | The review path of the service: `GET /internal/v1/review/rules` |",
         "",
-        "An approval applies to the rule file with the fingerprint above. If the file changes, this document "
-        "changes and a new approval is needed.",
+        "## History",
         "",
-        "| No. | Rule | Level | Approve / change / reject | Note |",
-        "|---:|---|---|---|---|",
-        *[
-            f"| {number} | {rule.title} | {_LEVELS[rule.action.urgency or '']} | | |"
-            for number, rule in enumerate(rules, 1)
-        ],
+        "| Date | Change |",
+        "|---|---|",
+        *[f"| {entry.date} | {entry.change} |" for entry in draft.history],
         "",
     ]
     return "\n".join(lines)

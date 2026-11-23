@@ -1,7 +1,8 @@
 # Urgency rules: review document
 
-> **Status: `pending`. Not approved. Not shown to anyone.**
-> Unreviewed draft. Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. It is not a validated triage protocol and is not served to anyone until the owner approves it.
+> **Not shown to anyone.** These rules reach a person only from a published release with clinical mode switched on. Neither exists yet.
+> Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. Approved by the owner on 2026-11-23 without a doctor's review. It is not a validated triage protocol.
+> Decisions on the rules are recorded in the system, with the name of who decided and the time, not in this document. The history at the end says what the owner decided.
 
 Rule set `urgency-draft-1` for India, written 2026-11-20. This document is generated from `packages/clinical/feeltriva_clinical/drafts/urgency_draft.json`: change the file, not this text. The finished text for approval, without the working notes, is in [urgency_rules_final.md](urgency_rules_final.md).
 
@@ -9,28 +10,28 @@ Rule set `urgency-draft-1` for India, written 2026-11-20. This document is gener
 
 20 rules: 12 emergency and 8 urgent, over 85 features of the vocabulary, resting on 19 published pages.
 
-| No. | Rule | Level | Status |
-|---:|---|---|---|
-| 1 | [Chest pain with signs of a heart attack](#rule-1) | Emergency | `pending` |
-| 2 | [Severe breathing difficulty](#rule-2) | Emergency | `pending` |
-| 3 | [Signs of a stroke](#rule-3) | Emergency | `pending` |
-| 4 | [Seizure (fit)](#rule-4) | Emergency | `pending` |
-| 5 | [Loss of consciousness with other warning signs](#rule-5) | Emergency | `pending` |
-| 6 | [Bleeding that is heavy or will not stop](#rule-6) | Emergency | `pending` |
-| 7 | [Vomiting blood with other warning signs](#rule-7) | Emergency | `pending` |
-| 8 | [Coughing up blood with other warning signs](#rule-8) | Emergency | `pending` |
-| 9 | [Signs of a severe allergic reaction](#rule-9) | Emergency | `pending` |
-| 10 | [Thoughts of suicide or self-harm](#rule-10) | Emergency | `pending` |
-| 11 | [Stiff neck or headache with signs of a serious infection](#rule-11) | Emergency | `pending` |
-| 12 | [Bleeding in pregnancy with fainting or dizziness](#rule-12) | Emergency | `pending` |
-| 13 | [Chest pain or chest tightness](#rule-13) | Urgent | `pending` |
-| 14 | [Breathing difficulty](#rule-14) | Urgent | `pending` |
-| 15 | [Fainting or loss of consciousness](#rule-15) | Urgent | `pending` |
-| 16 | [Vomiting blood](#rule-16) | Urgent | `pending` |
-| 17 | [Coughing up blood](#rule-17) | Urgent | `pending` |
-| 18 | [Black stools, bloody diarrhoea or bleeding in the gut](#rule-18) | Urgent | `pending` |
-| 19 | [Confusion](#rule-19) | Urgent | `pending` |
-| 20 | [Bleeding or spotting in pregnancy](#rule-20) | Urgent | `pending` |
+| No. | Rule | Level |
+|---:|---|---|
+| 1 | [Chest pain with signs of a heart attack](#rule-1) | Emergency |
+| 2 | [Severe breathing difficulty](#rule-2) | Emergency |
+| 3 | [Signs of a stroke](#rule-3) | Emergency |
+| 4 | [Seizure (fit)](#rule-4) | Emergency |
+| 5 | [Loss of consciousness with other warning signs](#rule-5) | Emergency |
+| 6 | [Bleeding that is heavy or will not stop](#rule-6) | Emergency |
+| 7 | [Vomiting blood with other warning signs](#rule-7) | Emergency |
+| 8 | [Coughing up blood with other warning signs](#rule-8) | Emergency |
+| 9 | [Signs of a severe allergic reaction](#rule-9) | Emergency |
+| 10 | [Thoughts of suicide or self-harm](#rule-10) | Emergency |
+| 11 | [Stiff neck or headache with signs of a serious infection](#rule-11) | Emergency |
+| 12 | [Bleeding in pregnancy with fainting or dizziness](#rule-12) | Emergency |
+| 13 | [Chest pain or chest tightness](#rule-13) | Urgent |
+| 14 | [Breathing difficulty](#rule-14) | Urgent |
+| 15 | [Fainting or loss of consciousness](#rule-15) | Urgent |
+| 16 | [Vomiting blood](#rule-16) | Urgent |
+| 17 | [Coughing up blood](#rule-17) | Urgent |
+| 18 | [Black stools, bloody diarrhoea or bleeding in the gut](#rule-18) | Urgent |
+| 19 | [Confusion](#rule-19) | Urgent |
+| 20 | [Bleeding or spotting in pregnancy](#rule-20) | Urgent |
 
 ## 2. How the rules behave
 
@@ -50,19 +51,17 @@ Rule set `urgency-draft-1` for India, written 2026-11-20. This document is gener
 
 ## 4. Telephone numbers named in the texts
 
-| Number | What it is | Quoted from | Confirmed by the owner on the official page |
+| Number | What it is | Quoted from | Confirmed by the owner |
 |---|---|---|---|
-| **112** | The single emergency number for the whole of India (Emergency Response Support System) | [Kerala Police (Government of Kerala)](https://keralapolice.gov.in/home/page/award/10) | not yet |
-| **14416** | Tele MANAS mental health helpline: toll-free, 24 hours a day, every day | [Dhubri Medical College & Hospital (Government of Assam)](https://dhubri-mch.assam.gov.in/services/tele-manas-call-14416-24%C3%977-mental-health-helpline); [JIPMER (an institute of the Government of India)](https://jipmer.edu.in/Tele-MANAS) | not yet |
+| **112** | The single emergency number for the whole of India (Emergency Response Support System) | [Kerala Police (Government of Kerala)](https://keralapolice.gov.in/home/page/award/10) | 2026-11-23 |
+| **14416** | Tele MANAS mental health helpline: toll-free, 24 hours a day, every day | [Dhubri Medical College & Hospital (Government of Assam)](https://dhubri-mch.assam.gov.in/services/tele-manas-call-14416-24%C3%977-mental-health-helpline); [JIPMER (an institute of the Government of India)](https://jipmer.edu.in/Tele-MANAS) | 2026-11-23 |
 
 No other number appears in any text shown. A check refuses a draft whose texts name a number not listed here.
 
-## 5. Decisions for the owner before approval
+## 5. Still open
 
-1. Review by a doctor practising in India. The warning signs are taken from the NHS website (England); no Indian clinical source was used and no clinician has read the rules.
-2. Confirm the two telephone numbers on the official pages (https://112.gov.in and https://telemanas.mohfw.gov.in). The central government's own pages refused automated reading, so 112 is quoted from a Kerala Police page and 14416 from a Government of Assam hospital page and a JIPMER page.
-3. Decide whether the ambulance number 108 should be added. It is not used: no official page stating it could be read, and the ambulance number differs between states.
-4. Decide each rule's level. Every level is the assistant's choice within the published advice. Where the vocabulary cannot tell a severe or sudden case from a mild one, the rule takes the higher level.
+1. No doctor has reviewed the rules. The owner approved them on 2026-11-23 without such a review. A review by a doctor practising in India remains advised before clinical mode is switched on.
+2. The ambulance number 108 is not used: no official page stating it could be read, and the ambulance number differs between states. The owner has not asked for it.
 
 ## 6. Weaknesses that remain whatever is decided
 
@@ -89,9 +88,9 @@ No other number appears in any text shown. A check refuses a draft whose texts n
 <a id="rule-1"></a>
 ### Rule 1. Chest pain with signs of a heart attack
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.chest_pain_emergency` | 1 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.chest_pain_emergency` | 1 of 20 |
 
 **Fires when**
 
@@ -129,14 +128,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-2"></a>
 ### Rule 2. Severe breathing difficulty
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.breathing_emergency` | 2 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.breathing_emergency` | 2 of 20 |
 
 **Fires when**
 
@@ -172,14 +169,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-3"></a>
 ### Rule 3. Signs of a stroke
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.stroke_signs` | 3 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.stroke_signs` | 3 of 20 |
 
 **Fires when**
 
@@ -208,14 +203,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-4"></a>
 ### Rule 4. Seizure (fit)
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.seizure` | 4 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.seizure` | 4 of 20 |
 
 **Fires when**
 
@@ -244,14 +237,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-5"></a>
 ### Rule 5. Loss of consciousness with other warning signs
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.loss_of_consciousness_emergency` | 5 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.loss_of_consciousness_emergency` | 5 of 20 |
 
 **Fires when**
 
@@ -286,14 +277,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-6"></a>
 ### Rule 6. Bleeding that is heavy or will not stop
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.heavy_bleeding` | 6 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.heavy_bleeding` | 6 of 20 |
 
 **Fires when**
 
@@ -327,14 +316,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-7"></a>
 ### Rule 7. Vomiting blood with other warning signs
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.vomiting_blood_emergency` | 7 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.vomiting_blood_emergency` | 7 of 20 |
 
 **Fires when**
 
@@ -368,14 +355,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-8"></a>
 ### Rule 8. Coughing up blood with other warning signs
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.coughing_blood_emergency` | 8 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.coughing_blood_emergency` | 8 of 20 |
 
 **Fires when**
 
@@ -405,14 +390,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-9"></a>
 ### Rule 9. Signs of a severe allergic reaction
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.severe_allergic_reaction` | 9 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.severe_allergic_reaction` | 9 of 20 |
 
 **Fires when**
 
@@ -447,14 +430,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-10"></a>
 ### Rule 10. Thoughts of suicide or self-harm
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.thoughts_of_self_harm` | 10 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.thoughts_of_self_harm` | 10 of 20 |
 
 **Fires when**
 
@@ -486,14 +467,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-11"></a>
 ### Rule 11. Stiff neck or headache with signs of a serious infection
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.meningitis_signs` | 11 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.meningitis_signs` | 11 of 20 |
 
 **Fires when**
 
@@ -531,14 +510,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-12"></a>
 ### Rule 12. Bleeding in pregnancy with fainting or dizziness
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Emergency** | `urg.draft.pregnancy_bleeding_emergency` | 12 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Emergency** | `urg.draft.pregnancy_bleeding_emergency` | 12 of 20 |
 
 **Fires when**
 
@@ -568,14 +545,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-13"></a>
 ### Rule 13. Chest pain or chest tightness
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.chest_pain` | 13 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.chest_pain` | 13 of 20 |
 
 **Fires when**
 
@@ -605,14 +580,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-14"></a>
 ### Rule 14. Breathing difficulty
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.breathing_difficulty` | 14 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.breathing_difficulty` | 14 of 20 |
 
 **Fires when**
 
@@ -644,14 +617,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-15"></a>
 ### Rule 15. Fainting or loss of consciousness
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.fainting` | 15 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.fainting` | 15 of 20 |
 
 **Fires when**
 
@@ -682,14 +653,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-16"></a>
 ### Rule 16. Vomiting blood
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.vomiting_blood` | 16 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.vomiting_blood` | 16 of 20 |
 
 **Fires when**
 
@@ -721,14 +690,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-17"></a>
 ### Rule 17. Coughing up blood
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.coughing_blood` | 17 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.coughing_blood` | 17 of 20 |
 
 **Fires when**
 
@@ -756,14 +723,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-18"></a>
 ### Rule 18. Black stools, bloody diarrhoea or bleeding in the gut
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.black_or_bloody_stools` | 18 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.black_or_bloody_stools` | 18 of 20 |
 
 **Fires when**
 
@@ -793,14 +758,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-19"></a>
 ### Rule 19. Confusion
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.confusion` | 19 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.confusion` | 19 of 20 |
 
 **Fires when**
 
@@ -828,14 +791,12 @@ No other number appears in any text shown. A check refuses a draft whose texts n
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
 
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
-
 <a id="rule-20"></a>
 ### Rule 20. Bleeding or spotting in pregnancy
 
-| Level | Identifier | Checked in position | Status |
-|---|---|---:|---|
-| **Urgent** | `urg.draft.pregnancy_bleeding` | 20 of 20 | `pending` |
+| Level | Identifier | Checked in position |
+|---|---|---:|
+| **Urgent** | `urg.draft.pregnancy_bleeding` | 20 of 20 |
 
 **Fires when**
 
@@ -862,8 +823,6 @@ No other number appears in any text shown. A check refuses a draft whose texts n
 - Kerala Police (Government of Kerala), [Emergency Response Support System (ERSS)](https://keralapolice.gov.in/home/page/award/10):
   - “ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.”
   - “to establish a single emergency number "112" all over the country, integrating all existing emergency numbers”
-
-**Owner's decision:** ☐ approve ☐ change ☐ reject. Note:
 
 ## 9. Sources and licences
 
@@ -989,3 +948,4 @@ A feature is a symptom or an answer in the vocabulary. Where the feature is a qu
 |---|---|
 | 2026-11-20 | First draft: 20 rules (12 emergency, 8 urgent), stored pending. |
 | 2026-11-23 | Review document enlarged and the final text for approval prepared. No rule, level or text shown was changed. Added: the list of telephone numbers with their confirmation status, the known weaknesses, and a second quoted sentence for 112. |
+| 2026-11-23 | The owner approved all 20 rules and confirmed the two telephone numbers. The owner's words, in reply to the note that no rule was decided and both numbers were unconfirmed: "This is decided by me and approved. 20 rules are approved." No rule, level or text shown was changed. |

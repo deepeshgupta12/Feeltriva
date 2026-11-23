@@ -34,7 +34,11 @@ def _changed(change) -> UrgencyDraft:
 
 def test_the_draft_is_whole_pending_and_every_rule_has_a_basis_and_a_reason():
     draft = load_draft()
-    assert draft.status == "pending" and "Unreviewed draft" in draft.label and "not by a clinician" in draft.label
+    assert (
+        draft.status == "pending"
+        and "not by a clinician" in draft.label
+        and "not a validated triage protocol" in draft.label
+    )
     assert len(draft.rules) == 20 and {rule.status for rule in draft.rules} == {"pending"}
     levels = [rule.action.urgency for rule in sorted(draft.rules, key=lambda rule: rule.priority)]
     assert levels == ["emergency"] * 12 + ["urgent"] * 8  # every emergency rule is checked before every urgent one
@@ -73,8 +77,11 @@ def test_the_texts_shown_name_only_numbers_that_have_a_basis():
             assert "india.112" in rule.evidence_ids, rule.rule_id
         if "14416" in numbers:
             assert "india.telemanas" in rule.evidence_ids, rule.rule_id
-    # The owner has not yet confirmed either number on its official page, and the draft says so.
-    assert [(entry.number, entry.confirmed_by_owner) for entry in draft.numbers] == [("112", ""), ("14416", "")]
+    # The owner confirmed both numbers on 2026-11-23, and the file records the date.
+    assert [(entry.number, entry.confirmed_by_owner) for entry in draft.numbers] == [
+        ("112", "2026-11-23"),
+        ("14416", "2026-11-23"),
+    ]
     for rule in draft.rules:
         assert "diagnos" not in rule.action.text.lower() or "not a diagnosis" in rule.action.text.lower()
     quoted = " ".join(quote for source in draft.sources for quote in source.quotes)
@@ -155,42 +162,41 @@ def test_the_review_document_is_generated_from_the_draft_and_is_current():
     draft = load_draft()
     document = review_document(draft)
     assert (ROOT / "docs" / "review" / REVIEW_FILE).read_text(encoding="utf-8") == document
-    assert draft.label in document and "Not approved. Not shown to anyone." in document
+    assert draft.label in document and "**Not shown to anyone.**" in document
+    # The document does not claim to know what was decided: it says where decisions are recorded.
+    assert "Decisions on the rules are recorded in the system" in document and "`pending`" not in document
     for rule in draft.rules:
         assert rule.rule_id in document and rule.action.text in document and rule.why_this_level in document
-    # Every rule is in the overview, has its two cases and a line for the owner's decision.
-    assert document.count("| `pending` |") == 2 * len(draft.rules)  # the overview row and the rule's own table
     assert document.count("- Fires: recorded as present") == len(draft.rules)
-    assert document.count("**Owner's decision:**") == len(draft.rules)
     assert all(point in document for point in draft.open_points) and all(limit in document for limit in draft.limits)
     assert all(quote in document for source in draft.sources for quote in source.quotes)
     assert all(feature.feature_id in document for feature in draft.features)
-    assert all(f"| **{entry.number}** |" in document for entry in draft.numbers) and "| not yet |" in document
+    assert all(f"| **{entry.number}** |" in document for entry in draft.numbers) and "| 2026-11-23 |" in document
+    assert all(entry.change in document for entry in draft.history)
 
 
-def test_the_final_text_is_what_would_be_published_and_says_it_is_not_approved():
+def test_the_final_text_is_what_would_be_published_and_names_the_file_an_approval_is_for():
     draft, digest = load_draft(), draft_digest()
     document = final_document(draft, digest)
     assert (ROOT / "docs" / "review" / FINAL_FILE).read_text(encoding="utf-8") == document
-    # Finished is not approved: the document says so, and names the exact file an approval would be for.
-    assert "Not approved. Not shown to anyone." in document
-    assert "Final means the text is finished and ready to be approved. It does not mean approved." in document
-    assert f"`{digest}`" in document and "| Status in the system | `pending` |" in document
-    assert "Not yet possible: the approval path is built in sub-step M2.5" in document
-    # Every rule with the exact words shown, in the order the rules are checked, and a row to decide it.
+    assert "**Not shown to anyone.**" in document and "An approval is for this exact text" in document
+    assert f"`{digest}`" in document and "Where the approval is recorded" in document and "`pending`" not in document
+    # Every rule with the exact words shown, in the order the rules are checked.
     ordered = sorted(draft.rules, key=lambda rule: rule.priority)
     positions = [document.index(f"> {rule.action.text}") for rule in ordered]
     assert positions == sorted(positions) and len(set(positions)) == len(draft.rules)
     assert document.index("## Emergency rules (checked first)") < document.index("## Urgent rules")
-    assert all(f"| {number} | {rule.title} |" in document for number, rule in enumerate(ordered, 1))
-    # It carries no working notes: no quoted basis and no reasons. What is open and what stays weak is still said.
+    assert all(f"### {number}. {rule.title}" in document for number, rule in enumerate(ordered, 1))
+    # It carries no working notes: no quoted basis and no reasons. What is open and what stays weak is still said,
+    # and so is what the owner decided.
     assert not any(rule.why_this_level in document for rule in draft.rules)
     assert (
         "**Basis" not in document and "page last reviewed" not in document and "Checked with two cases" not in document
     )
     assert "Open Government Licence v3.0" in document  # where the warning signs come from is still said
-    assert all(f"- [ ] {point}" in document for point in draft.open_points)
+    assert all(f"- {point}" in document for point in draft.open_points)
     assert all(limit in document for limit in draft.limits)
+    assert "This is decided by me and approved. 20 rules are approved." in document
 
 
 def test_a_text_cannot_name_a_telephone_number_the_draft_does_not_list():

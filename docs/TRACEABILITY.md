@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5a (2026-11-23).
+Last updated after sub-step M2.5a1 (2026-11-23).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -317,7 +317,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | U8 | Consent taken from users (E32) | Missing | M3.16 |
 | U9 | Conversations kept 30 days (E33) | Missing | C8 |
 | U10 | Feature meanings derived from the supplied data (E34) | Done as proposals; 51 headings listed for the owner | M2.7 |
-| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Drafted, pending | 20 rules from published warning signs, each with its basis, stored `pending` and not served (M2.10). The finished text for approval and its approval record are in `docs/review/urgency_rules_final.md` (M2.10a). The path that records the owner's approval exists since M2.5a (review API; nothing approved yet); publishing a release from approved rules is M2.5b | M2.10, M2.10a, M2.5a; M2.5b |
+| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Approved by the owner, not published | 20 rules from published warning signs, each with its basis, stored `pending` and not served (M2.10). The finished text for approval and its approval record are in `docs/review/urgency_rules_final.md` (M2.10a). The owner approved all 20 rules and the rule set on 2026-11-23 (E78), recorded through the review path (M2.5a, M2.5a1); publishing a release from them is M2.5b | M2.10, M2.10a, M2.5a, M2.5a1; M2.5b |
 | U12 | Claude API as the language model (E46) | Missing | M5.1 |
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |

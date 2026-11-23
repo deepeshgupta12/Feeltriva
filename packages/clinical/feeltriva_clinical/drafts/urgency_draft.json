@@ -2,7 +2,7 @@
   "draft_id": "urgency-draft",
   "version": "urgency-draft-1",
   "status": "pending",
-  "label": "Unreviewed draft. Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. It is not a validated triage protocol and is not served to anyone until the owner approves it.",
+  "label": "Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. Approved by the owner on 2026-11-23 without a doctor's review. It is not a validated triage protocol.",
   "jurisdiction": "India",
   "written": "2026-11-20",
   "history": [
@@ -13,6 +13,10 @@
     {
       "date": "2026-11-23",
       "change": "Review document enlarged and the final text for approval prepared. No rule, level or text shown was changed. Added: the list of telephone numbers with their confirmation status, the known weaknesses, and a second quoted sentence for 112."
+    },
+    {
+      "date": "2026-11-23",
+      "change": "The owner approved all 20 rules and confirmed the two telephone numbers. The owner's words, in reply to the note that no rule was decided and both numbers were unconfirmed: \"This is decided by me and approved. 20 rules are approved.\" No rule, level or text shown was changed."
     }
   ],
   "numbers": [
@@ -22,7 +26,7 @@
       "evidence_ids": [
         "india.112"
       ],
-      "confirmed_by_owner": ""
+      "confirmed_by_owner": "2026-11-23"
     },
     {
       "number": "14416",
@@ -31,7 +35,7 @@
         "india.telemanas",
         "india.telemanas_jipmer"
       ],
-      "confirmed_by_owner": ""
+      "confirmed_by_owner": "2026-11-23"
     }
   ],
   "sources": [
@@ -2475,10 +2479,8 @@
     }
   ],
   "open_points": [
-    "Review by a doctor practising in India. The warning signs are taken from the NHS website (England); no Indian clinical source was used and no clinician has read the rules.",
-    "Confirm the two telephone numbers on the official pages (https://112.gov.in and https://telemanas.mohfw.gov.in). The central government's own pages refused automated reading, so 112 is quoted from a Kerala Police page and 14416 from a Government of Assam hospital page and a JIPMER page.",
-    "Decide whether the ambulance number 108 should be added. It is not used: no official page stating it could be read, and the ambulance number differs between states.",
-    "Decide each rule's level. Every level is the assistant's choice within the published advice. Where the vocabulary cannot tell a severe or sudden case from a mild one, the rule takes the higher level."
+    "No doctor has reviewed the rules. The owner approved them on 2026-11-23 without such a review. A review by a doctor practising in India remains advised before clinical mode is switched on.",
+    "The ambulance number 108 is not used: no official page stating it could be read, and the ambulance number differs between states. The owner has not asked for it."
   ],
   "limits": [
     "The rules were written by an engineering assistant, not by a clinician.",

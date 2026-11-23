@@ -1,8 +1,9 @@
-# Urgency rules: final text for approval
+# Urgency rules: final text
 
-> **Status: `pending`. Not approved. Not shown to anyone.**
-> Unreviewed draft. Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. It is not a validated triage protocol and is not served to anyone until the owner approves it.
-> **Final means the text is finished and ready to be approved. It does not mean approved.**
+> **Not shown to anyone.** These rules reach a person only from a published release with clinical mode switched on. Neither exists yet.
+> Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. Approved by the owner on 2026-11-23 without a doctor's review. It is not a validated triage protocol.
+> Decisions on the rules are recorded in the system, with the name of who decided and the time, not in this document. The history at the end says what the owner decided.
+> **An approval is for this exact text**, named by the fingerprint at the end.
 
 Rule set `urgency-draft-1` for India. This document is generated from the rule file; the reasons, the published basis of every rule and the cases it was checked with are in [urgency_rules_draft.md](urgency_rules_draft.md).
 
@@ -12,12 +13,10 @@ The complete text of the 20 urgency rules as they would be published. For each r
 
 The warning signs behind the rules are taken from pages of the NHS website (England), licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/). The texts shown are this project's own wording and are not NHS content. Every source is listed in the review document.
 
-## Before approval
+## Still open
 
-- [ ] Review by a doctor practising in India. The warning signs are taken from the NHS website (England); no Indian clinical source was used and no clinician has read the rules.
-- [ ] Confirm the two telephone numbers on the official pages (https://112.gov.in and https://telemanas.mohfw.gov.in). The central government's own pages refused automated reading, so 112 is quoted from a Kerala Police page and 14416 from a Government of Assam hospital page and a JIPMER page.
-- [ ] Decide whether the ambulance number 108 should be added. It is not used: no official page stating it could be read, and the ambulance number differs between states.
-- [ ] Decide each rule's level. Every level is the assistant's choice within the published advice. Where the vocabulary cannot tell a severe or sudden case from a mild one, the rule takes the higher level.
+- No doctor has reviewed the rules. The owner approved them on 2026-11-23 without such a review. A review by a doctor practising in India remains advised before clinical mode is switched on.
+- The ambulance number 108 is not used: no official page stating it could be read, and the ambulance number differs between states. The owner has not asked for it.
 
 ## How the rules are applied
 
@@ -29,10 +28,10 @@ The warning signs behind the rules are taken from pages of the NHS website (Engl
 
 ## Telephone numbers
 
-| Number | What it is | Quoted from | Confirmed by the owner on the official page |
+| Number | What it is | Quoted from | Confirmed by the owner |
 |---|---|---|---|
-| **112** | The single emergency number for the whole of India (Emergency Response Support System) | [Kerala Police (Government of Kerala)](https://keralapolice.gov.in/home/page/award/10) | not yet |
-| **14416** | Tele MANAS mental health helpline: toll-free, 24 hours a day, every day | [Dhubri Medical College & Hospital (Government of Assam)](https://dhubri-mch.assam.gov.in/services/tele-manas-call-14416-24%C3%977-mental-health-helpline); [JIPMER (an institute of the Government of India)](https://jipmer.edu.in/Tele-MANAS) | not yet |
+| **112** | The single emergency number for the whole of India (Emergency Response Support System) | [Kerala Police (Government of Kerala)](https://keralapolice.gov.in/home/page/award/10) | 2026-11-23 |
+| **14416** | Tele MANAS mental health helpline: toll-free, 24 hours a day, every day | [Dhubri Medical College & Hospital (Government of Assam)](https://dhubri-mch.assam.gov.in/services/tele-manas-call-14416-24%C3%977-mental-health-helpline); [JIPMER (an institute of the Government of India)](https://jipmer.edu.in/Tele-MANAS) | 2026-11-23 |
 
 ## Emergency rules (checked first)
 
@@ -290,38 +289,20 @@ The published advice is help the same day, with an ambulance if named signs appe
 - Several features from different sources mean the same thing and are joined inside the rules, because no synonym has been approved yet. A feature added to the vocabulary later is not part of any rule until the rule is edited.
 - Emergency care, common illnesses and the words people use for symptoms differ between England and India. The published advice was not adapted beyond the telephone numbers.
 
-## Approval record
+## Approval
+
+An approval is given for the rule file with the fingerprint below, and is recorded in the system through the review path with the name of who approved and the time. If the file changes, the fingerprint changes and a new approval is needed.
 
 | | |
 |---|---|
 | Rule set | `urgency-draft-1` |
-| Fingerprint of the rule file (SHA-256) | `3e0bedd9a28de2c136eab2c74c882e351de1a1f299194bb6d832398acdbb9712` |
-| Status in the system | `pending` |
-| Reviewed by a doctor (name, date) | |
-| Approved by the owner (name, date) | |
-| Recorded in the system | Not yet possible: the approval path is built in sub-step M2.5 |
+| Fingerprint of the rule file (SHA-256) | `19147c0f5df211a961bd1abcdb57d1dc60520e2165100bf82f17c8bc6abd0193` |
+| Where the approval is recorded | The review path of the service: `GET /internal/v1/review/rules` |
 
-An approval applies to the rule file with the fingerprint above. If the file changes, this document changes and a new approval is needed.
+## History
 
-| No. | Rule | Level | Approve / change / reject | Note |
-|---:|---|---|---|---|
-| 1 | Chest pain with signs of a heart attack | Emergency | | |
-| 2 | Severe breathing difficulty | Emergency | | |
-| 3 | Signs of a stroke | Emergency | | |
-| 4 | Seizure (fit) | Emergency | | |
-| 5 | Loss of consciousness with other warning signs | Emergency | | |
-| 6 | Bleeding that is heavy or will not stop | Emergency | | |
-| 7 | Vomiting blood with other warning signs | Emergency | | |
-| 8 | Coughing up blood with other warning signs | Emergency | | |
-| 9 | Signs of a severe allergic reaction | Emergency | | |
-| 10 | Thoughts of suicide or self-harm | Emergency | | |
-| 11 | Stiff neck or headache with signs of a serious infection | Emergency | | |
-| 12 | Bleeding in pregnancy with fainting or dizziness | Emergency | | |
-| 13 | Chest pain or chest tightness | Urgent | | |
-| 14 | Breathing difficulty | Urgent | | |
-| 15 | Fainting or loss of consciousness | Urgent | | |
-| 16 | Vomiting blood | Urgent | | |
-| 17 | Coughing up blood | Urgent | | |
-| 18 | Black stools, bloody diarrhoea or bleeding in the gut | Urgent | | |
-| 19 | Confusion | Urgent | | |
-| 20 | Bleeding or spotting in pregnancy | Urgent | | |
+| Date | Change |
+|---|---|
+| 2026-11-20 | First draft: 20 rules (12 emergency, 8 urgent), stored pending. |
+| 2026-11-23 | Review document enlarged and the final text for approval prepared. No rule, level or text shown was changed. Added: the list of telephone numbers with their confirmation status, the known weaknesses, and a second quoted sentence for 112. |
+| 2026-11-23 | The owner approved all 20 rules and confirmed the two telephone numbers. The owner's words, in reply to the note that no rule was decided and both numbers were unconfirmed: "This is decided by me and approved. 20 rules are approved." No rule, level or text shown was changed. |
