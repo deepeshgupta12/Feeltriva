@@ -3608,3 +3608,9 @@ the lines they covered were rewritten, which left four style findings; fixed bef
 - A rollback changes which release is current. A service already running keeps the bundle it
   loaded until it is restarted.
 - One release is current for the whole system, not one per bundle: there is one rule set.
+
+**Committed and indexed.** Committed as `a140a27` and pushed; CI passed on both jobs (run
+45115544657). The code graph was re-indexed at `a140a27` and reports up-to-date. Migration `0012`
+is applied to the main database. The API was restarted for the new routes; the web app was not,
+because nothing it loads changed. This paragraph was added in a following documents-only commit,
+after which the index was refreshed again.
