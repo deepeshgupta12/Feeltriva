@@ -11,13 +11,14 @@ from pathlib import Path
 import pytest
 from feeltriva_clinical import BundleError, Facts, evaluate, load_bundle, load_fixture_bundle, validate_bundle
 from feeltriva_clinical.bundle import EvidenceItem, Feature, ReleaseBundle
+from feeltriva_clinical.urgency_documents import FINAL_FILE, REVIEW_FILE, final_document, review_document
 from feeltriva_clinical.urgency_draft import (
     DRAFT_PATH,
     DraftError,
     UrgencyDraft,
     check_draft,
+    draft_digest,
     load_draft,
-    review_document,
 )
 from pydantic import ValidationError
 
@@ -72,6 +73,9 @@ def test_the_texts_shown_name_only_numbers_that_have_a_basis():
             assert "india.112" in rule.evidence_ids, rule.rule_id
         if "14416" in numbers:
             assert "india.telemanas" in rule.evidence_ids, rule.rule_id
+    # The owner has not yet confirmed either number on its official page, and the draft says so.
+    assert [(entry.number, entry.confirmed_by_owner) for entry in draft.numbers] == [("112", ""), ("14416", "")]
+    for rule in draft.rules:
         assert "diagnos" not in rule.action.text.lower() or "not a diagnosis" in rule.action.text.lower()
     quoted = " ".join(quote for source in draft.sources for quote in source.quotes)
     assert "112" in quoted and "14416" in quoted
@@ -150,8 +154,59 @@ def test_a_draft_that_is_not_whole_is_refused_and_says_why():
 def test_the_review_document_is_generated_from_the_draft_and_is_current():
     draft = load_draft()
     document = review_document(draft)
-    assert (ROOT / "docs" / "review" / "urgency_rules_draft.md").read_text(encoding="utf-8") == document
-    assert draft.label in document and all(
-        rule.rule_id in document and rule.action.text in document for rule in draft.rules
+    assert (ROOT / "docs" / "review" / REVIEW_FILE).read_text(encoding="utf-8") == document
+    assert draft.label in document and "Not approved. Not shown to anyone." in document
+    for rule in draft.rules:
+        assert rule.rule_id in document and rule.action.text in document and rule.why_this_level in document
+    # Every rule is in the overview, has its two cases and a line for the owner's decision.
+    assert document.count("| `pending` |") == 2 * len(draft.rules)  # the overview row and the rule's own table
+    assert document.count("- Fires: recorded as present") == len(draft.rules)
+    assert document.count("**Owner's decision:**") == len(draft.rules)
+    assert all(point in document for point in draft.open_points) and all(limit in document for limit in draft.limits)
+    assert all(quote in document for source in draft.sources for quote in source.quotes)
+    assert all(feature.feature_id in document for feature in draft.features)
+    assert all(f"| **{entry.number}** |" in document for entry in draft.numbers) and "| not yet |" in document
+
+
+def test_the_final_text_is_what_would_be_published_and_says_it_is_not_approved():
+    draft, digest = load_draft(), draft_digest()
+    document = final_document(draft, digest)
+    assert (ROOT / "docs" / "review" / FINAL_FILE).read_text(encoding="utf-8") == document
+    # Finished is not approved: the document says so, and names the exact file an approval would be for.
+    assert "Not approved. Not shown to anyone." in document
+    assert "Final means the text is finished and ready to be approved. It does not mean approved." in document
+    assert f"`{digest}`" in document and "| Status in the system | `pending` |" in document
+    assert "Not yet possible: the approval path is built in sub-step M2.5" in document
+    # Every rule with the exact words shown, in the order the rules are checked, and a row to decide it.
+    ordered = sorted(draft.rules, key=lambda rule: rule.priority)
+    positions = [document.index(f"> {rule.action.text}") for rule in ordered]
+    assert positions == sorted(positions) and len(set(positions)) == len(draft.rules)
+    assert document.index("## Emergency rules (checked first)") < document.index("## Urgent rules")
+    assert all(f"| {number} | {rule.title} |" in document for number, rule in enumerate(ordered, 1))
+    # It carries no working notes: no quoted basis and no reasons. What is open and what stays weak is still said.
+    assert not any(rule.why_this_level in document for rule in draft.rules)
+    assert (
+        "**Basis" not in document and "page last reviewed" not in document and "Checked with two cases" not in document
     )
-    assert all(point in document for point in draft.open_points)
+    assert "Open Government Licence v3.0" in document  # where the warning signs come from is still said
+    assert all(f"- [ ] {point}" in document for point in draft.open_points)
+    assert all(limit in document for limit in draft.limits)
+
+
+def test_a_text_cannot_name_a_telephone_number_the_draft_does_not_list():
+    def other_number(plain):
+        plain["rules"][0]["action"]["text"] += " Or call 108."
+
+    def number_without_its_basis(plain):
+        plain["rules"][0]["evidence_ids"] = ["nhs.chest_pain"]
+
+    def number_nobody_names(plain):
+        plain["numbers"].append({"number": "999", "what": "invented", "evidence_ids": ["india.112"]})
+
+    for change, message in (
+        (other_number, "names the number 108, which the draft does not list"),
+        (number_without_its_basis, "names 112 without that number's basis"),
+        (number_nobody_names, "a listed telephone number is named in no text"),
+    ):
+        with pytest.raises(DraftError, match=message):
+            check_draft(_changed(change))

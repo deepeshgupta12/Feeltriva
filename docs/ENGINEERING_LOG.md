@@ -3269,3 +3269,85 @@ now finds 112 in 20 texts and 14416 in one.
 44729100873). The code graph was re-indexed at `92c284c` and reports up-to-date. The API and the
 web app were not restarted: nothing they load changed. No migration. This paragraph was added in
 a following documents-only commit, after which the index was refreshed again.
+
+### M2.10a — Urgency rules: the review document enlarged and the final text for approval
+
+Owner's instruction of 2026-11-23, after reporting the M2.10 checks as "all good": "Enhance the
+urgency_rules_draft.md even more and make a final version for the same as well." M2.5 was not
+started in this run: one sub-step at a time.
+
+**How the instruction was read.** "Final version" is taken as the finished text, ready to be
+approved. It cannot mean approved: no path records an approval before M2.5, and E39 allows
+serving only after the owner's recorded approval. The owner had read the 20 rules, so their
+conditions, levels and texts were not changed, and nothing new was added to them.
+
+**What was built.**
+
+- `feeltriva_clinical/urgency_documents.py` (new, pure): `review_document` and `final_document`,
+  both generated from the rule file. The earlier `review_document` in `urgency_draft.py` was
+  removed; its one caller, the test, uses the new module.
+- `docs/review/urgency_rules_draft.md` (991 lines, was 410): an overview table of the 20 rules
+  with links; how the rules behave; the two levels; the telephone numbers with their source and
+  "confirmed by the owner: not yet"; the decisions the owner has to take; the weaknesses that
+  remain; the warning signs not covered; for each rule its condition as a list, the text shown,
+  the reason for its level, the two cases it was checked with, its quoted basis and a decision
+  line; the sources with the rules resting on each; the 85 features with the rules using each;
+  the history.
+- `docs/review/urgency_rules_final.md` (325 lines, new): only when each rule fires and the exact
+  words the person is shown, emergency rules first; the checks before approval; the numbers;
+  what is not covered; what stays true after approval; an approval record naming the rule file
+  by its SHA-256 fingerprint, with a row per rule. Its head says "Final means the text is
+  finished and ready to be approved. It does not mean approved."
+- The rule file gained three lists: `numbers` (112 and 14416, each with its basis and an empty
+  date of the owner's confirmation), `limits` and `history`. One more sentence of the Kerala
+  Police page is quoted for 112 ("to establish a single emergency number "112" all over the
+  country ..."), found word for word in the fetched page. The open points were rewritten as
+  four decisions for the owner. `check_draft` now refuses a text that names a number the file
+  does not list, a number without its basis among the rule's sources, and a listed number that
+  no text names.
+- Decision E76 records what "final" means and that an approval is for one fingerprint.
+
+**No rule changed.** A digest over the 20 rules (conditions, levels, texts, basis, tests) was
+taken before and after editing the file: the same, `7a62112eb2187838...`.
+
+**Real run** (`python -m feeltriva_api.rule_drafts`, main database): 0 inserted, 0 updated, 20
+unchanged, 20 `pending`. The bundle's fingerprint in the database, the SHA-256 of the file and
+the fingerprint printed in the final text are the same value (`3e0bedd9...9712`). `/readyz` still
+reports clinical mode off and the synthetic release. The API and the web app were not restarted.
+
+**Impact analysis.** `review_document`, `UrgencyDraft` and `check_draft`: LOW. The graph does not
+trace callers across packages, so the callers were found by search: the storing command and the
+two test files; each was updated or checked. `detect_changes` before commit: "medium", 48 names,
+of which 26 are headings of the regenerated document. In code, compared with the last commit:
+`UrgencyDraft` and `check_draft` changed, `DraftNumber`, `DraftChange` and `_NUMBER` added,
+`review_document` and `_condition` removed from this module (they live in the new module).
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 59 files |
+| `uv run pytest -m "not archives"` (SQLite) | 221 passed, 56 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 286 passed |
+
+New or changed tests prove: both documents are exactly what the rule file generates; the review
+document holds every rule with its text, reason, two cases, basis and decision line, every
+feature and every number; the final text holds every rule's exact words in the order the rules
+are checked, says it is not approved, names the file's fingerprint and the missing approval path,
+and carries no working notes; a text naming an unlisted number, a number without its basis, or a
+listed number nobody names is refused; neither number is marked as confirmed by the owner.
+
+**Bugs.** None in committed code. Found while writing: a test claimed that no quoted line of the
+NHS pages occurs in the final text; it failed because some texts shown use a short phrase that is
+also in a quote ("your chest feels tight or heavy"). The test now checks that the final text has
+no basis section, and the final text gained a line naming the NHS website and its licence.
+
+**Limits, stated plainly.**
+
+- Nothing about the rules is better than on 2026-11-20: no clinician has read them and they were
+  tried on no real case. Only the documents changed.
+- The owner's confirmation of 112 and 14416 on the official pages is not recorded: the owner
+  wrote "all good" but did not say the two pages were opened. Both stay "not yet".
+- The approval record in the final text is a place to write on, not a recorded approval. The
+  system records nothing until M2.5.
+- The documents are long because 85 features are spelled out. The final text is the short one.

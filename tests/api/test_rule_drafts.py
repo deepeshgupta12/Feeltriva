@@ -20,6 +20,8 @@ def _draft(tag: str, text: str = "Sample escalation text (invented, not medical 
             "label": "Invented draft for a test.",
             "jurisdiction": "nowhere",
             "written": "2026-01-01",
+            "history": [],
+            "numbers": [],
             "sources": [
                 {
                     "evidence_id": "src.sample",
@@ -52,6 +54,7 @@ def _draft(tag: str, text: str = "Sample escalation text (invented, not medical 
             ],
             "not_covered": [],
             "open_points": [],
+            "limits": [],
         }
     )
     check_draft(draft)

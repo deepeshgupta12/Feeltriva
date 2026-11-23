@@ -5,6 +5,35 @@
   "label": "Unreviewed draft. Written by the engineering assistant on the owner's instruction (decision E39), not by a clinician. It is not a validated triage protocol and is not served to anyone until the owner approves it.",
   "jurisdiction": "India",
   "written": "2026-11-20",
+  "history": [
+    {
+      "date": "2026-11-20",
+      "change": "First draft: 20 rules (12 emergency, 8 urgent), stored pending."
+    },
+    {
+      "date": "2026-11-23",
+      "change": "Review document enlarged and the final text for approval prepared. No rule, level or text shown was changed. Added: the list of telephone numbers with their confirmation status, the known weaknesses, and a second quoted sentence for 112."
+    }
+  ],
+  "numbers": [
+    {
+      "number": "112",
+      "what": "The single emergency number for the whole of India (Emergency Response Support System)",
+      "evidence_ids": [
+        "india.112"
+      ],
+      "confirmed_by_owner": ""
+    },
+    {
+      "number": "14416",
+      "what": "Tele MANAS mental health helpline: toll-free, 24 hours a day, every day",
+      "evidence_ids": [
+        "india.telemanas",
+        "india.telemanas_jipmer"
+      ],
+      "confirmed_by_owner": ""
+    }
+  ],
   "sources": [
     {
       "evidence_id": "nhs.chest_pain",
@@ -254,7 +283,8 @@
       "page_reviewed": "",
       "licence": "Government page; only the fact of the number is used. Read on 20 November 2026.",
       "quotes": [
-        "ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112."
+        "ERSS is an emergency response system wherein the citizen can seek support from police in cases of emergency. All they need is to call 112.",
+        "to establish a single emergency number \"112\" all over the country, integrating all existing emergency numbers"
       ]
     },
     {
@@ -2445,10 +2475,17 @@
     }
   ],
   "open_points": [
-    "The warning signs are taken from the NHS website (England). No Indian clinical source was used. A doctor practising in India should review the rules before they are approved.",
-    "The numbers 112 and 14416 could not be read on the central government's own pages (112.gov.in, mha.gov.in, telemanas.mohfw.gov.in, pib.gov.in refused automated reading). They are taken from a Kerala Police page, a Government of Assam hospital page and a JIPMER page. The owner should open the official pages and confirm both numbers before approval.",
-    "The ambulance number 108 is not used: no official page stating it could be read, and it differs between states.",
-    "Each urgency level is the assistant's choice within the published advice. Where the vocabulary cannot tell a severe or sudden case from a mild one, the draft escalates.",
-    "The rules have not been tried on real cases. No urgency labels exist to measure how often they would fire wrongly or miss."
+    "Review by a doctor practising in India. The warning signs are taken from the NHS website (England); no Indian clinical source was used and no clinician has read the rules.",
+    "Confirm the two telephone numbers on the official pages (https://112.gov.in and https://telemanas.mohfw.gov.in). The central government's own pages refused automated reading, so 112 is quoted from a Kerala Police page and 14416 from a Government of Assam hospital page and a JIPMER page.",
+    "Decide whether the ambulance number 108 should be added. It is not used: no official page stating it could be read, and the ambulance number differs between states.",
+    "Decide each rule's level. Every level is the assistant's choice within the published advice. Where the vocabulary cannot tell a severe or sudden case from a mild one, the rule takes the higher level."
+  ],
+  "limits": [
+    "The rules were written by an engineering assistant, not by a clinician.",
+    "The rules have not been tried on a single real case. No urgency labels exist, so nobody knows how often a rule would fire when it should not, or stay silent when it should fire.",
+    "The vocabulary records that a symptom is present, not how severe or how sudden it is. Where that decides the level, the rule escalates. Some people will be told to seek emergency care who did not need it.",
+    "A rule fires only on what has been recorded as present. A warning sign that the person has but was not asked about, or described in words the system did not recognise, fires nothing.",
+    "Several features from different sources mean the same thing and are joined inside the rules, because no synonym has been approved yet. A feature added to the vocabulary later is not part of any rule until the rule is edited.",
+    "Emergency care, common illnesses and the words people use for symptoms differ between England and India. The published advice was not adapted beyond the telephone numbers."
   ]
 }

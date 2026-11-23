@@ -8,6 +8,8 @@ not by a clinician. The draft is a file, `drafts/urgency_draft.json`. Every rule
 - says why it has the urgency level it has;
 - carries a case that makes it fire and a case that does not.
 
+The draft is written out as two documents by `urgency_documents.py`.
+
 A draft is not a release. Its status and the status of every rule can only be `pending`: the
 file cannot approve itself. It has no questions, candidates or templates, so it cannot be loaded
 as a release bundle, and a bundle built from it is refused in clinical mode because nothing in it
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -29,6 +32,9 @@ from .bundle import Rule, RuleAction
 from .rules import Facts, RuleValidationError, evaluate, referenced_features, validate_ast
 
 DRAFT_PATH = Path(__file__).parent / "drafts" / "urgency_draft.json"
+
+
+_NUMBER = re.compile(r"\b\d{3,}\b")  # anything in a text shown that could be dialled
 
 
 class DraftError(ValueError):
@@ -79,6 +85,20 @@ class NotCovered(_Strict):
     why: str
 
 
+class DraftNumber(_Strict):
+    """A telephone number that a text shown to a person may name."""
+
+    number: str
+    what: str
+    evidence_ids: list[str] = Field(min_length=1)
+    confirmed_by_owner: str = ""  # the date the owner confirmed it on the official page; empty until then
+
+
+class DraftChange(_Strict):
+    date: str
+    change: str
+
+
 class UrgencyDraft(_Strict):
     draft_id: str
     version: str
@@ -86,11 +106,14 @@ class UrgencyDraft(_Strict):
     label: str
     jurisdiction: str
     written: str
+    history: list[DraftChange]
+    numbers: list[DraftNumber]
     sources: list[DraftSource]
     features: list[DraftFeature]
     rules: list[DraftRule]
     not_covered: list[NotCovered]
-    open_points: list[str]
+    open_points: list[str]  # what the owner has to decide or confirm before approval
+    limits: list[str]  # weaknesses that remain whatever is decided
 
     def as_rules(self) -> list[Rule]:
         """The rules in the form a release bundle holds them."""
@@ -146,6 +169,19 @@ def check_draft(draft: UrgencyDraft) -> None:
                 raise DraftError(f"{rule.rule_id}: a test expects fires={test.fires} and the rule gives {fired}")
     if used != features:
         raise DraftError(f"{len(features - used)} listed features are used by no rule")
+    numbers = {entry.number: set(entry.evidence_ids) for entry in draft.numbers}
+    if len(numbers) != len(draft.numbers) or not all(ids <= sources for ids in numbers.values()):
+        raise DraftError("the telephone numbers are listed twice or rest on an unknown basis")
+    dialled: set[str] = set()
+    for rule in draft.rules:
+        for number in set(_NUMBER.findall(rule.action.text)):
+            if number not in numbers:
+                raise DraftError(f"{rule.rule_id}: its text names the number {number}, which the draft does not list")
+            if not numbers[number] & set(rule.evidence_ids):
+                raise DraftError(f"{rule.rule_id}: its text names {number} without that number's basis")
+            dialled.add(number)
+    if dialled != set(numbers):
+        raise DraftError("a listed telephone number is named in no text")
     emergency = [rule.priority for rule in draft.rules if rule.action.urgency == "emergency"]
     urgent = [rule.priority for rule in draft.rules if rule.action.urgency == "urgent"]
     if emergency and urgent and max(emergency) >= min(urgent):
@@ -160,86 +196,3 @@ def load_draft(path: Path = DRAFT_PATH) -> UrgencyDraft:
 
 def draft_digest(path: Path = DRAFT_PATH) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _condition(node: dict[str, Any], names: dict[str, str]) -> str:
-    """A condition in words, for a reader who does not read the rule format."""
-    op = node["op"]
-    if op == "present":
-        return f"“{names[node['feature']]}”"
-    parts = [_condition(child, names) for child in node["args"]]
-    if op == "or":
-        return (
-            "any of: " + "; ".join(parts)
-            if all(c["op"] == "present" for c in node["args"])
-            else " OR ".join(f"({part})" for part in parts)
-        )
-    return " AND ".join(f"({part})" for part in parts)
-
-
-def review_document(draft: UrgencyDraft) -> str:
-    """The draft as a document for the owner's review. Generated: edit the draft file, not this text."""
-    names = {feature.feature_id: feature.question or feature.name for feature in draft.features}
-    sources = {source.evidence_id: source for source in draft.sources}
-    lines = [
-        "# Urgency rules: draft for the owner's review",
-        "",
-        f"**{draft.label}**",
-        "",
-        f"Version `{draft.version}`, written {draft.written}, for {draft.jurisdiction}. Status: `{draft.status}`. "
-        "This document is generated from `packages/clinical/feeltriva_clinical/drafts/urgency_draft.json`; "
-        "change the file, not this text.",
-        "",
-        "## How to read it",
-        "",
-        "- A rule fires only when the answers given so far make its condition true. A symptom nobody has asked "
-        "about counts as unknown, never as absent.",
-        "- **Emergency** rules are checked before **urgent** ones, and the first rule that fires decides the text shown.",
-        "- The words in quotation marks are features of the vocabulary; a question is shown where the feature is one.",
-        "- Each basis is quoted word for word from the page named, with the date the page says it was last reviewed.",
-        "",
-        "## Open points for the owner",
-        "",
-        *[f"{number}. {point}" for number, point in enumerate(draft.open_points, 1)],
-        "",
-        "## Warning signs the draft does not cover",
-        "",
-        "| Published warning sign | Why there is no rule |",
-        "|---|---|",
-        *[f"| {item.sign} | {item.why} |" for item in draft.not_covered],
-        "",
-        "## The rules",
-    ]
-    for number, rule in enumerate(sorted(draft.rules, key=lambda item: item.priority), 1):
-        lines += [
-            "",
-            f"### {number}. {rule.title}",
-            "",
-            f"- **Rule:** `{rule.rule_id}`, level **{rule.action.urgency}**, priority {rule.priority}, status `{rule.status}`",
-            f"- **Fires when:** {_condition(rule.condition_ast, names)}",
-            f"- **Text shown:** {rule.action.text}",
-            f"- **Why this level:** {rule.why_this_level}",
-            "- **Basis:**",
-        ]
-        for evidence_id in rule.evidence_ids:
-            source = sources[evidence_id]
-            reviewed = f", page last reviewed {source.page_reviewed}" if source.page_reviewed else ""
-            lines.append(f"  - {source.publisher}, [{source.source_title}]({source.source_url}){reviewed}:")
-            lines += [f"    - “{quote}”" for quote in source.quotes]
-    lines += [
-        "",
-        "## Sources and licences",
-        "",
-        "| Source | Licence and attribution |",
-        "|---|---|",
-        *[
-            f"| {source.publisher}: [{source.source_title}]({source.source_url}) | {source.licence} |"
-            for source in draft.sources
-        ],
-        "",
-        "Information from the NHS website is licensed under the "
-        "[Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/). "
-        "The rules and the texts shown are this project's own wording and are not NHS content.",
-        "",
-    ]
-    return "\n".join(lines)
