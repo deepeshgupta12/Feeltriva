@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5d1 (2026-11-24).
+Last updated after sub-step M2.5c2a (2026-11-24).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -77,7 +77,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Done as pending claims | Done for statements (no duplicates found). 8,742 single claims, each a span of its statement, stored `pending` in `statement_claims` (M2.6, M2.6a, M2.6b, M2.6c); nothing is written to evidence before review | M1.4, M2.6; M2.5 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
-| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping working set, hashes, audit. What is approved can be published as an immutable, numbered mapping release with the SHA-256 of its sources and the count of what is still undecided, with rollback (M2.5c2); nothing is approved, so none is published. No split manifest | M1.2, M1.3, M2.5c2; M4.3 |
+| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping working set, hashes, audit. What is approved can be published as an immutable, numbered mapping release with the SHA-256 of its sources and the count of what is still undecided, with rollback (M2.5c2); the owner approved the 85 features the urgency rules name (M2.5c2a); no release is published yet. No split manifest | M1.2, M1.3, M2.5c2, M2.5c2a; M4.3 |
 | Demog. | Sex/gender counts are row counts, never combined as priors; identity, case ID, clinical sex context and gender identity kept separate | Done | Stored as supplied with the original field name; counts equal the handoff | M1.7 |
 | Zones | Four storage zones: raw immutable objects, normalised relational data, reviewed serving knowledge, private session data | Partial | Raw objects (M1.12), relational data and session data exist. No reviewed serving knowledge yet | M1.12; M2.5; C |
 

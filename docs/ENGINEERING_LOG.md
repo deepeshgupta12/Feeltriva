@@ -4122,3 +4122,64 @@ that the next sighting shows the cause. Recorded as open, not as fixed.
 - `completeness` still says nothing about clinical validity, and now also passes rows a
   reviewer rejected or retired: it checks that the import is intact, not what was decided.
 
+
+**Committed and indexed (M2.5d1).** Committed as `d167dcd` and pushed; CI passed on both jobs
+(run 45336562825). The code graph was re-indexed and reports up-to-date at `d167dcd`. No server
+was restarted: only the ingestion pipeline changed, which neither the API nor the web app loads.
+
+### M2.5c2a — The owner's approval of the 85 features recorded
+
+Owner decision E86 of 2026-11-24. Asked "The 85 features your urgency rules name ... Do you
+approve them, and should I enter that under your name as I did for the rules?", the owner
+answered: "Yes, I am approving them". No code changed in this sub-step.
+
+**What was done.** The 85 approvals were entered through the review path
+(`POST /internal/v1/review/decisions`, target type `feature`) as `dev-reviewer:owner`, each with
+the note: 'Approved by the owner on 2026-11-24 ("Yes, I am approving them"): one of the 85
+features the approved urgency rules name. Entered by the assistant on the owner's instruction
+(decision E86).' It was done after M2.5d1, so that the self-checks accept the decided rows.
+
+**Checked before entering.** The 85 features listed in the rule file are exactly the features
+the 20 approved rules name (same set). All 85 exist in the vocabulary, all were `pending`, all
+are of the kind symptom with a yes/no value.
+
+**Result on the real data.**
+
+| What | Value |
+|---|---|
+| Features approved / still pending | 85 / 883 |
+| Decision records for features (`review_notes`), all by `dev-reviewer:owner`, all `approved` | 85, written 2026-11-24 05:54:51 to 05:54:52 UTC |
+| Audit events for these decisions | 85 |
+| Approved features without a decision record | 0 |
+| Column mappings of these 85 features | 198, all still pending (not decided) |
+| Diseases, mappings, statements, evidence rows, sources decided | 0 |
+| Preview of the mapping working set `mapping-lexical-0` | publishable, would be release 1: 85 features, 0 diseases, 0 mappings; undecided 883 features, 960 disease labels, 3,117 and 1,962 mappings |
+| Published mapping releases | 0 (not published: a release cannot be removed, and publishing is the owner's act, E79) |
+| `/readyz` | clinical mode off, synthetic release |
+
+**The self-check on data that holds decided rows.** `uv run python -m feeltriva_ingestion
+completeness` after the approvals: 236 checks, 230 ok, 0 mismatches, 6 left to a later sub-step
+(963 s). Its report is line for line the report of the run before the approvals. Under the rule
+that M2.5d1 replaced, the same run would have reported 85 "imported items already marked
+approved" and exited with a mismatch: that is the number of approved features a mapping uses.
+
+**Tests.** No code changed, so the suites of M2.5d1 stand (SQLite 240 passed, 63 skipped;
+PostgreSQL 312 passed). CI passed on `d167dcd`.
+
+**Also recorded from the owner's message (E86).**
+
+- The four response texts: the owner answered "yes" to the assistant's reading of "it is fine" as
+  approval of the four texts as written. They are approved; the approval is entered where the
+  texts are stored, in M2.5f.
+- Source rights (D-S1): the owner answered "ok". Read as an acknowledgement, not as a decision.
+  No source is approved and D-S1 stays open.
+
+**Bugs.** None.
+
+**Limits, stated plainly.**
+
+- Approving a feature approves its name, kind and value type. It approves no mapping of a source
+  column to it, no evidence and no disease. The 198 mappings of these features are undecided.
+- Nothing is published and nothing is served. The serving bundle (M2.5f) needs a published
+  mapping release that holds these features, and the stored response texts.
+- No doctor has reviewed the rules or the features (D-C2).
