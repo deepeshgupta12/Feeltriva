@@ -4183,3 +4183,8 @@ PostgreSQL 312 passed). CI passed on `d167dcd`.
 - Nothing is published and nothing is served. The serving bundle (M2.5f) needs a published
   mapping release that holds these features, and the stored response texts.
 - No doctor has reviewed the rules or the features (D-C2).
+
+**Committed and indexed (M2.5c2a).** Committed as `9024e47` (documents only) and pushed; CI
+passed on both jobs (run 45341856786). The code graph reports up-to-date. No server was
+restarted: no code the API or the web app loads changed in M2.5d1 or M2.5c2a. This paragraph was
+added in a following documents-only commit, after which the index was refreshed again.
