@@ -246,7 +246,8 @@ def main() -> int:
             )
             lines.append(
                 "Read-only. Idempotent reruns are covered by the test suite, not by this command. Everything "
-                "checked here is still pending review: this is a loading check, not clinical validation."
+                "checked here is pending or carries a reviewer's recorded decision: this is a loading check, not "
+                "clinical validation."
             )
             text = "\n".join(lines)
             print(text)

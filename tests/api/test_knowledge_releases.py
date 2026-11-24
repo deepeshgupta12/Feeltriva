@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -160,14 +159,12 @@ def reviewer(client) -> Api:
 
 
 @pytest.fixture
-def knowledge(owner_db) -> Iterator[str]:
+def knowledge(owner_db) -> str:
+    """The rows stay in the test database with the decisions the tests record on them through the review path.
+    The self-check of `load-evidence`, whose tests share this database, accepts such rows since M2.5d1."""
     tag = uuid.uuid4().hex[:10]
     _rows(owner_db, tag)
-    yield tag
-    # The invented evidence rows are removed again. The self-check of `load-evidence` still reports every evidence
-    # row that is not pending (what is left of BUG-021, sub-step M2.5d), and its tests share this database.
-    with owner_db.transaction(None, role="migration") as tx:
-        tx.execute(text("DELETE FROM disease_feature_evidence WHERE evidence_id LIKE :e"), {"e": f"ev_{tag}_%"})
+    return tag
 
 
 def _decide(client, who: Api, target_type: str, target_id: str, status: str = "approved"):

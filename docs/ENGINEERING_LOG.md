@@ -33,6 +33,7 @@ command output, not estimated.
 | BUG-022 | M2.16 / M2.17 | Where the name search already held the ICD-11 code that MONDO leads to, the note on that row did not keep the foundation entity MONDO names | Fixed |
 | BUG-023 | M2.6 | The sentence rule read the letters that end a token of letters and digits ("794f", "2a") as a single-letter word or an abbreviation, so a sentence ending in such a token was not ended. Found by CI on the M2.6 commit: the test sentence ends in a random tag | Fixed |
 | BUG-024 | M2.5c1 | Two merge or split events written within one second came back in the wrong order on SQLite, because the history was ordered by a time the database filled in | Fixed before commit |
+| BUG-025 | M1.11, M1.13 / M2.5c3, M2.5d1 | The self-checks of `load-evidence` and `completeness` reported every row that was not `pending`, so both commands would fail as soon as a reviewer decided a row (the fault of BUG-021, left in two more commands). Shown by the test suite in M2.5c3 | Fixed in M2.5d1 |
 
 ## Entries
 
@@ -4015,3 +4016,109 @@ documents-only commit, after which the index was refreshed again.
 **Correction (same day).** The entry and decision E84 first said that 13 of the 14 sources have
 no licence recorded. The owner-test run showed 3 with a licence and 11 without. Both texts were
 corrected in a documents-only commit.
+
+### M2.5d1 — Self-checks that accept a reviewer's decision
+
+Owner's go-ahead of 2026-11-24: "Please proceed". M2.5d held two separate pieces of work and is
+done in two parts (decision E85): M2.5d1, the self-checks; M2.5d2, what a decision on a
+vocabulary link entails. Only M2.5d1 was done here. It was done before the owner's approval of
+the 85 features was entered (next entry), because that approval would otherwise have made
+`completeness` report a difference.
+
+**What the plan asks, checked before the work.** "`load-evidence` and `completeness` accept a row
+whose decision carries a reviewer's name (BUG-021)" and, since M2.5c2 and M2.5c3, the same for
+features, diseases, evidence rows and sources, whose tables have no reviewer column. Nothing
+imported is marked approved without a reviewer (`CLAUDE.md`).
+
+**What was found by reading the code.**
+
+- `completeness` compared a status with `pending` in eleven places, not the two the plan row
+  named: sources, disease mappings, diseases, feature mappings, features, statements, both kinds
+  of evidence proposal, and three counts of mappings "awaiting review".
+- Approving one feature that a mapping uses was enough to make `completeness` exit with a
+  mismatch ("imported items already marked approved"). The 85 features are such features.
+- `derive-meanings`, which the plan row also named since M2.5c3, was already right: it leaves a
+  reviewed mapping and feature alone and reports nothing for it. The plan row is corrected.
+
+**What was built.**
+
+- `decisions.py` (new, in the ingestion package): the standing of a row. `pending`: as imported.
+  `reviewed`: its present status is the last decision a reviewer recorded on it in
+  `review_notes`, or it is a disease label retired by a merge that `disease_history` records.
+  Anything else was changed by no reviewer. The module only builds SQL from names fixed in it.
+- `evidence.py` (`summarise`, `check`), `completeness.py` (`_reference`, `_evidence`),
+  `verify_files.py` (`verify_statement_file` and its query), `completeness_cases.py`
+  (`disease_mapping_rows`, `_features`, `_list`), `completeness_rows.py` (`_statement_file`,
+  `_acceptance`): each reads the standing where it read the status, and reports only a row
+  changed by no reviewer. Three counts are renamed to say what they count
+  (`changed_by_no_reviewer`, `mentions_changed_by_no_reviewer`,
+  `diseases_changed_by_no_reviewer`), and seven report lines are reworded to match.
+- `__main__.py`: the closing line of the report no longer says that everything is pending.
+
+The two working sets (`mapping_releases`, `knowledge_releases`) are still expected to be
+`pending`: they are never decided as a whole (E83, E84).
+
+**Impact analysis.** HIGH for `_reference`, `_evidence`, `verify_statement_file`,
+`_statement_file` and `_acceptance`: each has one direct caller, but all are on the single path
+of the `completeness` command (`gather`, `inspect_file`, `emit`, `run_completeness`, `main`).
+LOW for `summarise`, `check`, `disease_mapping_rows`, `_features`, `_list` and `main`. The HIGH
+result was reported to the owner before the edit with the plan for every caller: no caller is
+edited; each changed function keeps the shape of what it returns; the renamed counts are changed
+at every reader in the same commit; the real command is run before and after. `detect_changes`
+before commit: "high", 32 names in 9 files. Compared with the last commit by syntax tree: the
+eleven functions above, the query `_STATEMENT_ROWS`, three existing tests and one test fixture
+are changed, and two tests are new; `_feature_rows`, `_Named` and the other names listed are
+there only because lines above them moved.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 67 files |
+| `uv run pytest -m "not archives"` (SQLite) | 240 passed, 63 skipped |
+| `uv run pytest` (SQLite, archives included) | 246 passed, 66 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | four runs: 311 passed and 1 failed; then 312 passed three times |
+| `uv run python -m feeltriva_ingestion completeness` on the main database, before the change | 236 checks: 230 ok, 0 mismatches, 6 left to a later sub-step; 489 s |
+| the same command with the changed code, twice | 236 checks: 230 ok, 0 mismatches, 6 left to a later sub-step, both times; 1,472 s beside two full test suites, 672 s alone. Earlier runs of the unchanged check took between 464 s and 697 s (M2.6a to M2.6c) |
+
+Compared line by line, the two reports differ only in the reworded lines; every expected and
+loaded value is the same.
+
+The two new tests prove, on crafted files loaded with the real loaders: for each of the six
+kinds of row (source, disease, disease mapping, feature, feature mapping, evidence row), a row
+approved with no decision behind it is reported, the same row with its decision recorded as the
+review path records it is not, and a row whose status is not its last recorded decision is
+reported; a label retired by a merge is in order once the history records the merge; an
+approved evidence row with its decision passes `load-evidence`, one without is reported, and a
+decision for another status does not cover it. Three existing tests were changed to the new
+names and wording; one of them now also shows that an approved statement with its decision is
+in order. The invented evidence rows of the knowledge-release tests are no longer removed after
+each test: they stay approved with their decisions, and the `load-evidence` tests that share the
+database accept them, which is the fault of M2.5c3 shown the other way round.
+
+**The failed run.** The first of the four PostgreSQL runs failed in
+`tests/mcp/test_mcp_parity.py::test_full_flow_gives_identical_results_over_rest_and_mcp`. This
+sub-step changes nothing in the API or the MCP server. The test then passed five times alone and
+in three more full runs, two of them under load. It is the intermittent failure first recorded
+in M2.13b; this is its second sighting. Its error text was again not captured, because the run
+printed only its last lines. From now on the full output of every PostgreSQL run is saved, so
+that the next sighting shows the cause. Recorded as open, not as fixed.
+
+**Bugs.**
+
+- **BUG-025 — `load-evidence` and `completeness` reported every row that was not `pending`.**
+  The fault of BUG-021 in two more commands, found in M2.5c3 when two older tests failed. Fixed
+  here as described above.
+
+**Limits, stated plainly.**
+
+- The rule trusts `review_notes`. A note can only be written in a reviewer's transaction
+  (row-level security), but whoever owns the schema can write one directly; the check cannot
+  tell that from a decision made through the review path.
+- A reviewer who gives a kept label its standard name at a merge changes `preferred_name`. No
+  check compares that name with the imported one today; if one is added it must allow for this.
+- The checks of vocabulary links, relation suggestions and claims keep their own rule (a decided
+  row names its reviewer in its own column). They already accepted reviewed rows.
+- `completeness` still says nothing about clinical validity, and now also passes rows a
+  reviewer rejected or retired: it checks that the import is intact, not what was decided.
+

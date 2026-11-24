@@ -13,6 +13,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 from .cases import SPLIT_FLAG
+from .decisions import IN_ORDER
 from .lists import COUNT_FLAG, EMPTY_FLAG, feature_candidate_id
 from .load import disease_candidate_id
 
@@ -101,9 +102,15 @@ def disease_mapping_rows(report: Report, world: dict[str, Any], key: tuple[str, 
     lexical = sum(
         1
         for label, (disease_id, _native, method, status) in stored.items()
-        if disease_id == disease_candidate_id(label) and method == "lexical_casefold_whitespace" and status == "pending"
+        if disease_id == disease_candidate_id(label) and method == "lexical_casefold_whitespace" and status in IN_ORDER
     )
-    report.check(row, "label mappings that are lexical candidates awaiting review", len(stored), lexical, "rule")
+    report.check(
+        row,
+        "label mappings that are lexical candidates, pending or decided by a reviewer",
+        len(stored),
+        lexical,
+        "rule",
+    )
 
 
 def _features(report: Report, world: dict[str, Any], key: tuple[str, str], info: dict[str, Any], row: int) -> None:
@@ -163,9 +170,9 @@ def _features(report: Report, world: dict[str, Any], key: tuple[str, str], info:
     )
     report.check(
         row,
-        "mappings still pending review, none reading a zero as a denial",
+        "mappings pending or decided by a reviewer, none reading a zero as a denial",
         len(mapped),
-        sum(1 for mapping in mapped.values() if mapping["zero"] != "absent" and mapping["status"] == "pending"),
+        sum(1 for mapping in mapped.values() if mapping["zero"] != "absent" and mapping["status"] in IN_ORDER),
         "manifest",
     )
     report.check(
@@ -225,9 +232,10 @@ def _list(report: Report, world: dict[str, Any], info: dict[str, Any], row: int)
     stored = {term: world["feature_rows"].get(mapping["id"], NO_ROWS) for term, mapping in listed.items()}
     report.check(
         row,
-        "distinct list terms, each with its own pending mapping (and no mapping for other terms)",
+        "distinct list terms, each with its own mapping, pending or decided by a reviewer (and no mapping for "
+        "other terms)",
         len(terms),
-        sum(1 for term in terms if term in listed and listed[term]["status"] == "pending")
+        sum(1 for term in terms if term in listed and listed[term]["status"] in IN_ORDER)
         if set(listed) <= set(terms)
         else f"{len(set(listed) - set(terms))} mappings for terms the file does not contain",
         "file",

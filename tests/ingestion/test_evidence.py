@@ -280,6 +280,50 @@ def test_every_stored_proposal_is_pending_and_has_provenance(crafted, owner_db):
     result = load_evidence(c["url"], c["manifest"], narrative_sources=[c["narrative_sid"]])
     assert set(result["stored"]) >= {COOCCURRENCE_TYPE, NARRATIVE_TYPE}
     for stored in result["stored"].values():
-        assert stored["not_pending"] == 0 and stored["without_provenance"] == 0
+        assert stored["changed_by_no_reviewer"] == 0 and stored["without_provenance"] == 0
         assert stored["frequency_without_denominator"] == 0 and stored["frequency_out_of_range"] == 0
     assert re.fullmatch(r"recf_[0-9a-f]{16}", whole_file_record_id(c["sid"]))
+
+
+@pytest.mark.postgres
+def test_a_proposal_a_reviewer_decided_passes_the_check_and_one_changed_by_nobody_does_not(crafted, owner_db):
+    """M2.5d1. The check used to report every evidence row that was not pending (BUG-021)."""
+    c = crafted
+
+    def run():
+        return load_evidence(c["url"], c["manifest"], narrative_sources=[c["narrative_sid"]])
+
+    run()
+    with owner_db.transaction(None) as tx:
+        decided, changed = tx.execute(
+            text("SELECT evidence_id FROM disease_feature_evidence WHERE record_id = :r ORDER BY evidence_id LIMIT 2"),
+            {"r": whole_file_record_id(c["sid"])},
+        ).scalars()
+    approve = text("UPDATE disease_feature_evidence SET status = 'approved' WHERE evidence_id = :e")
+    note = text(
+        "INSERT INTO review_notes (note_id, target_type, target_id, reviewer, note, status_change) "
+        "VALUES (:n, 'evidence', :e, 'dev-reviewer:test', 'Decided in a test.', :s)"
+    )
+    try:
+        # Approved, with the decision recorded as the review path records it: in order.
+        with owner_db.transaction(None) as tx:
+            tx.execute(approve, {"e": decided})
+            tx.execute(note, {"n": uuid.uuid4(), "e": decided, "s": "approved"})
+        result = run()
+        assert check(result) == [] and result["stored"][COOCCURRENCE_TYPE]["changed_by_no_reviewer"] == 0
+        # Approved with no decision behind it: reported.
+        with owner_db.transaction(None) as tx:
+            tx.execute(approve, {"e": changed})
+        assert check(run()) == [f"{COOCCURRENCE_TYPE}: 1 rows changed by no reviewer"]
+        # A decision recorded for another status than the row has does not cover it.
+        with owner_db.transaction(None) as tx:
+            tx.execute(note, {"n": uuid.uuid4(), "e": changed, "s": "rejected"})
+        assert check(run()) == [f"{COOCCURRENCE_TYPE}: 1 rows changed by no reviewer"]
+    finally:  # the check reads the whole table, and other tests share this database
+        with owner_db.transaction(None) as tx:
+            ids = {"a": decided, "b": changed}
+            tx.execute(
+                text("UPDATE disease_feature_evidence SET status = 'pending' WHERE evidence_id IN (:a, :b)"), ids
+            )
+            tx.execute(text("DELETE FROM review_notes WHERE target_type = 'evidence' AND target_id IN (:a, :b)"), ids)
+    assert check(run()) == []

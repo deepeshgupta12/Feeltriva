@@ -31,6 +31,7 @@ from sqlalchemy import create_engine
 
 from .archives import Manifest, load_manifest
 from .cases import _raw_cursor, case_files
+from .decisions import changed_by_no_reviewer
 from .load import source_id
 
 NARRATIVE_TYPE = "narrative_lexical_mention"
@@ -248,7 +249,8 @@ def _load_cooccurrence(cur: Any, sources: list[tuple[str, str, str]]) -> dict[st
 
 def summarise(cur: Any) -> dict[str, Any]:
     cur.execute(
-        """SELECT evidence_type, count(*), count(*) FILTER (WHERE status <> 'pending'),
+        f"""SELECT evidence_type, count(*),
+                  count(*) FILTER (WHERE {changed_by_no_reviewer("disease_feature_evidence")}),
                   count(*) FILTER (WHERE statement_id IS NULL AND record_id IS NULL),
                   count(*) FILTER (WHERE frequency IS NOT NULL AND frequency_denominator IS NULL),
                   count(*) FILTER (WHERE frequency IS NOT NULL AND (frequency <= 0 OR frequency > 1)),
@@ -257,7 +259,7 @@ def summarise(cur: Any) -> dict[str, Any]:
     )
     keys = (
         "rows",
-        "not_pending",
+        "changed_by_no_reviewer",
         "without_provenance",
         "frequency_without_denominator",
         "frequency_out_of_range",
@@ -292,7 +294,12 @@ def check(result: dict[str, Any]) -> list[str]:
     """Internal consistency of what was written. Empty = consistent."""
     diffs = []
     for evidence_type, stored in result["stored"].items():
-        for key in ("not_pending", "without_provenance", "frequency_without_denominator", "frequency_out_of_range"):
+        for key in (
+            "changed_by_no_reviewer",
+            "without_provenance",
+            "frequency_without_denominator",
+            "frequency_out_of_range",
+        ):
             if stored[key]:
                 diffs.append(f"{evidence_type}: {stored[key]} rows {key.replace('_', ' ')}")
     for name, source in result["cooccurrence"]["per_source"].items():

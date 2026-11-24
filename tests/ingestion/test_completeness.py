@@ -122,6 +122,11 @@ def _mismatches(report):
 
 
 STATED = "feature positions named in the mapping table"
+# A reviewer's decision as the review path records it; the last argument is how many hours ago.
+NOTE = (
+    "INSERT INTO review_notes (note_id, target_type, target_id, reviewer, note, status_change, created_at) "
+    "VALUES (gen_random_uuid(), %s, %s, 'dev-reviewer:test', 'Decided in a test.', %s, now() - %s * interval '1 hour')"
+)
 
 
 # -- case files: a crafted train/test matrix ----------------------------------------------------
@@ -340,9 +345,11 @@ def test_every_kind_of_damage_to_loaded_cases_is_reported(matrix, owner_db):
         "repeated headings whose number of conflicting cases": (
             f"UPDATE case_features SET conflict = false WHERE mapping_id = '{dup}'"
         ),
-        "mappings still pending": f"UPDATE feature_mappings SET status = 'approved' WHERE mapping_id = '{f1}'",
+        "mappings pending or decided by a reviewer": (
+            f"UPDATE feature_mappings SET status = 'approved' WHERE mapping_id = '{f1}'"
+        ),
         "none reading a zero as a denial": f"UPDATE feature_mappings SET zero_semantics = 'absent' WHERE mapping_id = '{f1}'",
-        "already marked approved": f"UPDATE feature_mappings SET status = 'approved' WHERE mapping_id = '{f1}'",
+        "only a reviewer may decide": f"UPDATE feature_mappings SET status = 'approved' WHERE mapping_id = '{f1}'",
         "headings found at their registered position": (
             f"UPDATE feature_mappings SET original_term = 'renamed' WHERE mapping_id = '{f1}'"
         ),
@@ -361,7 +368,7 @@ def test_every_kind_of_damage_to_loaded_cases_is_reported(matrix, owner_db):
         "marked as such on the case": (
             f"UPDATE dataset_cases SET duplicate_status = 'no_duplicate_detected' WHERE record_id = {_row(train, 4)}"
         ),
-        "count, denominator, frequency or pending status differs": (
+        "count, denominator or frequency differs": (
             "UPDATE disease_feature_evidence SET frequency = 0.123456 "
             f"WHERE record_id = '{whole_file_record_id(train)}'"
         ),
@@ -548,7 +555,7 @@ def test_narrative_rows_are_compared_with_their_statements(tmp_path, owner_db):
         facts = facts_of(cur)
     assert facts["aligned"] and not +facts["row_diffs"]
     assert (facts["rows"], facts["links_expected"], facts["links"]) == (5, 4, 4)
-    assert (facts["statements_expected"], facts["statements"], facts["not_pending"]) == (4, 4, 0)
+    assert (facts["statements_expected"], facts["statements"], facts["changed_by_no_reviewer"]) == (4, 4, 0)
     assert (
         facts["expected_flags"]
         == facts["flags"]
@@ -577,9 +584,14 @@ def test_narrative_rows_are_compared_with_their_statements(tmp_path, owner_db):
         approved = facts_of(cur)
         cur.execute(f"DELETE FROM source_records WHERE record_id = 'rec_{tag}_5'")  # the row without a statement
         assert facts_of(cur)["aligned"] is False  # a missing record: rows cannot be paired
-    assert approved["not_pending"] == 1
+    assert approved["changed_by_no_reviewer"] == 1
+    # The same approval with a reviewer's decision recorded for it is in order.
+    with scratch(os.environ["TEST_MIGRATION_DATABASE_URL"]) as cur:
+        cur.execute(f"UPDATE statements SET status = 'approved' WHERE statement_id = 'st_{tag}_1'")
+        cur.execute(NOTE, ("statement", f"st_{tag}_1", "approved", 0))
+        assert facts_of(cur)["changed_by_no_reviewer"] == 0
 
-    # The report lines for a narrative table, with the approval above counted as a mismatch.
+    # The report lines for a narrative table, with the approval nobody recorded counted as a mismatch.
     report = Report(mapping_table())
     info = {
         "entry": {"archive": "archive(13).zip", "file": "symptoms.csv"},
@@ -590,7 +602,12 @@ def test_narrative_rows_are_compared_with_their_statements(tmp_path, owner_db):
     world = {
         "disease_cross": {},
         "reference": {"disease": {}},
-        "evidence": {"mentions_expected": 2, "mentions": 2, "mentions_unexpected": 0, "mentions_not_pending": 0},
+        "evidence": {
+            "mentions_expected": 2,
+            "mentions": 2,
+            "mentions_unexpected": 0,
+            "mentions_changed_by_no_reviewer": 0,
+        },
         "claims": {
             "statements": 4,
             "expected": 9,
@@ -601,7 +618,9 @@ def test_narrative_rows_are_compared_with_their_statements(tmp_path, owner_db):
         },
     }
     _statement_file(report, world, ("archive(13).zip", "symptoms.csv"), info)
-    assert _mismatches(report) == ["statements already approved (imported text stays pending until reviewed)"]
+    assert _mismatches(report) == [
+        "statements whose status was changed by no reviewer (imported text stays pending until reviewed)"
+    ]
     # The single claims are checked since M2.6: nothing in this row is left for a later sub-step.
     assert {check.row for check in report.checks} == {12} and report.deferred == []
     # A claim that is missing, and one the rules do not make, are both mismatches.
@@ -694,3 +713,65 @@ def test_text_chunks_must_reproduce_the_file_at_their_offsets(tmp_path, owner_db
 
 def test_a_file_the_mapping_table_does_not_name_has_no_rows():
     assert completeness_cases.roles_of({"archive": "unknown.zip", "file": "x.csv", "adapter": "symptom_list"}) == {}
+
+
+@pytest.mark.postgres
+def test_a_row_a_reviewer_decided_is_in_order_and_a_row_changed_by_nobody_is_reported(matrix, owner_db):
+    """M2.5d1. The check used to report every row that was not pending (BUG-021)."""
+    _register_label_mappings(owner_db, matrix)
+    train = source_id(matrix["archive"], "train.csv")
+    tag = matrix["release"].removeprefix("rel-")
+    flu, cold = disease_candidate_id("Flu"), disease_candidate_id("Cold")
+    with scratch(matrix["url"]) as cur:
+        cur.execute(
+            "SELECT mapping_id FROM disease_mappings WHERE release_id = %s AND source_id = %s AND original_label = 'Flu'",
+            (matrix["release"], train),
+        )
+        label_mapping = cur.fetchone()[0]
+        cur.execute(
+            "SELECT min(evidence_id) FROM disease_feature_evidence WHERE record_id = %s", (whole_file_record_id(train),)
+        )
+        proposal = cur.fetchone()[0]
+    rows = {  # review target type -> table, key column, status column, key
+        "source": ("sources", "source_id", "provenance_status", train),
+        "disease": ("diseases", "disease_id", "status", flu),
+        "disease_mapping": ("disease_mappings", "mapping_id", "status", label_mapping),
+        "feature": ("features", "feature_id", "status", f"feat_{tag}_f1"),
+        "feature_mapping": ("feature_mappings", "mapping_id", "status", f"fm_{tag}_tr_4"),
+        "evidence": ("disease_feature_evidence", "evidence_id", "status", proposal),
+    }
+
+    def reported(cur):
+        return [measure for measure in _mismatches(_case_report(cur, matrix)[0]) if not measure.endswith(STATED)]
+
+    def by_nobody(cur):
+        return any("changed by no reviewer" in measure for measure in reported(cur))
+
+    for target, (table, key, status, value) in rows.items():
+        change = f"UPDATE {table} SET {status} = %s WHERE {key} = %s"
+        with scratch(matrix["url"]) as cur:
+            cur.execute(change, ("approved", value))
+            assert cur.rowcount == 1, target
+            assert by_nobody(cur), f"an approved {target} with no decision behind it was not reported"
+            cur.execute(NOTE, (target, value, "approved", 0))
+            assert reported(cur) == [], f"an approved {target} with its decision recorded was reported"
+        with scratch(matrix["url"]) as cur:
+            # The last recorded decision is the one that counts: approved an hour ago, rejected since.
+            cur.execute(NOTE, (target, value, "approved", 1))
+            cur.execute(NOTE, (target, value, "rejected", 0))
+            cur.execute(change, ("approved", value))
+            assert by_nobody(cur), f"a {target} whose status is not its last decision was not reported"
+            cur.execute(change, ("rejected", value))
+            assert reported(cur) == [], target
+    # A label merged into another was retired by the merge, which the history records with the reviewer's name.
+    with scratch(matrix["url"]) as cur:
+        cur.execute("UPDATE diseases SET status = 'retired', redirected_to = %s WHERE disease_id = %s", (cold, flu))
+        assert by_nobody(cur)
+        cur.execute(
+            "INSERT INTO disease_history (event_id, action, disease_id, other_id, reviewer, note) "
+            "VALUES (gen_random_uuid(), 'merge', %s, %s, 'dev-reviewer:test', 'They name the same thing.')",
+            (flu, cold),
+        )
+        assert reported(cur) == []
+    with scratch(matrix["url"]) as cur:  # every change above was rolled back
+        assert reported(cur) == []

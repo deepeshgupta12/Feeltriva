@@ -136,7 +136,8 @@ Reviewers can list the links at `GET /internal/v1/review/terminology-links` and 
 `completeness` prints, for each of the 27 rows of the source-to-target table in
 `docs/04_DATA_MAPPING.md`, the loaded value next to the expected one and exits with status 1 on
 any mismatch. It confirms that the data is loaded as the handoff requires. It is not a clinical
-check: everything it looks at is still pending review.
+check: everything it looks at is pending review or carries a reviewer's recorded decision, and a
+row whose status was changed by no reviewer is reported as a mismatch.
 
 ### MCP
 

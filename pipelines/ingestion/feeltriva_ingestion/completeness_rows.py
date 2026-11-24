@@ -24,6 +24,7 @@ from .completeness_cases import (
     row_diffs,
     split_rows,
 )
+from .decisions import IN_ORDER
 
 if TYPE_CHECKING:
     from .completeness import Report
@@ -140,7 +141,11 @@ def _statement_file(report: Report, world: dict[str, Any], key: tuple[str, str],
     report.check(row, f"rows whose stored statement or attribution differs from the file{detail}", 0, differing, "file")
     report.check(row, "statements linked to the source URL supplied for them", linked, attributed["source_url"], "file")
     report.check(
-        row, "statements already approved (imported text stays pending until reviewed)", 0, facts["not_pending"], "rule"
+        row,
+        "statements whose status was changed by no reviewer (imported text stays pending until reviewed)",
+        0,
+        facts["changed_by_no_reviewer"],
+        "rule",
     )
     if "native_id" in roles:
         stored = world["reference"]["disease"].get(sid, {})
@@ -204,9 +209,9 @@ def _statement_file(report: Report, world: dict[str, Any], key: tuple[str, str],
         )
         report.check(
             row,
-            "proposals that are not a mention in the statement, or are already approved",
+            "proposals that are not a mention in the statement, or whose status was changed by no reviewer",
             0,
-            evidence["mentions_unexpected"] + evidence["mentions_not_pending"],
+            evidence["mentions_unexpected"] + evidence["mentions_changed_by_no_reviewer"],
             "rule",
         )
         claims = world["claims"]
@@ -366,7 +371,7 @@ def _acceptance(report: Report, world: dict[str, Any]) -> None:
                 or found[0] != n
                 or found[1] != denominator
                 or abs(float(found[2]) - n / denominator) > 6e-7
-                or found[3] != "pending"
+                or found[3] not in IN_ORDER
             ):
                 wrong += 1
     report.check(
@@ -378,7 +383,8 @@ def _acceptance(report: Report, world: dict[str, Any]) -> None:
     )
     report.check(
         0,
-        "co-occurrence proposals whose count, denominator, frequency or pending status differs from the files",
+        "co-occurrence proposals whose count, denominator or frequency differs from the files, or whose status was "
+        "changed by no reviewer",
         0,
         wrong,
         "files",
@@ -387,29 +393,34 @@ def _acceptance(report: Report, world: dict[str, Any]) -> None:
         m for group in (reference["positional"], reference["listed"]) for s in group.values() for m in s.values()
     ]
     used = {mapping["feature"] for mapping in mappings}
-    approved = {
+    # A row a reviewer decided is in order. The two working sets are not decided at all: they stay pending,
+    # and what is approved in them is what a published release says (decisions E83, E84).
+    changed = {
         "sources": sum(
-            1 for info in files.values() if reference["sources"].get(info["sid"], (0, 0, "pending"))[2] != "pending"
+            1 for info in files.values() if reference["sources"].get(info["sid"], (0, 0, "pending"))[2] not in IN_ORDER
         ),
-        "disease mappings": sum(1 for s in reference["disease"].values() for m in s.values() if m[3] != "pending"),
-        "diseases": reference["approved_diseases"],
-        "feature mappings": sum(1 for mapping in mappings if mapping["status"] != "pending"),
+        "disease mappings": sum(1 for s in reference["disease"].values() for m in s.values() if m[3] not in IN_ORDER),
+        "diseases": reference["diseases_changed_by_no_reviewer"],
+        "feature mappings": sum(1 for mapping in mappings if mapping["status"] not in IN_ORDER),
         "features": sum(
-            1 for feature_id in used if reference["features"].get(feature_id, ("", "pending"))[1] != "pending"
+            1 for feature_id in used if reference["features"].get(feature_id, ("", "pending"))[1] not in IN_ORDER
         ),
         "statements": sum(
-            info["facts"]["not_pending"] for info in files.values() if info["kind"] == "statement" and info["facts"]
+            info["facts"]["changed_by_no_reviewer"]
+            for info in files.values()
+            if info["kind"] == "statement" and info["facts"]
         ),
-        "narrative proposals": evidence["mentions_not_pending"],
+        "narrative proposals": evidence["mentions_changed_by_no_reviewer"],
         "mapping release": int(reference["mapping_release_status"] != "pending"),
         "knowledge release": int(texts["release_status"] != "pending"),
     }
-    found = {name: n for name, n in approved.items() if n}
+    found = {name: n for name, n in changed.items() if n}
     report.check(
         0,
-        f"imported items already marked approved; only a reviewer may do that{' ' + str(found) if found else ''}",
+        "imported items whose status was changed by no reviewer; only a reviewer may decide"
+        f"{' ' + str(found) if found else ''}",
         0,
-        sum(approved.values()),
+        sum(changed.values()),
         "rule",
     )
     report.check(

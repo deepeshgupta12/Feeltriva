@@ -26,6 +26,7 @@ from .archives import read_csv_positional
 from .audit import DISEASE_HEADERS, norm_label
 from .cases import _hash
 from .chunks import ChunkingError, chunk_document, uncovered_characters
+from .decisions import IN_ORDER, standing
 from .load import _h, disease_candidate_id
 
 # Columns of a case file that are not feature columns, by what the loaders do with them.
@@ -45,8 +46,8 @@ _CASE_ROWS = """SELECT r.row_number, r.content_hash, r.quality_flags, r.original
 FROM source_records r LEFT JOIN dataset_cases c USING (record_id) LEFT JOIN case_labels l USING (case_id)
 WHERE r.source_id = %s AND r.row_number IS NOT NULL ORDER BY r.row_number, l.disease_id"""
 
-_STATEMENT_ROWS = """SELECT r.row_number, r.content_hash, r.quality_flags, ss.source_url, ss.text_span,
-       st.statement_id, st.statement_type, st.text_content, st.status::text, st.disease_id
+_STATEMENT_ROWS = f"""SELECT r.row_number, r.content_hash, r.quality_flags, ss.source_url, ss.text_span,
+       st.statement_id, st.statement_type, st.text_content, {standing("statements", "st")}, st.disease_id
 FROM source_records r LEFT JOIN statement_sources ss USING (record_id) LEFT JOIN statements st USING (statement_id)
 WHERE r.source_id = %s AND r.row_number IS NOT NULL ORDER BY r.row_number, st.statement_id"""
 
@@ -285,7 +286,7 @@ def verify_statement_file(
         "expected_flags": Counter(),
         "links_expected": 0,
         "links": 0,
-        "not_pending": 0,
+        "changed_by_no_reviewer": 0,
         "attribution_rows": Counter(),
         "labels": set(),
     }
@@ -329,7 +330,7 @@ def verify_statement_file(
             _, _, _, url, span, statement_id, statement_type, text, status, stored_disease = linked[0]
             facts["links"] += 1
             statement_ids.add(statement_id)
-            facts["not_pending"] += status != "pending"
+            facts["changed_by_no_reviewer"] += status not in IN_ORDER
             if (
                 statement_type != want["type"]
                 or norm_label(text) != norm_label(want["text"])

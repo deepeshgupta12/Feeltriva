@@ -11,7 +11,9 @@ silently. Work that the table asks for but a later sub-step owns is listed as `l
 that sub-step named; it is never counted as done.
 
 This says the data is loaded as the mapping table requires. It says nothing about clinical
-validity: every mapping, statement, chunk and evidence row checked here is still `pending`.
+validity. Every mapping, statement and evidence row checked here is `pending` or carries a
+reviewer's recorded decision; a row whose status was changed by no reviewer is a mismatch
+(`decisions.py`).
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from .audit import REFERENCE_AUDIT, norm_label
 from .cases import _raw_cursor, original_split
 from .chunks import CATEGORY_FLAG, KNOWLEDGE_RELEASE_ID, TEXT_ARCHIVE
 from .completeness_rows import emit
+from .decisions import IN_ORDER, changed_by_no_reviewer, standing
 from .evidence import (
     _QUESTION_TERM,
     COOCCURRENCE_TYPE,
@@ -185,12 +188,12 @@ def _csv_rows(path: Path) -> list[dict[str, str]]:
 
 def _reference(cur: Any, source_ids: list[str], release_id: str = RELEASE_ID) -> dict[str, Any]:
     """Sources, mappings and features as stored. Small tables, read whole."""
-    cur.execute("SELECT source_id, version, sha256, provenance_status::text FROM sources")
+    cur.execute(f"SELECT source_id, version, sha256, {standing('sources')} FROM sources")
     sources = {row[0]: row[1:] for row in cur.fetchall()}
     disease: dict[str, dict[str, tuple[Any, ...]]] = {}
     cur.execute(
-        "SELECT source_id, original_label, disease_id, original_id, method, status::text FROM disease_mappings "
-        "WHERE release_id = %s AND source_id = ANY(%s)",
+        f"SELECT source_id, original_label, disease_id, original_id, method, {standing('disease_mappings')} "
+        "FROM disease_mappings WHERE release_id = %s AND source_id = ANY(%s)",
         (release_id, source_ids),
     )
     for sid, label, *rest in cur.fetchall():
@@ -198,8 +201,8 @@ def _reference(cur: Any, source_ids: list[str], release_id: str = RELEASE_ID) ->
     positional: dict[str, dict[int, dict[str, Any]]] = {}
     listed: dict[str, dict[str, dict[str, Any]]] = {}
     cur.execute(
-        """SELECT mapping_id, source_id, column_index, original_term, feature_id, zero_semantics, status::text,
-                  transformation ->> 'candidate_term'
+        f"""SELECT mapping_id, source_id, column_index, original_term, feature_id, zero_semantics,
+                  {standing("feature_mappings")}, transformation ->> 'candidate_term'
            FROM feature_mappings WHERE release_id = %s AND source_id = ANY(%s)""",
         (release_id, source_ids),
     )
@@ -209,7 +212,7 @@ def _reference(cur: Any, source_ids: list[str], release_id: str = RELEASE_ID) ->
             listed.setdefault(sid, {})[candidate] = mapping
         else:
             positional.setdefault(sid, {})[int(index)] = mapping
-    cur.execute("SELECT feature_id, kind::text, status::text FROM features")
+    cur.execute(f"SELECT feature_id, kind::text, {standing('features')} FROM features")
     features = {row[0]: row[1:] for row in cur.fetchall()}
     cur.execute(
         """SELECT source_id, count(*), count(DISTINCT content_hash), count(DISTINCT row_number), min(row_number),
@@ -221,11 +224,11 @@ def _reference(cur: Any, source_ids: list[str], release_id: str = RELEASE_ID) ->
     cur.execute("SELECT status::text FROM mapping_releases WHERE release_id = %s", (release_id,))
     release = cur.fetchone()
     cur.execute(
-        """SELECT count(*) FROM diseases WHERE status <> 'pending' AND disease_id IN (
+        f"""SELECT count(*) FROM diseases WHERE {changed_by_no_reviewer("diseases")} AND disease_id IN (
                SELECT disease_id FROM disease_mappings WHERE release_id = %s AND source_id = ANY(%s))""",
         (release_id, source_ids),
     )
-    approved_diseases = cur.fetchone()[0]
+    unreviewed_diseases = cur.fetchone()[0]
     return {
         "sources": sources,
         "disease": disease,
@@ -234,7 +237,7 @@ def _reference(cur: Any, source_ids: list[str], release_id: str = RELEASE_ID) ->
         "features": features,
         "records": records,
         "mapping_release_status": release[0] if release else None,
-        "approved_diseases": approved_diseases,
+        "diseases_changed_by_no_reviewer": unreviewed_diseases,
     }
 
 
@@ -261,8 +264,8 @@ def _evidence(cur: Any, files: dict[tuple[str, str], dict[str, Any]], narrative_
     case_sources = {whole_file_record_id(f["sid"]): key for key, f in files.items() if f["kind"] == "case"}
     cooccurrence: dict[tuple[str, str], dict[tuple[str, str], tuple[Any, ...]]] = {key: {} for key in files}
     cur.execute(
-        """SELECT record_id, disease_id, feature_id, (context ->> 'cases_with_feature')::bigint,
-                  frequency_denominator, frequency, status::text
+        f"""SELECT record_id, disease_id, feature_id, (context ->> 'cases_with_feature')::bigint,
+                  frequency_denominator, frequency, {standing("disease_feature_evidence")}
            FROM disease_feature_evidence WHERE evidence_type = %s AND record_id = ANY(%s)""",
         (COOCCURRENCE_TYPE, list(case_sources)),
     )
@@ -289,7 +292,7 @@ def _evidence(cur: Any, files: dict[tuple[str, str], dict[str, Any]], narrative_
         for statement_id, text in statements.items():
             expected.update((statement_id, feature_id) for feature_id in find_mentions(text, pattern, terms))
     cur.execute(
-        "SELECT statement_id, feature_id, status::text FROM disease_feature_evidence "
+        f"SELECT statement_id, feature_id, {standing('disease_feature_evidence')} FROM disease_feature_evidence "
         "WHERE evidence_type = %s AND statement_id = ANY(%s)",
         (NARRATIVE_TYPE, list(statements)),
     )
@@ -307,7 +310,7 @@ def _evidence(cur: Any, files: dict[tuple[str, str], dict[str, Any]], narrative_
         "mentions_expected": len(expected),
         "mentions": len(expected & set(stored)),
         "mentions_unexpected": len(set(stored) - expected),
-        "mentions_not_pending": sum(1 for status in stored.values() if status != "pending"),
+        "mentions_changed_by_no_reviewer": sum(1 for status in stored.values() if status not in IN_ORDER),
         "by_statement_type": dict(cur.fetchall()),
     }
 
