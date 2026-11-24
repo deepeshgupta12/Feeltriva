@@ -3,11 +3,11 @@
 //
 // Usage:
 //   backend:   uv run uvicorn feeltriva_api.main:app_factory --factory --port 8000   (repo root)
-//   frontend:  pnpm dev:api                                                        (apps/web, port 5174)
+//   frontend:  pnpm dev:api     (apps/web, port 5173: the one web port; stop `pnpm dev` first)
 //   test:      pnpm e2e:live
 //
 // Environment:
-//   E2E_BASE_URL  default http://localhost:5174
+//   E2E_BASE_URL  default http://localhost:5173
 //   E2E_OUT_DIR   optional directory for screenshots
 //   E2E_CHANNEL   Chrome channel for playwright-core, default "chrome"
 //
@@ -17,7 +17,7 @@ import { join } from 'node:path';
 
 import { chromium } from 'playwright-core';
 
-const BASE = (process.env.E2E_BASE_URL ?? 'http://localhost:5174').replace(/\/+$/, '');
+const BASE = (process.env.E2E_BASE_URL ?? 'http://localhost:5173').replace(/\/+$/, '');
 const OUT = process.env.E2E_OUT_DIR ?? null;
 const CHANNEL = process.env.E2E_CHANNEL ?? 'chrome';
 const ALLOWED_STORAGE_KEYS = ['feeltriva.ui.navCollapsed'];

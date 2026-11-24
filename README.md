@@ -63,9 +63,13 @@ Requirements: Node 22.22 or newer and pnpm.
 cd apps/web
 pnpm install
 pnpm dev        # http://localhost:5173  design demo: in-memory sample scenarios, no backend needed
-pnpm dev:api    # http://localhost:5174  live mode: every action goes through the API on :8000
-pnpm dev:review # http://localhost:5174  live mode with the review workspace at /review: notes and decisions are recorded by the API under the reviewer name "owner"
+pnpm dev:api    # http://localhost:5173  live mode: every action goes through the API on :8000
+pnpm dev:review # http://localhost:5173  live mode with the review workspace at /review: notes and decisions are recorded by the API under the reviewer name "owner"
 ```
+
+The web app has one port, 5173, and the three commands above are run one at a time: each refuses to
+start while another holds the port, so stop the one that is running first (owner's instruction,
+2026-11-24: nothing is started on port 5174).
 
 In the design demo, **Demo tools** (top right) switches between the ten scenarios and turns on
 the reviewer preview. In live mode, type the fixture vocabulary (`I have alpha but no beta`,
@@ -75,7 +79,7 @@ starts fresh by design.
 ```bash
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 pnpm smoke      # real Chrome against :5173 — routes, ten scenarios, four viewports
-pnpm e2e:live   # real Chrome against :5174 + the API — intake to deletion through REST
+pnpm e2e:live   # real Chrome against :5173 in live mode (`pnpm dev:api`) + the API — intake to deletion through REST
 ```
 
 ### Tests

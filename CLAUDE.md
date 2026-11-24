@@ -65,10 +65,12 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
   the owner should carry out themselves**: exact commands and, for anything visible, the
   click-by-click steps with what they should see. (Owner's instruction, 2026-11-16.)
 - Keep the backend and one frontend running for the owner while working: API on
-  `http://localhost:8000` and the web app on `http://localhost:5173` (`pnpm dev`, design demo
-  with sample data). Do not leave a second web server running: the live-API mode on
-  `http://localhost:5174` (`pnpm dev:api`) is started only when a sub-step needs it or the
-  owner asks, and stopped afterwards (owner's instruction, 2026-11-17). Restart servers after
+  `http://localhost:8000` and the web app on `http://localhost:5173`. **Port 5173 is the only web
+  port. Nothing is ever started on port 5174** (owner's instruction, 2026-11-24). `pnpm dev`
+  (design demo with sample data), `pnpm dev:api` and `pnpm dev:review` (live mode through the API,
+  the second with the review workspace) all use 5173, one at a time; run the one the owner's
+  tests of the current sub-step need and say in every report which one is running. The browser
+  test of the review workspace (`pnpm e2e:review`) uses no web port. Restart servers after
   changes that need it and say so.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
 

@@ -4823,3 +4823,50 @@ was restarted after M2.5e1 and after M2.4a; the web app on port 5173 was not, be
 demo it serves did not change; port 5174 was used for the browser test and stopped. This
 paragraph was added in a following documents-only commit, after which the index was refreshed
 again.
+
+### Web port — one port, 5173 (owner's instruction of 2026-11-24)
+
+The owner went to test the live review screens and found nothing on port 5174: the working
+agreement had the live mode started there only for a sub-step and stopped afterwards. Their
+instruction: "keep 5174 port closed, we will use 5173 only" (decision E94).
+
+**Impact analysis.** `scripts/e2e-live.mjs` and `scripts/e2e-review-live.mjs`: LOW, no callers
+(both are run from the command line). No application code is changed.
+
+**Implemented.**
+
+- `apps/web/package.json`: `dev:api` and `dev:review` use port 5173, as `dev` does. Each has
+  `--strictPort`, so a second one refuses to start while the first holds the port.
+- `scripts/e2e-review-live.mjs` starts no web server. The new script `build:e2e-review` builds
+  the app in live mode (reviewer `e2e`, service on port 8001) into
+  `node_modules/.cache/feeltriva-e2e-review`, outside Git, and the test hands those files to the
+  browser itself under the address of port 5173. Nothing listens; a web server that is running
+  on 5173 is not touched. `pnpm e2e:review` builds first, then runs the test.
+- `scripts/e2e-live.mjs` expects the live mode on 5173.
+- `CORS_ALLOWED_ORIGINS` in `.env.example` and in the local `.env` names 5173 only.
+- `README.md` and the working agreement in `CLAUDE.md` say: one web port, three commands, one at
+  a time, and every report says which one is running.
+
+**Found on the way.** Chrome refused the calls of the page to the test service: a page handed
+over from disk does not count as a page of this machine, and Chrome blocks such a page from
+calling a service on this machine. The test's browser context is now given the permission
+`local-network-access`. This concerns the test only; a page served by the development server
+is a page of this machine.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `pnpm e2e:review` against the test database, service on port 8001, web server on 5173 left running | 15 passed, 0 failed |
+| Ports afterwards | 5173 answers, 5174 and 8001 do not |
+| `pnpm lint` / `pnpm exec prettier --check` on the two files touched and formatted | clean |
+| `pnpm test` | 130 passed (8 files) |
+| `detect_changes` before commit | 8 files, risk low, no flow affected. The functions it lists in `e2e-review-live.mjs` stand below the inserted lines and are unchanged. It also lists `docs/HANDOFF_README.md` and `apps/web/README.md`, which `git status` shows unchanged: it matched the changed lines of `README.md` to the other files of that name |
+
+**Limits, stated plainly.**
+
+- The design demo and the live mode cannot run side by side any more. Which one is running is
+  said in every report; changing takes stopping one command and starting the other.
+- The browser test still needs a second copy of the service on port 8001 while it runs, on the
+  test database. That is not a web port, and it is stopped when the test ends.
+- `scripts/e2e-live.mjs` is still not laid out by the formatter; three of its lines changed.

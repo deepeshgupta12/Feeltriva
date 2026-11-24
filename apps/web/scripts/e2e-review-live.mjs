@@ -1,25 +1,27 @@
-// Browser test of the internal review workspace against a RUNNING review service (M2.4a).
+// Browser test of the internal review workspace against a RUNNING review service (M2.4a, M2.4b).
 //
 // It records notes and decisions, so the service must run on a TEST database with invented rows,
-// never on real data. All four steps from the repository root:
+// never on real data. No web server is started and no web port is used: `pnpm e2e:review` builds the
+// app in live mode for this test and the test hands the built files to the browser itself, under the
+// address of the one web port (5173). A web server that is running there is not touched.
+// From the repository root:
 //
 //   export TEST_MIGRATION_DATABASE_URL=postgresql+psycopg://feeltriva:feeltriva_dev@127.0.0.1:5440/feeltriva_test
 //   E2E_TAG=$(uv run python apps/web/scripts/seed_review_e2e.py)
 //   DATABASE_URL=postgresql+psycopg://feeltriva_app:feeltriva_app_dev@127.0.0.1:5440/feeltriva_test \
-//     CORS_ALLOWED_ORIGINS=http://localhost:5174 uv run uvicorn feeltriva_api.main:app_factory --factory --port 8001
-//   (in apps/web)  VITE_SERVICE_MODE=http VITE_DEV_AUTH=true VITE_DEV_REVIEWER=e2e \
-//     VITE_API_BASE_URL=http://localhost:8001 pnpm exec vite --port 5174 --strictPort
+//     CORS_ALLOWED_ORIGINS=http://localhost:5173 uv run uvicorn feeltriva_api.main:app_factory --factory --port 8001
 //   (in apps/web)  E2E_TAG=$E2E_TAG pnpm e2e:review
 //
-// Environment: E2E_TAG (required), E2E_BASE_URL (default http://localhost:5174),
-// E2E_API_URL (default http://localhost:8001), E2E_CHANNEL (default "chrome"), E2E_OUT_DIR (screenshots).
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+// Environment: E2E_TAG (required), E2E_API_URL (default http://localhost:8001), E2E_DIST (the build,
+// default node_modules/.cache/feeltriva-e2e-review), E2E_CHANNEL (default "chrome"), E2E_OUT_DIR (screenshots).
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { extname, join, normalize, resolve } from 'node:path';
 
 import { chromium } from 'playwright-core';
 
 const TAG = process.env.E2E_TAG ?? '';
-const BASE = (process.env.E2E_BASE_URL ?? 'http://localhost:5174').replace(/\/+$/, '');
+const BASE = 'http://localhost:5173'; // an address only: the browser is handed the built files, nothing listens
+const DIST = resolve(process.env.E2E_DIST ?? 'node_modules/.cache/feeltriva-e2e-review');
 const API = (process.env.E2E_API_URL ?? 'http://localhost:8001').replace(/\/+$/, '');
 const OUT = process.env.E2E_OUT_DIR ?? null;
 const CHANNEL = process.env.E2E_CHANNEL ?? 'chrome';
@@ -27,6 +29,10 @@ const REVIEWER = 'dev-reviewer:e2e';
 
 if (!/^[0-9a-f]{10}$/.test(TAG)) {
   console.error('E2E_TAG is required: the tag printed by apps/web/scripts/seed_review_e2e.py');
+  process.exit(2);
+}
+if (!existsSync(join(DIST, 'index.html'))) {
+  console.error(`no build of the app in ${DIST}: run this test with \`pnpm e2e:review\`, which builds it first`);
   process.exit(2);
 }
 if (OUT) mkdirSync(OUT, { recursive: true });
@@ -52,7 +58,36 @@ async function service(path) {
 }
 
 const browser = await chromium.launch({ channel: CHANNEL, headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+// The page is handed over from disk, so Chrome does not count it as a page of this machine and would block its
+// calls to the service on this machine; the permission says they are allowed.
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 900 },
+  permissions: ['local-network-access'],
+});
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+// The built app, handed to the browser from disk. A path that is not a file is a page of the app.
+await context.route(`${BASE}/**`, (route) => {
+  const path = normalize(decodeURIComponent(new URL(route.request().url()).pathname));
+  const file = join(DIST, path);
+  const found = file.startsWith(DIST) && extname(file) !== '' && existsSync(file);
+  if (!found && extname(path) !== '') return route.fulfill({ status: 404, body: 'not found' });
+  const served = found ? file : join(DIST, 'index.html');
+  return route.fulfill({
+    status: 200,
+    contentType: TYPES[extname(served)] ?? 'application/octet-stream',
+    body: readFileSync(served),
+  });
+});
 const page = await context.newPage();
 const problems = [];
 const tokens = new Set();
