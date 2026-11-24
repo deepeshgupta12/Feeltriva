@@ -14,6 +14,7 @@ export const TEST_CONFIG: AppConfig = {
   serviceMode: 'mock',
   apiBaseUrl: 'http://localhost:8000',
   devAuth: false,
+  devReviewer: null,
   demoTools: true,
 };
 

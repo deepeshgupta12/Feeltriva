@@ -25,7 +25,7 @@ from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
 from .errors import ApiError
-from .review import list_terminology_links
+from .review import list_notes, list_terminology_links
 from .review_rules import list_rules
 from .service import AssessmentService
 from .settings import Settings, get_settings
@@ -488,6 +488,10 @@ def create_app(settings: Settings | None = None, container: Container | None = N
                 container.db, who, status=status, disease_id=disease_id, q=q, limit=limit, offset=offset
             )
         )
+
+    @app.get("/internal/v1/review/notes")
+    def review_notes(target_type: str, target_id: str, who: Who) -> JSONResponse:
+        return JSONResponse(list_notes(container.db, who, target_type=target_type, target_id=target_id))
 
     return app
 

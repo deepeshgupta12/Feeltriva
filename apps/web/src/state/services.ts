@@ -4,6 +4,7 @@ import type { AssessmentService } from '@/api/assessmentService';
 import { FixtureConditionInfoService, type ConditionInfoService } from '@/api/conditionInfoService';
 import { createAuthTokenProvider } from '@/api/http/auth';
 import { HttpAssessmentService } from '@/api/http/HttpAssessmentService';
+import { HttpLiveReviewApi, type LiveReviewApi } from '@/api/liveReview';
 import { MockAssessmentService } from '@/api/mock/MockAssessmentService';
 import { FixtureReviewService, type ReviewService } from '@/api/reviewService';
 import type { AppConfig } from '@/config/env';
@@ -19,6 +20,8 @@ export interface AppServices {
   /** Fixture-backed until the API has endpoints for these. */
   conditions: ConditionInfoService;
   review: ReviewService;
+  /** The review workspace against the running API. Used in http mode; the fixtures above serve the demo. */
+  liveReview: LiveReviewApi;
   registry: SessionRegistry;
 }
 
@@ -47,6 +50,8 @@ export function createAppServices(config: AppConfig, overrides: Partial<AppServi
     mock,
     conditions: overrides.conditions ?? new FixtureConditionInfoService(),
     review: overrides.review ?? new FixtureReviewService(),
+    liveReview:
+      overrides.liveReview ?? new HttpLiveReviewApi({ baseUrl: config.apiBaseUrl, devReviewer: config.devReviewer }),
     registry: overrides.registry ?? new SessionRegistry(assessment),
   };
 }

@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5e2 (2026-11-24).
+Last updated after sub-step M2.4a (2026-11-24).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -259,7 +259,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 |---|---|---|---|---|
 | M0 | Clean checkout starts with documented commands; migrations up/down; contract references resolve; no secrets; clinical mode off | Done | Mock embedding adapter does not exist | M0; M5.2 |
 | M1 | All 12 CSVs and 85 texts accounted for; counts and duplicate findings reproduce; reruns idempotent; archive-16 conflicts retained; archive-15 split recorded and flagged | Done | `uv run python -m feeltriva_ingestion completeness` checks four of the five criteria against the files and the audit (235 checks, 0 mismatches). Idempotent reruns cannot be checked by a read-only command; each loader's tests rerun it and expect no change | M1.1 – M1.13 |
-| M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Rule, mapping and knowledge releases can be published and rolled back (M2.5b, M2.5c2, M2.5c3). The serving bundle is assembled from the current releases (M2.5f) and condition information is read from views over them (M2.9). Missing: review screens; claims after review | M2.4, M2.5e |
+| M2 | Pending content cannot enter serving; every displayed claim has a source; conflicting records inspectable; releases can be rolled back | Partial | Rule, mapping and knowledge releases can be published and rolled back (M2.5b, M2.5c2, M2.5c3). The serving bundle is assembled from the current releases (M2.5f) and condition information is read from views over them (M2.9). The review screens read and write through the review API (M2.4a) and claims are handled after review (M2.5e). Missing: the close vocabulary results and the urgency rules in words on a screen | M2.4b, M2.4c |
 | M3 | End-to-end without a paid provider; cross-session access fails; stale answers 409; errors never reassure; corrections invalidate; REST and MCP match | Done | Follow-on gaps listed under FR05, FR06, FR11, FR14 | M3.8 – M3.15 |
 | M4 | No grouped leakage; reproducible; unsupported metrics unavailable; no promotion on accuracy alone | Missing | All | M4 |
 | M5 | Missing evidence abstains; explanation cannot change urgency or add a candidate; no private text in telemetry | Missing | All (abstention on missing evidence is done) | M5 |

@@ -584,3 +584,28 @@ def _link_guard(tx: Any, link: TerminologyLink, status: str, principal: Principa
 
 
 _GUARDS["terminology_link"] = _link_guard
+
+
+def list_notes(db: Database, principal: Principal, *, target_type: str, target_id: str) -> dict[str, Any]:
+    """The notes and decisions recorded on one review target, oldest first, for reviewers only (M2.4a)."""
+    principal.require_role("reviewer")
+    if target_type not in _TARGETS:
+        raise ApiError(422, "unknown_review_target", "Unknown review target type.")
+    with db.transaction(principal.subject, role="reviewer") as tx:
+        notes = tx.scalars(
+            select(ReviewNote)
+            .where(ReviewNote.target_type == target_type, ReviewNote.target_id == target_id)
+            .order_by(ReviewNote.created_at, ReviewNote.note_id)
+        ).all()
+        return {
+            "items": [
+                {
+                    "note_id": str(note.note_id),
+                    "reviewer": note.reviewer,
+                    "note": note.note,
+                    "status_change": note.status_change,
+                    "at": note.created_at.isoformat() if note.created_at else None,
+                }
+                for note in notes
+            ]
+        }

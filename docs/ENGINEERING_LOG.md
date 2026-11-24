@@ -35,6 +35,7 @@ command output, not estimated.
 | BUG-024 | M2.5c1 | Two merge or split events written within one second came back in the wrong order on SQLite, because the history was ordered by a time the database filled in | Fixed before commit |
 | BUG-025 | M1.11, M1.13 / M2.5c3, M2.5d1 | The self-checks of `load-evidence` and `completeness` reported every row that was not `pending`, so both commands would fail as soon as a reviewer decided a row (the fault of BUG-021, left in two more commands). Shown by the test suite in M2.5c3 | Fixed in M2.5d1 |
 | BUG-026 | M1.10 / M2.5f | A test of the chunk loader searched the shared test database for words every run stores, with a limit of 50, and expected its own row among the results; once more than 50 runs had left their rows it failed depending on the order | Fixed in M2.5f: the test searches for its own run's word |
+| BUG-027 | M2.1 / M2.4a | Two notes recorded on one item within a second came back in either order on SQLite, and every note of one transaction carried the same time on PostgreSQL, because the database filled the time in | Fixed in M2.4a: a note's time is set by the code, to the microsecond |
 
 ## Entries
 
@@ -4708,3 +4709,108 @@ code was right and the tests were changed.
   at its limit is not recognised.
 - It measures words. A source that cuts at a number of characters is not recognised.
 - A kept claim keeps the evidence row it made.
+
+**Committed and indexed (M2.5e2).** Committed as `2a9d1e3` and pushed. The code graph was
+re-indexed and reports up-to-date at `2a9d1e3`. No server needed a restart for it: only the
+ingestion pipeline changed. CI results of M2.5e1 and M2.5e2 are recorded with M2.4a below.
+
+### M2.4a — The review screens read and write through the review API
+
+Owner's instruction of 2026-11-24: "Do M2.5e and M2.4". M2.4 held three pieces of work, two of
+which need new work in the service, and is done in three parts (decision E93): M2.4a the screens
+on what the service already offers; M2.4b the close vocabulary results and the terms without a
+link; M2.4c the urgency rules in words. Only M2.4a was done here.
+
+**What the plan asks, checked before the work.** "The web reviewer screens read and write
+through the review API instead of mock state"; from M2.16, links taken from MONDO shown with the
+MONDO term they came through; from M2.6 and M2.6c, a statement with its claims, cues, proposed
+feature and the two marks with what to check, each claim decided; codes shown to reviewers only
+(E63). Acceptance: "inspect duplicate column, save note; confirm one close vocabulary result and
+reject another". The close results are not in the database yet (M2.4b), so here the browser
+flow approves one stored vocabulary link and rejects another.
+
+**What was built** (decision E93).
+
+- Service: `GET /internal/v1/review/notes` (`list_notes`), the notes and decisions on one item,
+  for reviewers only, so that a saved note can be shown again.
+- Web: `api/liveReview.ts`, the client for the reviewer routes; `routes/review/live/`: a drawer
+  that shows an item, its notes and the form that records a note or a decision; a list page that
+  searches, filters and pages through the service; the screens overview, disease mappings,
+  feature mappings, data quality, vocabulary links, statements and claims, urgency rules,
+  releases. `ReviewRoutes` and `ReviewShell` choose by mode: live screens in http mode, the design
+  demo on fixtures in mock mode.
+- Configuration: `VITE_DEV_REVIEWER` (with `VITE_DEV_AUTH`) names the development reviewer;
+  `pnpm dev:review` starts the live workspace as reviewer "owner"; without a reviewer name the
+  workspace says that reviewer sign-in is not configured and asks the service for nothing.
+- Browser test: `pnpm e2e:review` with `apps/web/scripts/seed_review_e2e.py`, against a test
+  database with invented rows.
+
+**Real run.**
+
+| What | Result |
+|---|---|
+| Browser flow (`pnpm e2e:review`) on the test database, second API on port 8001, web on 5174 | 15 of 15 checks pass |
+| What it did | opened a repeated column heading, saw both positions and the 12 disagreeing rows, was refused an empty note, saved a note, saw it with the reviewer's name, saw it again after a reload; was refused the narrower vocabulary link in the service's words, rejected it and approved the general one; approved a list item with a mark and a proposed feature |
+| What the service held afterwards, asked directly | the note under `dev-reviewer:e2e` with no status changed; one link approved and one rejected under that name; one evidence row made from the approved item |
+| Every request to the service | carried the reviewer token and no other |
+| The real API on port 8000, restarted | the notes route returns the owner's note on a real approved feature; a user gets 403; the data-quality list holds the 74 real repeated column positions |
+| The two temporary servers (8001, 5174) | stopped after the run |
+
+No decision was recorded on real data in this sub-step.
+
+**Impact analysis.** LOW: `ReviewRoutes`, `ReviewShell`, `createAppServices`, `parseConfig`,
+`create_app`. HIGH by count: `ReviewNote` (fifteen modules import the models or create notes),
+changed for BUG-027; reported to the owner before the edit with the plan: no creator is edited,
+none passes a time itself, the model sets it. `detect_changes` before commit: "medium", 16 names
+in 12 files; in the Python files `create_app` (one route) and `ReviewNote` changed and
+`list_notes` is new, the other names are listed because lines moved; in the web files the names
+are the ones changed on purpose.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 70 files |
+| `uv run pytest -m "not archives"` (SQLite) | 257 passed, 72 skipped, six runs in a row |
+| `uv run pytest` (SQLite, archives included) | 263 passed, 75 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 337 passed, 1 skipped, four runs; full output saved |
+| `pnpm typecheck` / `pnpm lint` / `pnpm build` (apps/web) | clean |
+| `pnpm test` (apps/web) | 130 passed in 8 files |
+| `pnpm e2e:review` (browser, test database) | 15 of 15 |
+
+The new web tests prove: the client asks the reviewer routes with the reviewer token and only
+the filters that are set, records a note without a status and a decision with one, passes on the
+service's refusal, and asks nothing without a reviewer; the data-quality screen shows a repeated
+heading as stored, refuses an empty note, records a note and a decision and shows them; a
+refusal of the service is shown in its words; a statement is shown with its sentence, items,
+mark and proposed feature, and applicability is recorded; with no reviewer configured the
+workspace asks the service for nothing. The existing tests of the design demo still pass.
+
+**Bugs.**
+
+- **BUG-027 — two notes recorded within a second came back in either order.** Found when the
+  new test of the notes route failed in two of four SQLite runs. The time of a note was filled
+  in by the database: SQLite keeps it to the second, and PostgreSQL gives every note of one
+  transaction the same time. The same cause as BUG-024. Fixed: the model sets the time in the
+  code, to the microsecond. Six SQLite runs and four PostgreSQL runs then passed.
+- Two checks of my browser test failed on its first run because they looked before the drawer
+  had read the notes again; the screen was right (seen in the screenshot). The test now waits.
+
+**Limits, stated plainly.**
+
+- **The close vocabulary results are not on a screen** (M2.4b): the 431 close ICD-11 results,
+  the names without an HPO or MONDO link, the 13 labels without a single equivalent. The second
+  half of the plan's browser flow, "confirm one close vocabulary result and reject another", is
+  therefore not met yet.
+- **The urgency rules are not shown in words** (M2.4c): the screen shows a rule's level, text
+  and stored condition and points to the review document.
+- There is no real reviewer sign-in. `pnpm dev:review` records under the name "owner", through a
+  development token the service accepts only in development.
+- The answers of the service are not checked field by field in the browser, as they are for the
+  patient-facing screens.
+- No way yet to decide many rows at once, merge labels, or publish a release from a screen.
+- While a list is read again after a decision, the table is replaced by "Loading…" for a moment.
+- In a development server the app-wide banner still says "Design demo · Sample scenarios" above
+  the live workspace; the workspace itself says "Live review data".
+- `pnpm format:check` reports one older file, `scripts/e2e-live.mjs`; it was not touched.
+- The browser test is run by hand; it is not part of CI, like `pnpm e2e:live`.

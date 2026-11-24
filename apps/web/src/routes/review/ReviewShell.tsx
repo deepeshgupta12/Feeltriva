@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { cn } from '@/lib/cn';
 import { useDemo } from '@/state/demo';
 import { usePageMeta } from '@/state/hooks';
+import { useServices } from '@/state/services';
 
 const SECTIONS = [
   { to: '/review', label: 'Overview', end: true },
@@ -18,6 +19,18 @@ const SECTIONS = [
   { to: '/review/releases', label: 'Releases', end: false },
   { to: '/review/data', label: 'Data quality', end: false },
   { to: '/review/evaluation', label: 'Model evaluation', end: false },
+] as const;
+
+/** The sections in http mode, where every screen reads and writes through the review API. */
+const LIVE_SECTIONS = [
+  { to: '/review', label: 'Overview', end: true },
+  { to: '/review/diseases', label: 'Disease mappings', end: false },
+  { to: '/review/features', label: 'Feature mappings', end: false },
+  { to: '/review/data', label: 'Data quality', end: false },
+  { to: '/review/links', label: 'Vocabulary links', end: false },
+  { to: '/review/evidence', label: 'Statements and claims', end: false },
+  { to: '/review/rules', label: 'Urgency rules', end: false },
+  { to: '/review/releases', label: 'Releases', end: false },
 ] as const;
 
 /**
@@ -31,8 +44,30 @@ const SECTIONS = [
 export function ReviewShell() {
   usePageMeta('Internal review', { noindex: true });
   const { reviewerPreview, toolsEnabled } = useDemo();
+  const { config, liveReview } = useServices();
+  const live = config.serviceMode === 'http';
 
-  if (!reviewerPreview) {
+  if (live && liveReview.reviewer === null) {
+    return (
+      <main id="main-content" className="mx-auto w-full max-w-[760px] flex-1 px-4 py-10 sm:px-6">
+        <StatusPanel
+          tone="attention"
+          title="Reviewer sign-in is not configured"
+          headingLevel="h1"
+          icon={<Lock aria-hidden="true" className="size-6" />}
+          actions={<ButtonLink to="/">Back to Feeltriva</ButtonLink>}
+        >
+          <p>This area is the internal review workspace. It isn’t part of the symptom check.</p>
+          <p>
+            This build has no reviewer sign-in, so nothing is requested from the review service. The service checks the
+            reviewer role itself on every request; nothing in the browser is authorization.
+          </p>
+        </StatusPanel>
+      </main>
+    );
+  }
+
+  if (!live && !reviewerPreview) {
     return (
       <main id="main-content" className="mx-auto w-full max-w-[760px] flex-1 px-4 py-10 sm:px-6">
         <StatusPanel
@@ -64,7 +99,11 @@ export function ReviewShell() {
               <Logo />
             </span>
             <span className="font-display text-lg font-bold">Internal review</span>
-            <StatusBadge tone="sample">Reviewer preview · not real authorization</StatusBadge>
+            {live ? (
+              <StatusBadge tone="info">Decisions are recorded under {liveReview.reviewer}</StatusBadge>
+            ) : (
+              <StatusBadge tone="sample">Reviewer preview · not real authorization</StatusBadge>
+            )}
           </div>
           <Link to="/" className="inline-flex min-h-11 items-center gap-1.5 font-medium underline underline-offset-4">
             <ArrowLeft aria-hidden="true" className="size-4" />
@@ -73,7 +112,7 @@ export function ReviewShell() {
         </div>
         <nav aria-label="Internal review sections" className="mx-auto max-w-[1440px] overflow-x-auto px-2 sm:px-4">
           <ul className="flex min-w-max gap-1 pb-1.5">
-            {SECTIONS.map((section) => (
+            {(live ? LIVE_SECTIONS : SECTIONS).map((section) => (
               <li key={section.to}>
                 <NavLink
                   to={section.to}

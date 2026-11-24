@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "dev:api": "VITE_SERVICE_MODE=http VITE_DEV_AUTH=true vite --port 5174 --strictPort",
+    "dev:review": "VITE_SERVICE_MODE=http VITE_DEV_AUTH=true VITE_DEV_REVIEWER=owner vite --port 5174 --strictPort",
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc -b --noEmit",
@@ -20,6 +21,7 @@
     "gen:api": "openapi-typescript ../../specs/openapi.json -o src/api/generated/schema.ts",
     "smoke": "node scripts/smoke.mjs",
     "e2e:live": "node scripts/e2e-live.mjs",
+    "e2e:review": "node scripts/e2e-review-live.mjs",
     "gen:review-fixtures": "node scripts/gen-review-fixtures.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

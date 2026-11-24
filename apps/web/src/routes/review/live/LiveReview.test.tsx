@@ -1,0 +1,235 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  ReviewApiError,
+  type DecisionResult,
+  type LiveReviewApi,
+  type ReviewItem,
+  type ReviewNoteRecord,
+  type ReviewState,
+} from '@/api/liveReview';
+import { App } from '@/App';
+import { AppProviders } from '@/state/AppProviders';
+import { createAppServices } from '@/state/services';
+import { TEST_CONFIG } from '@/test/harness';
+
+/** A review service in memory: one repeated column heading, one vocabulary link, one statement with a claim. */
+function fakeApi(reviewer: string | null = 'tester') {
+  const rows: Record<string, ReviewItem[]> = {
+    '/feature-mappings': [
+      {
+        mapping_id: 'fm_1',
+        source_id: 'src_sample',
+        file_path: 'sample.csv',
+        column_index: 3,
+        original_term: 'itching',
+        proposed_canonical_id: 'feat_itching',
+        zero_semantics: 'unknown',
+        review_status: 'pending',
+        conflicts: { repeated_header: true, repeated_positions: [3, 9], disagreement_rows: 12 },
+      },
+    ],
+    '/terminology-links': [
+      {
+        link_id: 'tl_1',
+        subject: { type: 'disease', id: 'dis_1', term: 'pretend ache' },
+        system: 'ICD-11 MMS',
+        system_version: 'test',
+        code: 'ZZ00.0',
+        title: 'Pretend ache of the left side',
+        match_method: 'exact_synonym',
+        detail: {},
+        review_status: 'pending',
+        reviewer: null,
+      },
+    ],
+    '/claims': [
+      {
+        statement_id: 'st_1',
+        statement_type: 'symptom',
+        disease: { id: 'dis_1', term: 'pretend ache' },
+        text: 'Signs include a hat and a scarf.',
+        has_a_mark: true,
+        claims: [
+          {
+            claim_id: 'cl_s',
+            kind: 'sentence',
+            text: 'Signs include a hat and a scarf.',
+            cues: {},
+            marks: [],
+            rule: 'test:sentence',
+            review_status: 'pending',
+            applicability: null,
+            proposed_feature: null,
+            items: [
+              {
+                claim_id: 'cl_hat',
+                kind: 'list_item',
+                text: 'a hat',
+                cues: { first_item_preposition: ['of'] },
+                marks: ['first_item_preposition'],
+                rule: 'test:enumeration',
+                review_status: 'pending',
+                applicability: null,
+                proposed_feature: { id: 'feat_hat', term: 'hat' },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const notes: ReviewNoteRecord[] = [];
+  const requests: Array<{ path: string; params: unknown }> = [];
+  const decide = vi.fn((targetType: string, targetId: string, note: string, status?: ReviewState) => {
+    if (targetType === 'terminology_link' && status === 'approved') {
+      return Promise.reject(
+        new ReviewApiError(
+          409,
+          'general_term_is_default',
+          'This term also has the more general candidate "Pretend ache".',
+        ),
+      );
+    }
+    notes.push({
+      note_id: `n${notes.length + 1}`,
+      reviewer: `dev-reviewer:${reviewer}`,
+      note,
+      status_change: status ?? null,
+      at: '2026-11-24T10:00:00+00:00',
+    });
+    for (const list of Object.values(rows)) {
+      for (const row of list) {
+        if (status && (row.mapping_id === targetId || row.link_id === targetId)) {
+          row.review_status = status;
+        }
+      }
+    }
+    const result: DecisionResult = {
+      target_type: targetType,
+      target_id: targetId,
+      previous_status: 'pending',
+      review_status: status ?? 'pending',
+      reviewer: `dev-reviewer:${reviewer}`,
+    };
+    return Promise.resolve(result);
+  });
+  const api: LiveReviewApi = {
+    reviewer,
+    get: () => Promise.resolve({ sources: 14, disease_candidates: 960, statements: { pending: 2952 } }),
+    list: (path, params) => {
+      requests.push({ path, params });
+      const items = structuredClone(rows[path] ?? []);
+      return Promise.resolve({
+        total: items.length,
+        items,
+        marks: { first_item_preposition: 'The first item of this list holds a preposition.' },
+      });
+    },
+    notes: () => Promise.resolve(structuredClone(notes)),
+    decide,
+    setApplicability: vi.fn(() => Promise.resolve({})),
+  };
+  return { api, decide, requests };
+}
+
+function renderLive(route: string, api: LiveReviewApi) {
+  const config = { ...TEST_CONFIG, serviceMode: 'http' as const, devAuth: true, devReviewer: api.reviewer };
+  const services = createAppServices(config, { liveReview: api });
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={[route]}>
+      <AppProviders services={services}>
+        <App />
+      </AppProviders>
+    </MemoryRouter>,
+  );
+  return user;
+}
+
+describe('the review workspace against the review service', () => {
+  it('shows a repeated column heading as stored and records a note under the reviewer', async () => {
+    const { api, decide, requests } = fakeApi();
+    const user = renderLive('/review/data', api);
+
+    expect(await screen.findByRole('heading', { name: 'Data quality: repeated column headings' })).toBeInTheDocument();
+    expect(screen.getByText(/Decisions are recorded under tester/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Vocabulary links' })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Review itching (column 3)' }));
+    // The list asked the service for the repeated headings only.
+    expect(requests[0]).toMatchObject({
+      path: '/feature-mappings',
+      params: { conflicts_only: true, limit: 25, offset: 0 },
+    });
+
+    const drawer = await screen.findByRole('dialog');
+    expect(
+      within(drawer).getByText('The heading is repeated at columns 3, 9; the columns disagree in 12 rows'),
+    ).toBeInTheDocument();
+    expect(await within(drawer).findByText('No notes yet.')).toBeInTheDocument();
+    // A note is required: nothing is sent without one.
+    await user.click(within(drawer).getByRole('button', { name: 'Save note' }));
+    expect(within(drawer).getByRole('alert')).toHaveTextContent('Write a note first.');
+    expect(decide).not.toHaveBeenCalled();
+
+    await user.type(within(drawer).getByLabelText('Note (required)'), 'Columns 3 and 9 disagree in 12 rows.');
+    await user.click(within(drawer).getByRole('button', { name: 'Save note' }));
+    expect(decide).toHaveBeenCalledWith('feature_mapping', 'fm_1', 'Columns 3 and 9 disagree in 12 rows.', undefined);
+    // The saved note is read back from the service and shown with the reviewer's name.
+    expect(await within(drawer).findByText('Columns 3 and 9 disagree in 12 rows.')).toBeInTheDocument();
+    expect(within(drawer).getByText(/Note · dev-reviewer:tester/)).toBeInTheDocument();
+    expect(within(drawer).getByRole('status')).toHaveTextContent('Note saved under tester.');
+
+    // A decision is recorded the same way and the row shows its new status.
+    await user.type(within(drawer).getByLabelText('Note (required)'), 'Both columns are kept.');
+    await user.click(within(drawer).getByRole('button', { name: 'Approve' }));
+    expect(decide).toHaveBeenLastCalledWith('feature_mapping', 'fm_1', 'Both columns are kept.', 'approved');
+    expect(await within(drawer).findByText('Recorded: Approved, under tester.')).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'Approve' })).toBeDisabled();
+  });
+
+  it('shows the reason when the service refuses a decision', async () => {
+    const { api } = fakeApi();
+    const user = renderLive('/review/links', api);
+
+    await user.click(
+      await screen.findByRole('button', { name: /Review pretend ache → Pretend ache of the left side/ }),
+    );
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('ZZ00.0')).toBeInTheDocument(); // codes are for reviewers
+    await user.type(within(drawer).getByLabelText('Note (required)'), 'The source names the left side.');
+    await user.click(within(drawer).getByRole('button', { name: 'Approve' }));
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent(
+      'This term also has the more general candidate "Pretend ache".',
+    );
+  });
+
+  it('lists a statement with its sentence, the items of its list, their marks and proposed feature', async () => {
+    const { api } = fakeApi();
+    const user = renderLive('/review/evidence', api);
+
+    expect(await screen.findByRole('heading', { name: 'Statements and claims' })).toBeInTheDocument();
+    expect(await screen.findByText(/pretend ache · symptom · has a mark to check/)).toBeInTheDocument();
+    expect(screen.getByText('Check: first item preposition')).toBeInTheDocument();
+    expect(screen.getByText('Proposed feature: hat')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Review claim: a hat' }));
+    const drawer = await screen.findByRole('dialog');
+    // The drawer says what to check for the mark, in the words the service gives.
+    expect(within(drawer).getByText('The first item of this list holds a preposition.')).toBeInTheDocument();
+    await user.type(within(drawer).getByLabelText('For whom or when this holds'), 'in winter');
+    await user.click(within(drawer).getByRole('button', { name: 'Save applicability' }));
+    expect(api.setApplicability).toHaveBeenCalledWith('cl_hat', 'in winter', 'Applicability recorded: in winter');
+  });
+
+  it('asks the service for nothing when no reviewer sign-in is configured', async () => {
+    const { api, requests } = fakeApi(null);
+    renderLive('/review/data', api);
+
+    expect(await screen.findByRole('heading', { name: 'Reviewer sign-in is not configured' })).toBeInTheDocument();
+    expect(screen.getByText(/nothing in the browser is authorization/)).toBeInTheDocument();
+    expect(requests).toEqual([]);
+  });
+});

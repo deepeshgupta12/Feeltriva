@@ -209,6 +209,29 @@ def test_review_decision_is_attributed_noted_and_audited(client, reviewer: Api, 
         ]
 
 
+def test_the_notes_on_an_item_are_listed_for_reviewers_oldest_first(client, api: Api, reviewer: Api, seeded):
+    def notes(who=reviewer, **params):
+        params = {"target_type": "feature_mapping", "target_id": seeded["fm_a"], **params}
+        return client.get("/internal/v1/review/notes", params=params, headers=who.headers(None))
+
+    assert notes(api).status_code == 403 and notes().json() == {"items": []}
+    assert notes(target_type="session").status_code == 422
+    for body in (
+        {"note": "Columns 3 and 9 disagree in 12 rows."},
+        {"note": "Both columns are kept.", "status": "approved"},
+    ):
+        body = {"target_type": "feature_mapping", "target_id": seeded["fm_a"], **body}
+        assert (
+            client.post("/internal/v1/review/decisions", headers=reviewer.headers(None), json=body).status_code == 200
+        )
+    listed = notes().json()["items"]
+    assert [(item["note"], item["status_change"], item["reviewer"]) for item in listed] == [
+        ("Columns 3 and 9 disagree in 12 rows.", None, reviewer.token),
+        ("Both columns are kept.", "approved", reviewer.token),
+    ]
+    assert all(item["note_id"] and item["at"] for item in listed)
+
+
 def test_invalid_review_requests(client, reviewer: Api, seeded):
     def post(**body):
         return client.post("/internal/v1/review/decisions", headers=reviewer.headers(None), json=body)

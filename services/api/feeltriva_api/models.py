@@ -8,7 +8,7 @@ import-only tables (dataset cases, model releases, ...) are handled by the inges
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
@@ -202,7 +202,10 @@ class ReviewNote(Base):
     reviewer: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text)
     status_change: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+    # Set by the code, to the microsecond: the order of the notes on one item is the order in which they were
+    # recorded. A time filled in by the database is the same for every note of one transaction, and SQLite keeps
+    # it to the second (BUG-027, as BUG-024).
+    created_at: Mapped[datetime] = mapped_column(TZ, default=lambda: datetime.now(UTC), server_default=func.now())
 
 
 # ---- private live-session zone (owner-scoped; RLS in PostgreSQL) -------------

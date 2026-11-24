@@ -125,6 +125,7 @@ describe('parseConfig', () => {
       serviceMode: 'mock',
       apiBaseUrl: 'http://localhost:8000',
       devAuth: false,
+      devReviewer: null,
       demoTools: true,
     });
   });
@@ -136,10 +137,18 @@ describe('parseConfig', () => {
       serviceMode: 'http',
       apiBaseUrl: 'https://api.example.test',
       devAuth: true,
+      devReviewer: null,
       demoTools: false,
     });
     expect(parseConfig({ VITE_DEV_AUTH: '1' }).devAuth).toBe(false);
     expect(parseConfig({ VITE_SERVICE_MODE: 'http', DEV: true }).demoTools).toBe(true);
     expect(parseConfig({ VITE_DEMO_TOOLS: 'false' }).demoTools).toBe(false);
+  });
+
+  it('takes a development reviewer name only with dev auth on, and only a plain name', () => {
+    expect(parseConfig({ VITE_DEV_AUTH: 'true', VITE_DEV_REVIEWER: ' owner ' }).devReviewer).toBe('owner');
+    expect(parseConfig({ VITE_DEV_REVIEWER: 'owner' }).devReviewer).toBeNull();
+    expect(parseConfig({ VITE_DEV_AUTH: 'true', VITE_DEV_REVIEWER: 'a b:c' }).devReviewer).toBeNull();
+    expect(parseConfig({ VITE_DEV_AUTH: 'true', VITE_DEV_REVIEWER: '' }).devReviewer).toBeNull();
   });
 });
