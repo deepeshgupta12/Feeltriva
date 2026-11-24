@@ -12,7 +12,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import disease_merges, published_knowledge, published_mappings, releases, response_text_sets, serving_bundle
+from . import (
+    disease_merges,
+    published_knowledge,
+    published_mappings,
+    releases,
+    response_text_sets,
+    review_claims,
+    serving_bundle,
+)
 from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
@@ -433,6 +441,54 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     def review_response_texts(who: Who) -> JSONResponse:
         return JSONResponse(response_text_sets.list_sets(container.db, who))
 
+    @app.get("/internal/v1/review/claims")
+    def review_claims_list(
+        who: Who,
+        status: str | None = None,
+        mark: str | None = None,
+        statement_type: str | None = None,
+        disease_id: str | None = None,
+        statement_id: str | None = None,
+        with_feature: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            review_claims.list_claims(
+                container.db,
+                who,
+                status=status,
+                mark=mark,
+                statement_type=statement_type,
+                disease_id=disease_id,
+                statement_id=statement_id,
+                with_feature=with_feature,
+                limit=limit,
+                offset=offset,
+            )
+        )
+
+    @app.post("/internal/v1/review/claims/{claim_id}/applicability")
+    def review_claim_applicability(claim_id: str, body: ClaimApplicability, who: Who) -> JSONResponse:
+        return JSONResponse(
+            review_claims.set_applicability(container.db, who, claim_id=claim_id, text=body.text, note=body.note)
+        )
+
+    @app.get("/internal/v1/review/chunks")
+    def review_chunks(
+        who: Who,
+        status: str | None = None,
+        disease_id: str | None = None,
+        q: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            review_claims.list_chunks(
+                container.db, who, status=status, disease_id=disease_id, q=q, limit=limit, offset=offset
+            )
+        )
+
     return app
 
 
@@ -453,4 +509,10 @@ class MappingPublish(BaseModel):
 class KnowledgePublish(BaseModel):
     model_config = ConfigDict(extra="forbid")
     knowledge_release_id: str
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class ClaimApplicability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str | None = Field(default=None, max_length=500)
     note: str = Field(min_length=1, max_length=4000)

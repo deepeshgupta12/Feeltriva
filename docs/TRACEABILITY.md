@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.9 (2026-11-24).
+Last updated after sub-step M2.5e1 (2026-11-24).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -98,7 +98,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | T11 | 13 `causes.csv` joined on native ID, name checked | Done | 714; no mismatch | M1.4 |
 | T12 | 13 `symptoms.csv` → statements; proposed `disease_feature_evidence` | Partial | 712 statements; 575 pending proposals where a known feature term is mentioned, each tied to its statement with the text span. A mention is not an assertion. The 712 statements are split into 727 sentences and 352 list items, all pending; 113 list items are exactly the name of one feature and carry it as a proposal (M2.6). **Missing:** review and approval, which turn a claim into evidence | M1.4, M1.11, M2.6; M2.5 |
 | T13 | 13 `treatments.csv` → statements, never cure or eligibility | Done | 621 as `treatment`, pending | M1.4 |
-| T14 | 13 text files → records; statements and chunks after review, with offsets | Partial | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served. **Missing:** statements extracted from the text files (M2.5) and the review itself (M2.5) | M1.3, M1.10; M2.5, M2.5 |
+| T14 | 13 text files → records; statements and chunks after review, with offsets | Partial | 85 files → 3,651 section-bounded chunks with exact character offsets, URL, extraction version and attribution, under a `pending` knowledge release. Not reviewed, so not served. A reviewer can now list and decide each chunk, and an approved chunk becomes a statement with its place in the file (M2.5e1). **Missing:** the review itself: no chunk is decided | M1.3, M1.10, M2.5e1 |
 | T15 | 14 `Patient_ID` scoped to source | Done | | M1.7 |
 | T16 | 14 `Age` numeric; unit to be confirmed before clinical use | Partial | Value kept exactly as supplied; unit left empty on the cases. A proposed unit (years) with its basis is stored on the source (M2.7). **Missing:** the owner's confirmation; no source documentation states the unit | M1.7, M2.7; owner review, M2.5 |
 | T17 | 14 `Gender` kept as Male/Female/Other | Done | 8,271 / 8,336 / 8,393 | M1.7 |

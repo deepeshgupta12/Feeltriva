@@ -4526,3 +4526,98 @@ nothing is available. The one skipped test on PostgreSQL is that last one, which
 the main database; the API was restarted for the changed condition route; the web app was not,
 because nothing it loads changed. This paragraph was added in a following documents-only commit,
 after which the index was refreshed again.
+
+### M2.5e1 — Claims and text chunks in the review path; what an approval makes
+
+Owner's instruction of 2026-11-24: "Do M2.5e and M2.4". M2.5e touches two different parts of the
+system, the review path of the API and the ingestion pipeline, and is committed as M2.5e1 and
+M2.5e2, both in this round. This entry is M2.5e1.
+
+**The owner's question, answered before the work** ("Will the above be implemented in some other
+step?"). The bundle has no candidates: the ranking model is M4 and retrieval is M5.2, but no
+sub-step said that the assessment service takes its possible explanations from the promoted model
+and the reviewed evidence with citations from the knowledge release. That was a gap in the plan;
+row M5.7 is added. A bundle that carries no knowledge release: already handled; the bundle names
+the knowledge release as soon as one is published. Views in PostgreSQL only: no step, by design.
+
+**What the plan and the handoff ask, checked before the work.** "Approving a list-item claim that
+carries a proposed feature turns it into evidence for that disease and feature; a reviewer sets a
+claim's applicability; ... statements from the text files are made after their chunks are
+reviewed" and, from M2.5c3, a reviewer's decision on a chunk. `docs/04`: "13 text files →
+source_records; statements/evidence_chunks after review"; `symptoms.csv`: "extract atomic feature
+relations into review queue". `docs/01` §4: statement types `treatment | management |
+prevention | cause | description | symptom`, with applicability and review status. M2.4 needs a
+reviewer-only route and review target for the claims.
+
+**What was built** (decision E91).
+
+- Migration `0018`: claims and chunks can be read and decided in a reviewer transaction only;
+  `evidence_chunks` gains `status` and `reviewer`; the API's role may insert evidence,
+  statements and statement sources in a reviewer transaction only; `statement_claims` gains
+  `superseded_by` (used in M2.5e2).
+- `review_claims.py` (new): review targets `claim` and `chunk` with their rules; `list_claims`,
+  `set_applicability`, `list_chunks`.
+- `main.py`: `GET /internal/v1/review/claims`, `POST .../claims/{id}/applicability`,
+  `GET .../chunks`. Reviewers only.
+- `models.py`: `StatementClaim`, `EvidenceChunk`.
+
+**What an approval makes.** An approved list item that names a feature: one evidence row, made
+once, retired when the approval is withdrawn. An approved part of a text: one statement with its
+source record and its place in the file, its type from the source's section heading, retired
+when the approval is withdrawn. A list of references is not approved.
+
+**Real run.** Migration applied to the main database (head `0018`). The API was restarted.
+
+| What | Result |
+|---|---|
+| Statements listed with their claims | 2,952 statements, 8,742 claims, all pending |
+| Statements with a claim marked `cut_off` / `first_item_preposition` | 79 / 78; marked statements are listed first |
+| Statements holding a list item with a proposed feature | 40 (106 such items) |
+| A real statement (atherosclerosis) | six list items shown under their sentence; four name a feature (sweating, nausea, breathlessness, palpitations) |
+| Text chunks listed | 3,651, all pending; 58 for the label "Alzheimer's disease", each with its section and the type it would get |
+| A user on the claims route | 403 |
+| Decided claims and chunks; statements and evidence rows made | 0, 0, 0, 0: nothing was decided |
+
+**Impact analysis.** `create_app`: LOW. `published_knowledge._content`: LOW and `_counts`: HIGH
+(four flows) were looked at for putting chunks into a release; neither is changed, because an
+approved chunk enters a release as the statement made from it. `detect_changes` before commit:
+"low", 8 names, all of them the request bodies at the end of `main.py`, listed because lines
+above them moved. By syntax tree: `create_app` changed (three routes); `ClaimApplicability`,
+`StatementClaim`, `EvidenceChunk` and the new module are new.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 70 files |
+| `uv run pytest -m "not archives"` (SQLite) | 255 passed, 69 skipped |
+| `uv run pytest` (SQLite, archives included) | 261 passed, 72 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 332 passed, 1 skipped, twice; full output saved |
+| Migration `0018` on a scratch database: head, down to `0017`, head | columns and policies present, absent, present |
+
+The six new tests prove, with invented rows: a user can neither list nor decide; a statement is
+listed with its sentence and the items of its list, their marks and proposed feature, and the
+filters by mark, feature and status choose statements; an approved sentence and an approved item
+without a feature make nothing; an approved item that names a feature makes one evidence row
+with its disease, feature, statement and its own decision record; a withdrawn approval retires
+the row and a new approval approves the same row, never a second one; applicability is stored
+with who said it, shown in the list, removable, and decides nothing; a part of a text is listed
+with the type it would get; a list of references is refused; an approved part becomes one
+statement with the file's record and the part's place in the file, retired and approved again
+with its chunk; the statement made from a chunk and the evidence made from a claim enter a
+published knowledge release; on PostgreSQL a user's transaction reads no claim and no chunk,
+decides none and makes no evidence or statement, and a reviewer's cannot change the wording.
+
+**Bugs.** None found.
+
+**Limits, stated plainly.**
+
+- Nothing is decided. 8,742 claims and 3,651 chunks are decided one at a time; there is no way
+  yet to decide many at once.
+- Applicability is free text. Nothing filters by it.
+- A statement made from a chunk gets its type from the section heading; a reviewer cannot choose
+  another type.
+- A claim's evidence row and a mention proposal of M1.11 for the same disease and feature both
+  exist, each with its own basis.
+- After a chunk is approved, `extract-claims` has to be run to make the claims of the new
+  statement.

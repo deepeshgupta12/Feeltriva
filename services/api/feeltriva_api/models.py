@@ -446,3 +446,44 @@ class ResponseTextSet(Base):
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
     approved_by: Mapped[str | None] = mapped_column(Text)
     approved_at: Mapped[datetime | None] = mapped_column(TZ)
+
+
+class StatementClaim(Base):
+    """A single claim of a stored statement: a sentence, or an item of a list in it, between two offsets.
+
+    Written by the ingestion pipeline (M2.6). The API reads these rows and records a reviewer's decision and
+    applicability on them (M2.5e), and only inside a reviewer transaction."""
+
+    __tablename__ = "statement_claims"
+    claim_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    statement_id: Mapped[str] = mapped_column(ForeignKey("statements.statement_id"))
+    parent_claim_id: Mapped[str | None] = mapped_column(ForeignKey("statement_claims.claim_id"))
+    kind: Mapped[str] = mapped_column(Text)
+    span_start: Mapped[int] = mapped_column(Integer)
+    span_end: Mapped[int] = mapped_column(Integer)
+    claim_text: Mapped[str] = mapped_column(Text)
+    rule: Mapped[str] = mapped_column(Text)
+    cues: Mapped[Any] = mapped_column(Json, default=dict)
+    proposed_feature_id: Mapped[str | None] = mapped_column(ForeignKey("features.feature_id"))
+    applicability: Mapped[Any | None] = mapped_column(Json)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    reviewer: Mapped[str | None] = mapped_column(Text)
+    superseded_by: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
+
+
+class EvidenceChunk(Base):
+    """A part of a narrative text file, bounded by its sections, with its offsets (M1.10).
+
+    Written by the ingestion pipeline. The API reads these rows and records a reviewer's decision on them
+    (M2.5e), and only inside a reviewer transaction. The table's full-text column is not mapped."""
+
+    __tablename__ = "evidence_chunks"
+    chunk_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    statement_id: Mapped[str | None] = mapped_column(ForeignKey("statements.statement_id"))
+    record_id: Mapped[str | None] = mapped_column(ForeignKey("source_records.record_id"))
+    knowledge_release_id: Mapped[str] = mapped_column(ForeignKey("knowledge_releases.release_id"))
+    chunk_text: Mapped[str] = mapped_column(Text)
+    details: Mapped[Any] = mapped_column("metadata", Json, default=dict)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    reviewer: Mapped[str | None] = mapped_column(Text)
