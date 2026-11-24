@@ -4188,3 +4188,52 @@ PostgreSQL 312 passed). CI passed on `d167dcd`.
 passed on both jobs (run 45341856786). The code graph reports up-to-date. No server was
 restarted: no code the API or the web app loads changed in M2.5d1 or M2.5c2a. This paragraph was
 added in a following documents-only commit, after which the index was refreshed again.
+
+### M2.5c4 — The owner's decisions of 2026-11-24 entered: mapping release 1 published, the 14 sources approved
+
+Owner decision E87. "Publish mapping release 1 - yes", and on source rights (D-S1): "All the
+sources are yes from my end, I trust you". No code changed in this sub-step.
+
+**What was done.**
+
+- Mapping release 1 was published through the review path
+  (`POST /internal/v1/review/mapping-releases`) as `dev-reviewer:owner`, with a note that the
+  assistant entered it on the owner's instruction.
+- The 14 sources were approved through the review path (`POST /internal/v1/review/decisions`,
+  target type `source`) as `dev-reviewer:owner`, each with the note: 'Approved by the owner on
+  2026-11-24 ("All the sources are yes from my end"): the content of this source may be shown
+  and used. Entered by the assistant on the owner's instruction (decision E87). The assistant
+  has not verified a licence for this source; the decision is the owner's.'
+
+**Result on the real data.**
+
+| What | Value |
+|---|---|
+| Published mapping release | `mapping-lexical-0.r1`, number 1, current, published by `dev-reviewer:owner` at 2026-11-24 07:04:04 UTC |
+| What it holds | 85 features; 0 diseases, 0 redirects, 0 mappings, 0 sources |
+| Its SHA-256 | `5f4aadbb7a283aa1a2cceda7261923e1c9e3e427cf0957d5a5381f4c566b8dd9` (the value the preview gave before publishing) |
+| Still undecided, as the release records | 883 features, 960 disease labels, 3,117 and 1,962 mappings |
+| A second publication of the same content | refused, `release_already_published` |
+| Sources approved / pending | 14 / 0; 14 decision records by `dev-reviewer:owner`, 2026-11-24 07:18:04 to 07:18:07 UTC |
+| Sources with a licence on record | 3 of 14, unchanged |
+| Preview of the knowledge set `knowledge-import-0` | not publishable: "no statement and no evidence is approved"; it would be pinned to `mapping-lexical-0.r1`; undecided 2,952 statements, 22,947 evidence rows, 0 sources |
+| Published knowledge releases | 0 |
+| `uv run python -m feeltriva_ingestion completeness` after both | 236 checks: 230 ok, 0 mismatches, 6 left to a later sub-step; the report is line for line the earlier one (1,460 s beside the test suites) |
+| `/readyz` | clinical mode off, synthetic release |
+
+**Tests.** No code changed, so the suites of M2.5d1 stand.
+
+**Bugs.** None.
+
+**Limits, stated plainly.**
+
+- The approval of the sources is the owner's judgement of the rights. The assistant verified no
+  licence. Eleven sources have none on record; the statements of archive 13 name Wikipedia pages
+  as their source, and Wikipedia's text is offered under a licence that asks for attribution and
+  for sharing alike. Whoever is responsible for the rights of the content should look at this
+  before content is shown to users.
+- Approving a source publishes nothing. No statement and no evidence row is approved, so no
+  knowledge release exists.
+- A published release cannot be edited or deleted. A later release or a rollback only changes
+  which one is current.
+- Nothing is served. The serving bundle is M2.5f.

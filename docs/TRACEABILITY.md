@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5c2a (2026-11-24).
+Last updated after sub-step M2.5c4 (2026-11-24).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -77,7 +77,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | D7 | Narrative statements de-duplicated within disease/type/source keeping every attribution; atomic claims only into a review queue | Done as pending claims | Done for statements (no duplicates found). 8,742 single claims, each a span of its statement, stored `pending` in `statement_claims` (M2.6, M2.6a, M2.6b, M2.6c); nothing is written to evidence before review | M1.4, M2.6; M2.5 |
 | D8 | Feature-profile clusters before splitting; cross-source near-duplicates need comparable semantics | Partial | Clusters per archive and layout done. No cross-source comparison (correct until semantics are reviewed) | M1.7; M4.3 |
 | D9 | Conflicting labels on equivalent profiles preserved as ambiguity | Done | 985 archive-15 profiles carry more than one label; nothing voted | M1.7 |
-| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping working set, hashes, audit. What is approved can be published as an immutable, numbered mapping release with the SHA-256 of its sources and the count of what is still undecided, with rollback (M2.5c2); the owner approved the 85 features the urgency rules name (M2.5c2a); no release is published yet. No split manifest | M1.2, M1.3, M2.5c2, M2.5c2a; M4.3 |
+| D10 | Immutable mapping version, split manifest, source hashes, audit report; only approved content published | Partial | Pending mapping working set, hashes, audit. What is approved can be published as an immutable, numbered mapping release with the SHA-256 of its sources and the count of what is still undecided, with rollback (M2.5c2); the owner approved the 85 features the urgency rules name (M2.5c2a), and mapping release 1 with them is published (M2.5c4). No split manifest | M1.2, M1.3, M2.5c2, M2.5c2a, M2.5c4; M4.3 |
 | Demog. | Sex/gender counts are row counts, never combined as priors; identity, case ID, clinical sex context and gender identity kept separate | Done | Stored as supplied with the original field name; counts equal the handoff | M1.7 |
 | Zones | Four storage zones: raw immutable objects, normalised relational data, reviewed serving knowledge, private session data | Partial | Raw objects (M1.12), relational data and session data exist. No reviewed serving knowledge yet | M1.12; M2.5; C |
 
@@ -187,7 +187,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | Ref | Requirement | Status | What exists / what is missing | Sub-step |
 |---|---|---|---|---|
 | E0 | Supplied baseline preserved as a reproducible benchmark and rejected for serving | Partial | Results stored and checked against the figures; not re-run here; not wired into serving | M4.1 |
-| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Archive 15: origin, licence (CC BY 4.0) and nature (simulated patients) established and recorded (E55). The other archives: owner's statement only (E30), no written provenance. A reviewer's decision on the rights of each source can be recorded (M2.5c3); none is decided (D-S1). Feature meanings proposed, pending review. Label origin unknown for archives 11 – 14 and 16 (D-O1); for archive 15 the label is the simulator's condition | M2.7, M2.12, M4.2 |
+| E1 | Confirm rights, provenance, label origin, populations, feature meanings | Partial | Archive 15: origin, licence (CC BY 4.0) and nature (simulated patients) established and recorded (E55). The other archives: owner's statement only (E30), no written provenance. A reviewer's decision on the rights of each source can be recorded (M2.5c3); the owner approved all 14 on 2026-11-24 (E87, M2.5c4), with no licence verified. Feature meanings proposed, pending review. Label origin unknown for archives 11 – 14 and 16 (D-O1); for archive 15 the label is the simulator's condition | M2.7, M2.12, M4.2 |
 | E2 | Review mappings; exact and near-duplicate clusters; group by identity where available | Partial | Exact and profile clusters done | M1.7; M2.5, M4.3 |
 | E3 | Archive 15 original test kept untouched; overlap audited; contaminated result reported separately | Partial | Overlap audited and flagged (27,910 shared profiles) | M1.7; M4.3 |
 | E4 | Train, validation, separate calibration and untouched test; transforms fitted on training only; clusters kept together | Missing | | M4.3, M4.4 |
