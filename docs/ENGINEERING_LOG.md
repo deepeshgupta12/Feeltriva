@@ -4237,3 +4237,86 @@ sources are yes from my end, I trust you". No code changed in this sub-step.
 - A published release cannot be edited or deleted. A later release or a rollback only changes
   which one is current.
 - Nothing is served. The serving bundle is M2.5f.
+
+**Committed and indexed (M2.5c4).** Committed as `2b19cb1` (documents only) and pushed.
+
+### M2.5d2 — What a decision on a vocabulary link entails
+
+Owner's go-ahead of 2026-11-24: "Please proceed". The second part of M2.5d (decision E85).
+
+**What the plan and the owner's decisions ask, checked before the work.** "Rejecting a MONDO link
+also retires the SNOMED CT and ICD-11 links derived from it (`import-identifiers` reports such
+links and fails until this is handled)" (from M2.16). "Where a label has an ICD-11 category and
+its unspecified sub-code as candidates, approval keeps the category" (E62, E66: the sub-code row
+is preserved with its provenance, and no case is recoded). "The general term is the default when
+a label has a broader and a narrower candidate" (E64). Codes are never shown to a user (E63).
+
+**What was built** (decision E88). One rule function for the review target `terminology_link`,
+`_link_guard`, with three small helpers, at the end of `review.py`. It runs inside the reviewer's
+transaction before the status is set, like the rules for rule bundles and merged labels.
+
+- Rejecting a MONDO link retires every pending link taken through it (`detail.via.link_id`), each
+  with a decision record under the reviewer's name that says why, and an audit event.
+- Withdrawing the rejection makes pending again the links the rejection retired, and only those.
+- While a link taken through a MONDO link is approved, rejecting that MONDO link is refused
+  (`derived_links_approved`): the reviewer decides the approved link first.
+- A link is not approved while the MONDO link it rests on is rejected (`basis_rejected`).
+- Where a term has two ICD-11 candidates and one lies under the other, the narrower one is not
+  approved while the broader one is pending or approved (`general_term_is_default`). This covers
+  a category and its unspecified sub-code, and a narrower code under a general one.
+- A refusal names the title and our own link ID of the other link, never a code.
+
+`record_review`, the route and the database are unchanged; no migration.
+
+**Real run.** The API was restarted for the rule. As reviewer on the real data:
+
+| What | Result |
+|---|---|
+| Approving the ICD-11 link taken through the rejected MONDO link "atopic eczema" (E64) | refused, `basis_rejected` |
+| Approving "Optic neuritis, unspecified" while its category "Optic neuritis" is a candidate | refused, `general_term_is_default` |
+| Links by status before and after the two attempts | 2,531 pending, 5 approved, 6 rejected; unchanged |
+| Decision records on links before and after | 11; unchanged |
+| Pending links resting on a rejected MONDO link (what `import-identifiers` fails on) | 0 |
+| Terms with a category and its unspecified sub-code both as candidates, now covered by the rule | 121 |
+| Other pending candidates lying under another candidate of the same term | 0 (the two E64 cases of this kind, stye and valley fever, are already decided) |
+
+**Impact analysis.** `record_review`: LOW, not changed; it calls the rule registered for the
+target. `TerminologyLink`: MEDIUM by count, read and set through the columns the API's role may
+already change (`status`, `reviewer`), not changed. `detect_changes` before commit: "low", no
+existing name touched. Compared with the last commit by syntax tree: four functions are new in
+`review.py`, four tests and a fixture are new, nothing existing changed.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 67 files |
+| `uv run pytest -m "not archives"` (SQLite) | 243 passed, 64 skipped |
+| `uv run pytest` (SQLite, archives included) | 249 passed, 67 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 316 passed, twice; full output saved |
+
+The four new tests prove, with invented links: rejecting a MONDO link retires the two links taken
+through it and leaves alone the link found by its own name; the retirement is recorded with the
+reviewer and the reason; a link is not approved while its MONDO link is rejected; withdrawing the
+rejection brings the two back; a MONDO link is not rejected while a link taken through it is
+approved, and nothing is retired by the refused attempt; a narrower code and an unspecified
+sub-code are not approved while the category stands, whether the relation is the recorded parent
+or the code itself; the refusal names no code; approving the category changes no other row; after
+the general candidate is rejected the narrower one can be approved; on PostgreSQL, a link the
+reviewer retired is not brought back by a withdrawal.
+
+**Bugs.** None found.
+
+**Limits, stated plainly.**
+
+- The rule sees a broader and a narrower candidate only when one code lies under the other. For
+  eczema and indigestion (E64) the two candidates are not under one another in the
+  classification, so choosing between them stays the reviewer's judgement.
+- Where the import did not record WHO's parent, the relation is read from the code itself (a
+  code that continues another). The 121 recorded pairs do not depend on this; at present no
+  other pending pair exists.
+- A MONDO term that is narrower than our label (the "atopic eczema" case) is not detected: the
+  API does not hold MONDO's hierarchy.
+- The test of "a link the reviewer retired stays retired" runs on PostgreSQL only, because the
+  order of two decisions is read from recorded times and SQLite keeps them to the second.
+- The review screens (M2.4) still have to show these refusals to a reviewer in words.

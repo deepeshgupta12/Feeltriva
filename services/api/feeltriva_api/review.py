@@ -446,3 +446,133 @@ _TARGETS["terminology_link"] = (TerminologyLink, "link_id")
 # What a decision on a kind of target requires or entails beyond setting its status (M2.5a). A guard is called
 # inside the reviewer's transaction before the status is set; it raises ApiError to refuse the decision.
 _GUARDS: dict[str, Any] = {}
+
+
+# ---- What a decision on a vocabulary link entails (M2.5d2) -------------------------------------------------
+#
+# 1. A SNOMED CT or ICD-11 link taken through a MONDO link rests on it (`detail.via.link_id`). Rejecting the
+#    MONDO link retires the pending links taken through it; withdrawing the rejection makes those pending
+#    again. A link taken through it that a reviewer approved is not overruled: the rejection is refused until
+#    that link is decided. A link is not approved while the MONDO link it rests on is rejected.
+# 2. The general term is the default (owner's rule E64). Where a term has two ICD-11 candidates and one lies
+#    under the other, the narrower one is not approved while the broader one is pending or approved; a reviewer
+#    who finds that the source names the narrower form rejects the general term first. The same holds for a
+#    category and its "unspecified" sub-code (E66): approval keeps the category, and the sub-code row stays as
+#    it is, for its provenance.
+#
+# Which code lies under which is taken from the category WHO names as the parent of an unspecified sub-code,
+# where the import recorded it (`detail.category_through_mondo`), and otherwise from the code itself: a code
+# that continues another code lies under it. Titles and our own link IDs are named in messages, never a code.
+_MONDO, _ICD_MMS = "MONDO", "ICD-11 MMS"
+_RETIRED_WITH = "Retired with the MONDO link it was taken through, which a reviewer rejected: "
+_PENDING_AGAIN = "Pending again, because the rejection of the MONDO link it was taken through was withdrawn: "
+
+
+def _taken_through(link: TerminologyLink) -> str | None:
+    return ((link.detail or {}).get("via") or {}).get("link_id")
+
+
+def _lies_under(link: TerminologyLink, other: TerminologyLink) -> bool:
+    category = ((link.detail or {}).get("category_through_mondo") or {}).get("icd_code")
+    return other.code == category or (len(link.code) > len(other.code) and link.code.startswith(other.code))
+
+
+def _follow(tx: Any, principal: Principal, link: TerminologyLink, status: str, note: str) -> None:
+    """Record a change of one link that follows from a reviewer's decision on another."""
+    previous = link.status
+    link.status, link.reviewer = status, principal.subject
+    tx.add(
+        ReviewNote(
+            note_id=uuid.uuid4(),
+            target_type="terminology_link",
+            target_id=link.link_id,
+            reviewer=principal.subject,
+            note=note,
+            status_change=status,
+        )
+    )
+    tx.add(
+        AuditEvent(
+            event_id=uuid.uuid4(),
+            actor_subject=principal.subject,
+            event_type="review_recorded",
+            redacted_metadata={
+                "target_type": "terminology_link",
+                "target_id": link.link_id,
+                "from": previous,
+                "to": status,
+                "follows_a_decision_on_another_link": True,
+            },
+        )
+    )
+
+
+def _link_guard(tx: Any, link: TerminologyLink, status: str, principal: Principal) -> None:
+    same_term = (
+        TerminologyLink.disease_id == link.disease_id
+        if link.disease_id
+        else TerminologyLink.feature_id == link.feature_id
+    )
+    others = tx.scalars(
+        select(TerminologyLink)
+        .where(same_term, TerminologyLink.link_id != link.link_id)
+        .order_by(TerminologyLink.link_id)
+    ).all()
+    if link.system == _MONDO and status != link.status:
+        taken = [other for other in others if _taken_through(other) == link.link_id]
+        if status == "rejected":
+            approved = [other for other in taken if other.status == "approved"]
+            if approved:
+                raise ApiError(
+                    409,
+                    "derived_links_approved",
+                    f"{len(approved)} links taken through this MONDO link are approved ("
+                    + ", ".join(other.link_id for other in approved)
+                    + "). Decide them first: a link cannot stay approved when the link it rests on is rejected.",
+                )
+            for other in taken:
+                if other.status == "pending":
+                    _follow(tx, principal, other, "retired", _RETIRED_WITH + link.link_id)
+        elif link.status == "rejected":
+            for other in taken:
+                last = tx.scalars(
+                    select(ReviewNote)
+                    .where(
+                        ReviewNote.target_type == "terminology_link",
+                        ReviewNote.target_id == other.link_id,
+                        ReviewNote.status_change == "retired",
+                    )
+                    .order_by(ReviewNote.created_at.desc())
+                ).first()
+                # Only a link the rejection itself retired comes back; one a reviewer retired stays retired.
+                if other.status == "retired" and last is not None and last.note == _RETIRED_WITH + link.link_id:
+                    _follow(tx, principal, other, "pending", _PENDING_AGAIN + link.link_id)
+    if status != "approved":
+        return
+    basis_id = _taken_through(link)
+    basis = tx.get(TerminologyLink, basis_id) if basis_id else None
+    if basis is not None and basis.status == "rejected":
+        raise ApiError(
+            409,
+            "basis_rejected",
+            f'This link was taken through the MONDO link "{basis.title}" ({basis.link_id}), which a reviewer '
+            "rejected. Withdraw that rejection first if this link is right.",
+        )
+    if link.system != _ICD_MMS:
+        return
+    general = [
+        other
+        for other in others
+        if other.system == _ICD_MMS and other.status in ("pending", "approved") and _lies_under(link, other)
+    ]
+    if general:
+        raise ApiError(
+            409,
+            "general_term_is_default",
+            f'This term also has the more general candidate "{general[0].title}" ({general[0].link_id}), and the '
+            "general term is the default. Approve that one; or, if the source names the narrower form, reject the "
+            "general candidate first.",
+        )
+
+
+_GUARDS["terminology_link"] = _link_guard
