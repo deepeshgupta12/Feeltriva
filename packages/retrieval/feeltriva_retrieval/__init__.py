@@ -26,7 +26,8 @@ class BundleEvidenceProvider:
     callers must treat a missing citation as 'no evidence' and withhold the claim."""
 
     def __init__(self, bundle: ReleaseBundle, *, clinical_mode: bool) -> None:
-        self._release = bundle.knowledge_version
+        # A bundle without a knowledge release holds no evidence (`validate_bundle`), so nothing is served with "".
+        self._release = bundle.knowledge_version or ""
         self._items = {e.evidence_id: e for e in bundle.evidence if not clinical_mode or e.status == "approved"}
 
     def get_many(self, evidence_ids: list[str]) -> dict[str, EvidenceRecord]:

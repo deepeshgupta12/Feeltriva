@@ -90,8 +90,9 @@ class Templates(_Strict):
 class ReleaseBundle(_Strict):
     bundle_id: str
     rules_version: str
-    knowledge_release_id: str
-    knowledge_version: str
+    # Both None when the bundle carries no knowledge release: it then has no candidates and no evidence.
+    knowledge_release_id: str | None
+    knowledge_version: str | None
     synthetic: bool
     status: ReviewState
     features: list[Feature]
@@ -142,6 +143,10 @@ def validate_bundle(bundle: ReleaseBundle, *, clinical_mode: bool) -> None:
             validate_ast(c.condition_ast, features)
     except (RuleValidationError, AnswerValidationError) as exc:
         raise BundleError(str(exc)) from exc
+    if (bundle.knowledge_release_id is None) != (bundle.knowledge_version is None):
+        raise BundleError("a knowledge release is named by its ID and its version, or not at all")
+    if bundle.knowledge_version is None and (bundle.candidates or bundle.evidence):
+        raise BundleError("candidates and evidence need a knowledge release")
     if clinical_mode:
         if bundle.synthetic:
             raise BundleError("synthetic fixture bundle cannot be served in clinical mode")

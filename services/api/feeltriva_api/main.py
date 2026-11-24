@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import disease_merges, published_knowledge, published_mappings, releases
+from . import disease_merges, published_knowledge, published_mappings, releases, response_text_sets, serving_bundle
 from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
@@ -424,6 +424,14 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         return JSONResponse(
             published_knowledge.make_current(container.db, who, release_id=body.release_id, note=body.note)
         )
+
+    @app.get("/internal/v1/review/serving-bundle")
+    def review_serving_bundle(who: Who) -> JSONResponse:
+        return JSONResponse(serving_bundle.preview(container.db, who))
+
+    @app.get("/internal/v1/review/response-texts")
+    def review_response_texts(who: Who) -> JSONResponse:
+        return JSONResponse(response_text_sets.list_sets(container.db, who))
 
     return app
 

@@ -34,6 +34,7 @@ command output, not estimated.
 | BUG-023 | M2.6 | The sentence rule read the letters that end a token of letters and digits ("794f", "2a") as a single-letter word or an abbreviation, so a sentence ending in such a token was not ended. Found by CI on the M2.6 commit: the test sentence ends in a random tag | Fixed |
 | BUG-024 | M2.5c1 | Two merge or split events written within one second came back in the wrong order on SQLite, because the history was ordered by a time the database filled in | Fixed before commit |
 | BUG-025 | M1.11, M1.13 / M2.5c3, M2.5d1 | The self-checks of `load-evidence` and `completeness` reported every row that was not `pending`, so both commands would fail as soon as a reviewer decided a row (the fault of BUG-021, left in two more commands). Shown by the test suite in M2.5c3 | Fixed in M2.5d1 |
+| BUG-026 | M1.10 / M2.5f | A test of the chunk loader searched the shared test database for words every run stores, with a limit of 50, and expected its own row among the results; once more than 50 runs had left their rows it failed depending on the order | Fixed in M2.5f: the test searches for its own run's word |
 
 ## Entries
 
@@ -4326,3 +4327,103 @@ jobs, run 45350954954) and `f92a700` (M2.5d2; CI passed on both jobs, run 453512
 graph was re-indexed and reports up-to-date at `f92a700`. The API was restarted for the rule of
 M2.5d2; the web app was not, because nothing it loads changed. This paragraph was added in a
 following documents-only commit, after which the index was refreshed again.
+
+### M2.5f — The serving bundle from the current releases
+
+Owner's instruction of 2026-11-24: "do M2.5f and M2.9". Each is done with its own commit; this
+entry is M2.5f.
+
+**What the plan asks, checked before the work.** The bundle loaded in clinical mode must hold the
+rules of the current rule release, the features those rules name with an approved status from
+the mapping release, and the four response texts; the sub-step "assembles that file from the
+current releases and refuses when any part is missing or not approved". From M2.5c3: the bundle
+is refused when the current knowledge release is pinned to a mapping release that is not the
+current one. From M2.5f1 and E86: storing the approved texts and entering the approval belongs
+here. Clinical mode defaults off and no external model provider is called (`CLAUDE.md`).
+
+**What was built** (decision E89).
+
+- Migration `0016`: table `response_text_sets` (the four texts as stored, the file's SHA-256,
+  status, who approved and when). A trigger refuses any change to the texts of a decided set.
+  The API's role may read, and decide only in a reviewer transaction; it cannot change a text.
+- `response_text_sets.py` (new): stores the texts file (`python -m
+  feeltriva_api.response_text_sets`); review target `response_texts`; approval is refused when
+  the file is not the one stored or fails its checks; `list_sets` for reviewers.
+- `serving_bundle.py` (new): `assemble`, `preview`, `write`, `verify_serving`, and the command
+  `python -m feeltriva_api.serving_bundle`, which writes the bundle and a second file saying
+  what it was built from.
+- `bundle.py`: a bundle may name no knowledge release (both fields empty); it then may hold no
+  candidates and no citations. `seed.py` registers no knowledge release for such a bundle;
+  `feeltriva_retrieval` copes with the empty name.
+- `container.py`: in clinical mode the loaded bundle must be exactly what the current releases
+  give (`verify_serving`), in addition to the check of M2.5b.
+- `main.py`: `GET /internal/v1/review/response-texts`, `GET /internal/v1/review/serving-bundle`.
+  Reviewers only.
+
+**Real run.** Migration applied to the main database (head `0016`). The API was restarted.
+
+| Step | Result |
+|---|---|
+| The texts file stored | `response-texts-draft-1`, 4 texts, SHA-256 `272179d62ea79ac122afacdde2965530102f22077b41876e3494ce6d969a1acd`; unchanged since the commit the owner read (`9512eb8`); stored pending |
+| Assembling before the approval | refused: "the response texts are not approved"; nothing written |
+| The owner's approval (E86) entered through the review path as `dev-reviewer:owner` | pending to approved, with a note quoting the owner and saying that the assistant entered it |
+| Assembling | bundle `urgency-draft.r1`: 20 rules, 85 features, 0 questions, 4 response texts, 0 candidates; SHA-256 `d89b006bf71a24364b89ed81640e3746de4dcdab01e0661ca9467a4e5c115821`; built from rule release `urgency-draft.r1`, mapping release `mapping-lexical-0.r1`, text set `response-texts-draft-1`, no knowledge release |
+| Where | `data/derived/serving_bundle.json` (53,129 bytes) and `serving_bundle.manifest.json`; `data/` is outside Git |
+| Loaded as clinical mode loads it | passes the clinical-mode checks; its rules are the current rule release; the whole bundle is what the releases give; every rule text is the text of the approved rule file |
+| `/readyz` | clinical mode off, synthetic release: nothing changed in what runs |
+
+**Impact analysis.** All LOW: `ReleaseBundle`, `validate_bundle`, `seed_release`,
+`build_container`, `BundleEvidenceProvider`, `create_app`, and the changed test. The graph does
+not trace readers of the bundle across packages, so they were found by search: `seed.py`,
+`service_results.py` (passes both fields on; the result's `versions.knowledge` and the
+assessment's knowledge column already allow an empty value), `feeltriva_retrieval`; the MCP
+server reads neither field. `detect_changes` before commit: "medium", 19 names in 7 files.
+Compared with the last commit by syntax tree: changed are `ReleaseBundle`, `validate_bundle`,
+`BundleEvidenceProvider.__init__`, `build_container`, `seed_release`, `create_app` (two routes)
+and one test with its fixture; `ResponseTextSet` is new; the rest is listed because lines moved.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 69 files |
+| `uv run pytest -m "not archives"` (SQLite) | 249 passed, 65 skipped |
+| `uv run pytest` (SQLite, archives included) | 255 passed, 68 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | four runs: 323 passed; 322 passed and 1 failed (BUG-026); after the fix 323 passed twice. Full output saved |
+| Migration `0016` on a scratch database: head, down to `0015`, head | table and policies present, absent, present |
+
+The seven new tests prove, on a database of their own with invented rules: every missing part is
+named and nothing is written; a mapping release that lacks a feature a rule names is refused with
+the feature's name; the assembled bundle holds the rules of the current rule release, the
+features of the mapping release and the approved texts, names no knowledge release, passes the
+clinical-mode checks and loads from its file; a bundle with an edited text, the sample bundle, a
+bundle assembled before a later release, and a bundle whose texts lost their approval are each
+refused at the start check; a knowledge release pinned to the current mapping release is named
+in the bundle and one pinned to an earlier release refuses it; a bundle names a knowledge release
+fully or not at all; the texts are stored as the file has them, approved only as stored, not
+rewritten once decided, and a withdrawn approval names nobody; the two routes are for reviewers
+only; on PostgreSQL the texts of a decided set cannot be changed even by the schema owner.
+
+**Bugs.**
+
+- **BUG-026 — a test of the chunk loader failed once the test database held more than 50 of
+  its own leftovers.** One of four PostgreSQL runs failed in
+  `test_chunks_are_stored_pending_searchable_and_idempotent`. The saved output showed the cause:
+  the test searched the shared test database for words that every run stores, with a limit of
+  50, and expected its own row among the results; 62 such rows had accumulated. Not caused by
+  this sub-step. Fixed: the test's file now carries a word of its own run and the test searches
+  for that. The test file is one of three that are not laid out by the formatter; only the
+  changed lines were touched.
+- The intermittent failure of the MCP parity test (M2.13b, M2.5d1) did not occur in these runs.
+
+**Limits, stated plainly.**
+
+- **Clinical mode cannot be switched on yet.** It refuses the mock extraction provider, and no
+  other provider exists (M5). Switching it on is also the owner's go-live decision (E36, E45).
+- The bundle holds no candidates. Served as it is, the service would screen every message for
+  the 20 urgency rules and otherwise answer with the "not enough information" text.
+- An urgency message does not show the source it rests on; the sources are in the rule release.
+- The file must be assembled again after every new release; the start check refuses an old file.
+- An assessment records the rule bundle's ID and, in its result, the rule release's ID. A column
+  for the published release IDs of mapping and knowledge on the assessment is not built (R12).
+- No doctor has reviewed the rules, the features or the texts (D-C2).

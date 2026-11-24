@@ -432,3 +432,17 @@ class PublishedKnowledge(Base):
     published_by: Mapped[str] = mapped_column(Text)
     published_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ResponseTextSet(Base):
+    """The four response texts of a release as stored from the texts file, for a reviewer's decision (M2.5f).
+    The texts of a decided set are not changed: the database refuses it."""
+
+    __tablename__ = "response_text_sets"
+    set_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    version: Mapped[str] = mapped_column(Text, unique=True)
+    fingerprint: Mapped[str] = mapped_column(Text)
+    texts: Mapped[Any] = mapped_column(Json)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    approved_by: Mapped[str | None] = mapped_column(Text)
+    approved_at: Mapped[datetime | None] = mapped_column(TZ)

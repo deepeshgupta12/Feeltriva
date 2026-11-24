@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5d2 (2026-11-24).
+Last updated after sub-step M2.5f (2026-11-24).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -166,7 +166,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | P3 | Pipeline 3: complaint screening and extraction; failure is incomplete, not negative | Done (fixture) | | M3.3 |
 | P4 | Pipeline 4: confirm, apply transactionally, invalidate stale results | Done | | M3.3 |
 | P5 | Pipeline 5: urgency and scope rules; urgent bypasses ranking | Done (fixture) | | M3.3 |
-| P6 | Pipeline 6: evidence and candidates only from approved releases | Partial | Enforced for clinical mode at load time; no approved release exists | M3.1; M2.5 |
+| P6 | Pipeline 6: evidence and candidates only from approved releases | Partial | Enforced for clinical mode at load time. The serving bundle is assembled only from the current rule release, the current mapping release and the approved response texts, and at start the loaded bundle must be exactly that (M2.5f). It holds no candidates and no citations yet | M3.1, M2.5f; M2.9 |
 | P7 | Pipeline 7: rank and choose next question or abstain; scores internal | Partial | Rule match and fixed-priority questions | M4, M3.8 |
 | P8 | Pipeline 8: compose with cited evidence; validate every cited ID and scope | Partial | Citation existence validated; no composed explanation | M3.3; M5.1, M5.3 |
 | P9 | Pipeline 9: check no contradiction with urgency/action; fall back to reviewed template | Missing | No generated explanation yet, so nothing to check | M5.3 |
@@ -317,7 +317,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | U8 | Consent taken from users (E32) | Missing | M3.16 |
 | U9 | Conversations kept 30 days (E33) | Missing | C8 |
 | U10 | Feature meanings derived from the supplied data (E34) | Done as proposals; 51 headings listed for the owner | M2.7 |
-| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Approved by the owner, not published | 20 rules from published warning signs, each with its basis, stored `pending` and not served (M2.10). The finished text for approval and its approval record are in `docs/review/urgency_rules_final.md` (M2.10a). The owner approved all 20 rules and the rule set on 2026-11-23 (E78), recorded through the review path (M2.5a, M2.5a1); published as release 1 on the owner's instruction (E80, M2.5b1); the serving bundle is M2.5f | M2.10, M2.10a, M2.5a, M2.5a1, M2.5b; M2.5f |
+| U11 | Urgency rules drafted by the assistant, approved by the owner (E39) | Approved by the owner, not published | 20 rules from published warning signs, each with its basis, stored `pending` and not served (M2.10). The finished text for approval and its approval record are in `docs/review/urgency_rules_final.md` (M2.10a). The owner approved all 20 rules and the rule set on 2026-11-23 (E78), recorded through the review path (M2.5a, M2.5a1); published as release 1 on the owner's instruction (E80, M2.5b1); the serving bundle holding them is assembled (M2.5f) and not served | M2.10, M2.10a, M2.5a, M2.5a1, M2.5b, M2.5f |
 | U12 | Claude API as the language model (E46) | Missing | M5.1 |
 | U13 | Cassandra self-hosted inside this repository (E47) | Missing | C2 |
 | U14 | Not live for now; the whole handoff is built end to end (E45) | In force | all steps |

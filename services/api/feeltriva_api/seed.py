@@ -24,13 +24,19 @@ def seed_release(db: Database, bundle: ReleaseBundle) -> None:
                     manifest_uri=f"bundle://{bundle.bundle_id}/{bundle.rules_version}",
                 )
             )
-        if tx.get(KnowledgeRelease, bundle.knowledge_release_id) is None:
+        knowledge_id, knowledge_version = bundle.knowledge_release_id, bundle.knowledge_version
+        # A bundle that carries no knowledge release names none, and none is registered for it.
+        if (
+            knowledge_id is not None
+            and knowledge_version is not None
+            and tx.get(KnowledgeRelease, knowledge_id) is None
+        ):
             tx.add(
                 KnowledgeRelease(
-                    release_id=bundle.knowledge_release_id,
-                    version=bundle.knowledge_version,
+                    release_id=knowledge_id,
+                    version=knowledge_version,
                     status=bundle.status,
-                    manifest_uri=f"bundle://{bundle.knowledge_release_id}/{bundle.knowledge_version}",
+                    manifest_uri=f"bundle://{knowledge_id}/{knowledge_version}",
                 )
             )
         tx.flush()

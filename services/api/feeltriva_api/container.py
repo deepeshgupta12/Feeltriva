@@ -45,9 +45,12 @@ def build_container(settings: Settings, db: Database | None = None) -> Container
     clinical = settings.clinical_mode_enabled
     if clinical:
         # Clinical mode serves only what was published: the rules loaded must be the current release (M2.5b).
+        # ... and the whole bundle must be what the current releases give (M2.5f).
         from .releases import verify_published
+        from .serving_bundle import verify_serving
 
         verify_published(db, bundle)
+        verify_serving(db, bundle)
     assessments = AssessmentService(
         db=db,
         settings=settings,

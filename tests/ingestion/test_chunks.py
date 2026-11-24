@@ -104,6 +104,8 @@ def crafted(tmp_path, owner_db):
     archive = f"texts-{tag}.zip"
     name = f"synthetic_condition_{tag}.txt"
     doc = DOC.replace("Synthetic Condition", f"Synthetic Condition {tag}").replace("alphaword", f"alphaword{tag}")
+    # The reference entry carries this run's own word too, so a search for it finds this run's chunk only.
+    doc = doc.replace("A reference entry.", f"A reference entry refword{tag}.")
     words = len(doc[chunk_document(doc).body_start :].split())
     path = tmp_path / archive
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -188,11 +190,11 @@ def test_chunks_are_stored_pending_searchable_and_idempotent(crafted, owner_db):
 
     hits = search_chunks(url, f"alphaword{tag}")
     assert len(hits) == 1 and hits[0]["release_status"] == "pending" and hits[0]["section_path"] == []
-    assert search_chunks(url, "reference entry") == [] or all(
-        h["disease"] != f"Synthetic Condition {tag}" for h in search_chunks(url, "reference entry")
-    )
-    with_refs = search_chunks(url, "reference entry", limit=50, include_boilerplate=True)
-    assert any(h["disease"] == f"Synthetic Condition {tag}" for h in with_refs)  # boilerplate hidden by default
+    # Boilerplate is hidden by default. The search is for this run's own word: the test database keeps the rows
+    # of earlier runs, and a search for words every run uses returned more than its limit (BUG-026).
+    assert search_chunks(url, f"refword{tag}") == []
+    with_refs = search_chunks(url, f"refword{tag}", include_boilerplate=True)
+    assert [h["disease"] for h in with_refs] == [f"Synthetic Condition {tag}"]
 
     again = load_chunks(raw_dir, url, manifest, archive=archive)
     assert again["chunks_inserted"] == 0 and again["category_flags_added"] == 0 and check(again, 1) == []
