@@ -4320,3 +4320,9 @@ reviewer retired is not brought back by a withdrawal.
 - The test of "a link the reviewer retired stays retired" runs on PostgreSQL only, because the
   order of two decisions is read from recorded times and SQLite keeps them to the second.
 - The review screens (M2.4) still have to show these refusals to a reviewer in words.
+
+**Committed and indexed (M2.5c4, M2.5d2).** `2b19cb1` (M2.5c4, documents only; CI passed on both
+jobs, run 45350954954) and `f92a700` (M2.5d2; CI passed on both jobs, run 45351279030). The code
+graph was re-indexed and reports up-to-date at `f92a700`. The API was restarted for the rule of
+M2.5d2; the web app was not, because nothing it loads changed. This paragraph was added in a
+following documents-only commit, after which the index was refreshed again.
