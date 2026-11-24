@@ -4520,3 +4520,9 @@ nothing is available. The one skipped test on PostgreSQL is that last one, which
   ranking and care guidance are later steps (M4, M5).
 - Applicability is a column, not a filter: no statement carries any yet.
 - The retrieval chunks are in no view: they have no review status (M2.5e).
+
+**Committed and indexed (M2.9).** Committed as `3da314d` and pushed; CI passed on both jobs (run
+45359559129). The code graph was re-indexed and reports up-to-date. Migration `0017` is applied to
+the main database; the API was restarted for the changed condition route; the web app was not,
+because nothing it loads changed. This paragraph was added in a following documents-only commit,
+after which the index was refreshed again.
