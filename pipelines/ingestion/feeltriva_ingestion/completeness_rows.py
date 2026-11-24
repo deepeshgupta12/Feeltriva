@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 from .chunks import CATEGORY_FLAG, TEXT_ARCHIVE
 from .completeness_cases import (
     TEXT_ROW,
-    TEXT_STATEMENTS,
     case_file_rows,
     disease_mapping_rows,
     name_of,
@@ -292,11 +291,20 @@ def _texts(report: Report, world: dict[str, Any]) -> None:
         texts["release_status"],
         "rule",
     )
-    report.later(
+    parts = world["text_chunks"]
+    report.check(
         row,
-        "statements extracted from the text files after review",
-        f"{world['text_statements']} statements",
-        TEXT_STATEMENTS,
+        "parts of the text files approved by a reviewer, each with the statement made from it",
+        parts["approved"],
+        parts["with_their_statement"],
+        "rule",
+    )
+    report.check(
+        row,
+        "statements of the text files that no reviewed part gave, or parts decided by no reviewer",
+        0,
+        parts["statements_no_part_gave"] + parts["decided_without_reviewer"],
+        "rule",
     )
 
 

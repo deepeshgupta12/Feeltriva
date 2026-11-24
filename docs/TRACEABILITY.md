@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.5e1 (2026-11-24).
+Last updated after sub-step M2.5e2 (2026-11-24).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|

@@ -147,6 +147,7 @@ def test_claims_are_stored_pending_with_their_span_their_sentence_and_a_feature_
             "expected": 5,
             "stored_as_expected": 5,
             "unexpected": 0,
+            "kept_for_a_decision": 0,
             "not_their_text": 0,
             "decided_without_reviewer": 0,
         }
@@ -175,9 +176,119 @@ def test_a_stored_claim_that_is_no_longer_its_statement_s_text_is_reported(store
     assert "1 stored claims are not their statement's text at their offsets" in check(changed)
 
 
-def test_claims_the_rules_no_longer_give_are_made_again_only_when_asked_and_never_after_a_decision(
-    stored, owner_db, monkeypatch
-):
+def _under_earlier_rules(monkeypatch, url, ids):
+    """Store the claims as earlier rules gave them: another version, under which no sentence ended inside a statement."""
+    monkeypatch.setattr(claims, "VERSION", "claims-0")
+    monkeypatch.setattr(claims, "sentences", lambda body: [(0, len(body))])
+    early = extract_claims(url, ids)
+    monkeypatch.undo()
+    return early
+
+
+def test_a_reviewer_s_decision_is_kept_when_the_rules_change(stored, owner_db, monkeypatch):
+    """M2.5e2 (decision E72): a rule change does not lose a decision."""
+    url, ids, tag = os.environ["TEST_MIGRATION_DATABASE_URL"], stored["ids"], stored["tag"]
+    assert check(_under_earlier_rules(monkeypatch, url, ids)) == []
+
+    def decide(status, where, value):
+        with owner_db.transaction(None) as tx:
+            changed = tx.execute(
+                text(
+                    f"UPDATE statement_claims SET status = :v, reviewer = 'dev-reviewer:test' "  # noqa: S608
+                    f"WHERE statement_id = :s AND {where} = :t"
+                ),
+                {"v": status, "s": ids[0], "t": value},
+            )
+            assert changed.rowcount == 1
+
+    def rows():
+        with owner_db.transaction(None) as tx:
+            found = tx.execute(
+                text(
+                    """SELECT c.claim_text, c.kind, c.status::text, c.rule, c.superseded_by, p.claim_text
+                       FROM statement_claims c LEFT JOIN statement_claims p ON p.claim_id = c.parent_claim_id
+                       WHERE c.statement_id = :s ORDER BY c.span_start, c.kind DESC, c.span_end"""
+                ),
+                {"s": ids[0]},
+            ).all()
+        return [tuple(row) for row in found]
+
+    # A reviewer approves an item the present rules give too (under another sentence), and rejects the one long
+    # sentence of the earlier rules, which the present rules no longer give.
+    decide("approved", "claim_text", f"a hat {tag}")
+    decide("rejected", "kind", "sentence")
+    whole, first = stored["symptom"], stored["symptom"].removesuffix(" It ends.")
+    # Not asked to make anything again: nothing is added, and the command says how to go on.
+    plain = extract_claims(url, ids)
+    assert plain["inserted"] == 0 and plain["earlier"] == {"claims": 4, "statements": 1, "reviewed_statements": 1}
+    assert any(
+        "a reviewer's decision" in diff and "--remake, which keeps every decision" in diff for diff in check(plain)
+    )
+    # Asked: the statement is brought to the present rules, and both decisions are still there.
+    carried = extract_claims(url, ids, remake=True)
+    assert carried["remade"] == {"statements": 0, "deleted": 0}
+    # Two sentences stored; the two items the rules give again brought under the present sentence; the earlier last
+    # item, which ran on to the end of the text and which nobody decided, deleted and made again by the present rules.
+    assert carried["carried"] == {"statements": 1, "kept": 1, "adjusted": 2, "deleted": 1, "inserted": 2}
+    assert check(carried) == [] and carried["inserted"] == 3
+    assert rows() == [
+        # the present first sentence, new and pending
+        (first, "sentence", "pending", f"{VERSION}:sentence", None, None),
+        # the long sentence of the earlier rules: decided, no longer given, kept as it is and marked
+        (whole, "sentence", "rejected", "claims-0:sentence", VERSION, None),
+        # the same claims as before: the approved one is still approved, now under the present sentence
+        (f"a hat {tag}", "list_item", "approved", "claims-0:enumeration", None, first),
+        (f"a scarf {tag} (red)", "list_item", "pending", "claims-0:enumeration", None, first),
+        # the last item as the present rules give it
+        (f"gloves {tag}", "list_item", "pending", f"{VERSION}:enumeration", None, first),
+        ("It ends.", "sentence", "pending", f"{VERSION}:sentence", None, None),
+    ]
+    assert any("1 decided claims the rules no longer give kept and marked" in line for line in report(carried))
+    # Nothing is left to do, and the kept claim is not reported again: by the command or by the completeness check.
+    again = extract_claims(url, ids, remake=True)
+    assert again["inserted"] == 0 and again["earlier"]["claims"] == 0 and check(again) == []
+    assert again["carried"]["statements"] == 0
+    with scratch(url) as cur:
+        facts = _claims(cur, stored["sid"])
+    assert (facts["expected"], facts["stored_as_expected"], facts["unexpected"], facts["kept_for_a_decision"]) == (
+        5,
+        5,
+        0,
+        1,
+    )
+
+
+def test_an_undecided_claim_under_a_kept_sentence_goes_and_the_sentence_stays(stored, owner_db, monkeypatch):
+    url, ids, tag = os.environ["TEST_MIGRATION_DATABASE_URL"], stored["ids"], stored["tag"]
+    _under_earlier_rules(monkeypatch, url, ids)
+    with owner_db.transaction(None) as tx:
+        # An item of the earlier rules that the present rules do not give at all, decided by a reviewer.
+        tx.execute(
+            text(
+                """INSERT INTO statement_claims (claim_id, statement_id, parent_claim_id, kind, span_start, span_end,
+                       claim_text, rule, cues, status, reviewer)
+                   SELECT 'cl_old_' || :t, statement_id, claim_id, 'list_item', 0, 5, 'Signs', 'claims-0:enumeration',
+                          '{}'::jsonb, 'rejected', 'dev-reviewer:test'
+                   FROM statement_claims WHERE statement_id = :s AND kind = 'sentence'"""
+            ),
+            {"t": tag, "s": ids[0]},
+        )
+    carried = extract_claims(url, ids, remake=True)
+    # The decided item is kept, and so is the undecided sentence it stands under. The one claim deleted is the
+    # earlier last item, which nobody decided and the rules no longer give.
+    assert carried["carried"]["kept"] == 2 and carried["carried"]["deleted"] == 1 and check(carried) == []
+    with owner_db.transaction(None) as tx:
+        kept = tx.execute(
+            text(
+                "SELECT kind, status::text, superseded_by FROM statement_claims "
+                "WHERE statement_id = :s AND superseded_by IS NOT NULL ORDER BY kind"
+            ),
+            {"s": ids[0]},
+        ).all()
+    assert [tuple(row) for row in kept] == [("list_item", "rejected", VERSION), ("sentence", "pending", VERSION)]
+
+
+def test_claims_the_rules_no_longer_give_are_made_again_only_when_asked(stored, owner_db, monkeypatch):
     url, ids, tag = os.environ["TEST_MIGRATION_DATABASE_URL"], stored["ids"], stored["tag"]
 
     def labels():
@@ -188,12 +299,8 @@ def test_claims_the_rules_no_longer_give_are_made_again_only_when_asked_and_neve
             ).all()
         return sorted((row[0], row[1], row[2]) for row in rows)
 
-    # Earlier rules: another version, under which no sentence was ended inside a statement.
-    monkeypatch.setattr(claims, "VERSION", "claims-0")
-    monkeypatch.setattr(claims, "sentences", lambda body: [(0, len(body))])
-    early = extract_claims(url, ids)
+    early = _under_earlier_rules(monkeypatch, url, ids)
     assert check(early) == [] and early["inserted"] == 5 and early["earlier"]["statements"] == 0
-    monkeypatch.undo()
 
     # The present rules, not asked to make anything again. The first statement holds a sentence and an item the rules
     # no longer give, and two items that now belong to another sentence: nothing is added to it, and it is reported.
@@ -207,31 +314,8 @@ def test_claims_the_rules_no_longer_give_are_made_again_only_when_asked_and_neve
     )
     assert any("4 in 1 statements" in line for line in report(plain))
 
-    # A reviewer has decided on one of them: the statement is left as it is, also when asked to make it again.
-    with owner_db.transaction(None) as tx:
-        tx.execute(
-            text(
-                """UPDATE statement_claims SET status = 'approved', reviewer = 'dev-reviewer:test'
-                   WHERE statement_id = :s AND claim_text = :t"""
-            ),
-            {"s": ids[0], "t": f"a hat {tag}"},
-        )
-    kept = extract_claims(url, ids, remake=True)
-    assert kept["inserted"] == 0 and kept["remade"] == {"statements": 0, "deleted": 0}
-    assert kept["earlier"] == {"claims": 4, "statements": 1, "reviewed_statements": 1}
-    diffs = check(kept)
-    assert any(
-        "1 statements hold claims that the rules do not give and a reviewer's decision" in diff for diff in diffs
-    )
-    assert not any("--remake" in diff for diff in diffs)
-    assert (ids[0], "claims-0:enumeration", "approved") in labels()
-
-    # Without a decision, the statement's claims are deleted and the present ones stored.
-    with owner_db.transaction(None) as tx:
-        tx.execute(
-            text("UPDATE statement_claims SET status = 'pending', reviewer = NULL WHERE statement_id = :s"),
-            {"s": ids[0]},
-        )
+    # No reviewer has decided on any of them: the statement's claims are deleted and the present ones stored.
+    assert tag in stored["symptom"]
     remade = extract_claims(url, ids, remake=True)
     assert remade["remade"] == {"statements": 1, "deleted": 4} and remade["inserted"] == 5
     assert check(remade) == [] and remade["stored"]["rows"] == 6 and remade["stored"]["pending"] == 6
@@ -265,3 +349,61 @@ def test_a_stored_claim_whose_cues_are_not_what_the_rules_give_is_made_again(sto
             {"s": ids[0]},
         ).all()
     assert [row[0] for row in cues] == [{"hedge": ["may"]}]
+
+
+def test_the_length_at_which_a_source_cuts_its_texts_is_found_by_measurement(owner_db):
+    """M2.5e2 (decision E74): a cut-off limit other than the 120 words of the one source measured by hand."""
+    url = os.environ["TEST_MIGRATION_DATABASE_URL"]
+    tag = uuid.uuid4().hex[:10]
+    sid = source_id(f"cut-{tag}.zip", "summaries.csv")
+    cut = "Word " * 7 + "signs include a hat, a scarf, gloves, and a"  # 16 words, stopped in the middle of a list
+    assert len(cut.split()) == 16
+    texts = [cut.replace("Word", f"Word{n}", 1) for n in range(6)] + ["A short text that ends."]
+    with owner_db.transaction(None) as tx:
+        tx.add(Source(source_id=sid, source_name=f"cut-{tag}.zip/summaries.csv", version="t", sha256="0"))
+        tx.add(Disease(disease_id=f"dis_{tag}", preferred_name=f"pretend ache {tag}"))
+        tx.flush()
+        for number, body in enumerate(texts, start=1):
+            tx.add(
+                SourceRecord(
+                    record_id=f"rec_{tag}_{number}",
+                    source_id=sid,
+                    file_path="summaries.csv",
+                    row_number=number,
+                    content_hash="0",
+                    raw_object_uri="zip://x",
+                )
+            )
+            tx.add(
+                Statement(
+                    statement_id=f"st_{tag}_{number}",
+                    disease_id=f"dis_{tag}",
+                    statement_type="description",
+                    text_content=body,
+                )
+            )
+            tx.flush()
+            tx.add(StatementSource(statement_id=f"st_{tag}_{number}", record_id=f"rec_{tag}_{number}"))
+    ids = [f"st_{tag}_{number}" for number in range(1, 8)]
+    result = extract_claims(url, ids)
+    assert check(result) == []
+    # Six texts of this source have exactly 16 words and stop in the middle of a sentence: its limit is 16 words.
+    assert result["cut_off"][sid] == 16
+    assert any("by measurement" in line and "16" in line for line in report(result))
+    with owner_db.transaction(None) as tx:
+        marked = tx.execute(
+            text(
+                """SELECT statement_id, cues -> 'cut_off' FROM statement_claims
+                   WHERE statement_id = ANY(:s) AND kind = 'sentence' ORDER BY statement_id, span_start"""
+            ),
+            {"s": ids},
+        ).all()
+        items = tx.execute(
+            text(
+                "SELECT claim_text FROM statement_claims WHERE statement_id = :s AND kind = 'list_item' ORDER BY span_start"
+            ),
+            {"s": ids[0]},
+        ).all()
+    assert [tuple(row) for row in marked] == [(ids[n], ["16 words"]) for n in range(6)] + [(ids[6], None)]
+    # The last item of the list, a fragment, is not kept.
+    assert [row[0] for row in items] == ["a hat", "a scarf", "gloves"]

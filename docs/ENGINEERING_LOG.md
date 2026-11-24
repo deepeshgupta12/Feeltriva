@@ -4621,3 +4621,90 @@ decides none and makes no evidence or statement, and a reviewer's cannot change 
   exist, each with its own basis.
 - After a chunk is approved, `extract-claims` has to be run to make the claims of the new
   statement.
+
+**Committed and indexed (M2.5e1).** Committed as `f357465` and pushed. The code graph was
+re-indexed and reports up-to-date at `f357465`. Migration `0018` is applied to the main database;
+the API was restarted. The CI result of this commit is recorded with that of M2.5e2 below.
+
+### M2.5e2 — Claims after a change of the rules; a source's cut-off length found by measurement
+
+The second commit of M2.5e (owner's instruction of 2026-11-24).
+
+**What the plan asks, checked before the work.** "How a reviewer's decision is carried over to
+the claims of newer rules (E72) ... before another text source is loaded its word limit is found
+by measurement (E74)". Acceptance: "a rule change does not lose a decision; a cut-off limit
+other than 120 words is found". E72: a reviewer's decision is never deleted by a command; until
+now a statement that held one was left out of every remake and reported each time. E74: the
+120-word limit "is a fact about one source".
+
+**What was built** (decision E92).
+
+- `claims.py`: `split` takes the number of words at which the statement's source cuts its texts;
+  left out, it is the 120 of the one source measured by hand, so every existing caller behaves
+  as before. `measure_cut_off` finds that number from a source's texts: the longest length, when
+  at least five texts have exactly that length and most of them end without a full stop. Rules
+  `claims-5`.
+- `claims_load.py`: `cut_off_limits` measures every source before its statements are split.
+  `_carry_over` brings a statement that holds a reviewer's decision to the present rules: a claim
+  the rules give again is the same row and keeps its decision, with the present cues and
+  sentence; a decided claim the rules no longer give is kept and marked (`superseded_by`); an
+  undecided one is deleted; the caller stores the new ones as pending. Only with `--remake`.
+- `completeness.py`, `completeness_rows.py`: a kept claim is no fault; the claims are recomputed
+  with the measured length; the line "statements extracted from the text files after review",
+  left to a later step since M1.13, is replaced by two checks of the statements made from
+  approved parts of the text files (M2.5e1).
+
+**Real run.**
+
+| Command | Result |
+|---|---|
+| `uv run python -m feeltriva_ingestion extract-claims` on the main database | rules `claims-5`: 2,952 statements read; inserted 0; stored 8,742 claims, all pending; 0 claims the rules do not give; 79 sentences marked `cut_off`, as before |
+| What the measurement found | one source cuts its texts: `archive(13).zip/diseases_main.csv`, at 120 words. This is the value measured by hand in M2.6c; no other source shows a limit |
+| `uv run python -m feeltriva_ingestion completeness` | 237 checks: 232 ok, 0 mismatches, 5 left to a later sub-step (524 s). Before: 236 checks, 230 ok, 6 left. One "later" line became two checks, both 0 of 0 |
+
+**Impact analysis.** HIGH: `split` (five direct callers, four flows), `_cut_off`, `_claims` and
+`_texts`. LOW: `extract_claims`, `_earlier`, `gather`. The HIGH result was reported to the owner
+before the edit with the plan for every caller: `split`'s new argument is optional and its
+default is today's value; `_cut_off` is called by `split` only; `_claims` returns the same
+counts and one more; `_texts` gets its new counts from `gather` in the same commit.
+`detect_changes` before commit: "high", 40 names in 8 files. Compared with the last commit by
+syntax tree: `split`, `_cut_off`, `_earlier`, `check`, `extract_claims`, `report`, `_claims`,
+`gather` and `_texts` changed; `measure_cut_off`, `_carry_over` and `cut_off_limits` are new;
+`_acceptance`, `run_completeness`, `_bare` and the other names are listed because lines moved.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 70 files |
+| `uv run pytest -m "not archives"` (SQLite) | 256 passed, 72 skipped |
+| `uv run pytest` (SQLite, archives included) | 262 passed, 75 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 336 passed, 1 skipped, twice; full output saved |
+
+The new tests prove: a limit of 63 words is found from five texts cut there, and none where too
+few texts share the longest length or the texts end properly; `split` marks a text cut at the
+measured length and drops its last item, and marks nothing without a limit; through the loader,
+a source with six texts of 16 unfinished words gets the limit 16 and its sentences the mark
+"16 words" ("a cut-off limit other than 120 words"); after a rule change, an approved item the
+rules give again is still approved under its new sentence, a rejected sentence the rules no
+longer give is kept and marked, the undecided item the rules dropped is deleted and made again,
+and a second run changes nothing and reports nothing ("a rule change does not lose a decision");
+an undecided sentence stays when a decided item stands under it; without `--remake` nothing is
+added and the command says how to go on. One existing test asserted the old rule (a reviewed
+statement is never remade) and was replaced by these.
+
+**Three wrong expectations of mine, corrected before commit.** My first version of the new tests
+expected the earlier rules' last list item to survive a rule change. It rightly does not: under
+the earlier rules it ran on to the end of the text, so the present rules give another span. The
+code was right and the tests were changed.
+
+**Bugs.** None found in the code.
+
+**Limits, stated plainly.**
+
+- When the cues of a decided claim change with the rules, the decision is kept and the cues are
+  updated. A reviewer is not told that a claim they decided now carries another mark.
+- The measurement needs at least five texts at the longest length. A source with fewer texts cut
+  at its limit is not recognised.
+- It measures words. A source that cuts at a number of characters is not recognised.
+- A kept claim keeps the evidence row it made.

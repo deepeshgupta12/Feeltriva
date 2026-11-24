@@ -27,7 +27,7 @@ from feeltriva_api.settings import Settings
 from sqlalchemy import create_engine
 
 from .cases import _raw_cursor
-from .claims import LIST_ITEM, SENTENCE, VERSION, item_name, split
+from .claims import LIST_ITEM, SENTENCE, VERSION, item_name, measure_cut_off, split
 from .meanings import is_question
 from .vocabulary import query_for
 
@@ -51,6 +51,22 @@ def feature_names(cur: Any) -> dict[str, list[str]]:
     return names
 
 
+def cut_off_limits(cur: Any) -> tuple[dict[str, str], dict[str, int]]:
+    """For every stored statement the source it came from, and for every source the number of words at which it
+    cuts its texts, found by measurement over all of that source's statements (0: the texts show no limit)."""
+    cur.execute(
+        """SELECT s.statement_id, min(r.source_id), s.text_content
+           FROM statements s JOIN statement_sources x USING (statement_id) JOIN source_records r USING (record_id)
+           GROUP BY s.statement_id, s.text_content"""
+    )
+    source_of: dict[str, str] = {}
+    texts: dict[str, list[str]] = {}
+    for statement_id, source, body in cur.fetchall():
+        source_of[statement_id] = source
+        texts.setdefault(source, []).append(body)
+    return source_of, {source: measure_cut_off(bodies) for source, bodies in texts.items()}
+
+
 def extract_claims(
     database_url: str | None = None, statement_ids: list[str] | None = None, remake: bool = False
 ) -> dict[str, Any]:
@@ -58,7 +74,8 @@ def extract_claims(
 
     A statement that holds a claim the rules do not give (made by earlier rules, or from an earlier text of the
     statement) is never mixed with new claims: nothing is added to it and it is reported. With `remake`, the claims
-    of such a statement are deleted and made again, unless a reviewer has decided on one of them."""
+    of such a statement are made again. Where a reviewer has decided on one of them, every decision is kept: see
+    `_carry_over`."""
     if database_url is None:
         app = Settings()
         database_url = app.migration_database_url or app.database_url
@@ -76,16 +93,19 @@ def extract_claims(
         "features": Counter(),
         "not_covered": [],
         "inserted": 0,
+        "cut_off": {},
     }
     engine = create_engine(database_url)
     try:
         with _raw_cursor(engine) as cur:
             names = feature_names(cur)
+            source_of, limits = cut_off_limits(cur)
+            result["cut_off"] = {source: limit for source, limit in sorted(limits.items()) if limit}
             cur.execute(f"SELECT statement_id, statement_type, text_content FROM statements {scope} ORDER BY 1", params)  # noqa: S608 - fixed text
             statements = cur.fetchall()
             rows = []
             for statement_id, kind, body in statements:
-                claims, reasons = split(body)
+                claims, reasons = split(body, limits.get(source_of.get(statement_id, ""), 0))
                 result["statements"][kind] += 1
                 for reason, count in reasons.items():
                     result["not_split"][reason] += count
@@ -127,7 +147,8 @@ def extract_claims(
                 for row in rows:
                     copy.write_row(row)
             ids = [row[0] for row in statements]
-            result["earlier"], result["remade"], held = _earlier(cur, ids, remake)
+            result["earlier"], result["remade"], result["carried"], held = _earlier(cur, ids, remake)
+            result["inserted"] += result["carried"]["inserted"]
             # Sentences first: a list item points at the sentence it belongs to.
             for kind in (SENTENCE, LIST_ITEM):
                 cur.execute(
@@ -192,10 +213,11 @@ def check(result: dict[str, Any]) -> list[str]:
             f"{waiting} statements hold claims that the rules do not give (made by earlier rules, or from an earlier "
             "text of the statement); nothing was added to them: run extract-claims --remake"
         )
-    if earlier["reviewed_statements"]:
+    left = earlier["reviewed_statements"] - result["carried"]["statements"]
+    if left:
         diffs.append(
-            f"{earlier['reviewed_statements']} statements hold claims that the rules do not give and a reviewer's "
-            "decision; they are left as they are"
+            f"{left} statements hold claims that the rules do not give and a reviewer's decision; nothing was added "
+            "to them: run extract-claims --remake, which keeps every decision"
         )
     return diffs
 
@@ -220,28 +242,43 @@ def report(result: dict[str, Any]) -> list[str]:
         f"({earlier['reviewed_statements']} of them with a reviewer's decision); made again now: "
         f"{remade['statements']} statements, {remade['deleted']} claims deleted"
     )
+    carried = result["carried"]
+    lines.append(
+        f"statements with a reviewer's decision brought to the present rules: {carried['statements']} "
+        f"({carried['kept']} decided claims the rules no longer give kept and marked, {carried['adjusted']} claims "
+        f"given by the rules brought to their present cues, {carried['deleted']} undecided claims deleted)"
+    )
+    lines.append(f"words at which a source cuts its texts, by measurement: {result['cut_off'] or 'none found'}")
     lines.append(f"inserted now: {result['inserted']}; stored: {result['stored']}")
     return lines
 
 
-def _earlier(cur: Any, ids: list[str], remake: bool) -> tuple[dict[str, int], dict[str, int], list[str]]:
-    """Statements that hold a claim the rules (in tmp_claims) do not give: what was found, what was made again, and
-    the statements to which nothing may be added.
+DECIDED = "(c.status <> 'pending' OR c.reviewer IS NOT NULL OR c.applicability IS NOT NULL)"
+_GIVEN = "EXISTS (SELECT 1 FROM tmp_claims t WHERE t.claim_id = c.claim_id)"
+
+
+def _earlier(
+    cur: Any, ids: list[str], remake: bool
+) -> tuple[dict[str, int], dict[str, int], dict[str, int], list[str]]:
+    """Statements that hold a claim the rules (in tmp_claims) do not give: what was found, what was made again,
+    what was brought to the present rules with its decisions kept, and the statements to which nothing may be added.
 
     A stored claim is given by the rules when they give a claim with the same span, the same text, the same
     sentence above it and the same wording cues. The label of the rules' version is not compared: a claim made by
-    earlier rules that the present rules give unchanged stays as it is, with the label it was made under. With `remake`, every claim of
-    such a statement is deleted so that the caller stores the present ones, but never when one of its claims
-    carries a reviewer's decision."""
+    earlier rules that the present rules give unchanged stays as it is, with the label it was made under. A claim
+    kept only for its reviewer's decision (`superseded_by`) is not counted again. With `remake`, every claim of
+    such a statement is deleted so that the caller stores the present ones, unless one of its claims carries a
+    reviewer's decision: then `_carry_over` brings the statement to the present rules and keeps every decision."""
     cur.execute(
-        """SELECT c.statement_id, count(*) FILTER (WHERE t.claim_id IS NULL),
-                  bool_or(c.status <> 'pending' OR c.reviewer IS NOT NULL)
+        f"""SELECT c.statement_id, count(*) FILTER (WHERE t.claim_id IS NULL AND c.superseded_by IS NULL),
+                  bool_or({DECIDED})
            FROM statement_claims c
            LEFT JOIN (SELECT DISTINCT claim_id, claim_text, parent_claim_id, cues FROM tmp_claims) t
                   ON t.claim_id = c.claim_id AND t.claim_text = c.claim_text AND t.cues = c.cues
                  AND t.parent_claim_id IS NOT DISTINCT FROM c.parent_claim_id
            WHERE c.statement_id = ANY(%s)
-           GROUP BY c.statement_id HAVING count(*) FILTER (WHERE t.claim_id IS NULL) > 0""",
+           GROUP BY c.statement_id
+           HAVING count(*) FILTER (WHERE t.claim_id IS NULL AND c.superseded_by IS NULL) > 0""",  # noqa: S608
         (ids,),
     )
     found = cur.fetchall()
@@ -253,9 +290,63 @@ def _earlier(cur: Any, ids: list[str], remake: bool) -> tuple[dict[str, int], di
         "reviewed_statements": len(reviewed),
     }
     remade = {"statements": 0, "deleted": 0}
+    carried = {"statements": 0, "kept": 0, "adjusted": 0, "deleted": 0, "inserted": 0}
     if remake and free:
         # One statement: a list item and the sentence it points at go together.
         cur.execute("DELETE FROM statement_claims WHERE statement_id = ANY(%s)", (free,))
         remade = {"statements": len(free), "deleted": cur.rowcount}
         free = []
-    return earlier, remade, reviewed + free
+    if remake and reviewed:
+        carried = _carry_over(cur, reviewed)
+        reviewed = []
+    return earlier, remade, carried, reviewed + free
+
+
+def _carry_over(cur: Any, statements: list[str]) -> dict[str, int]:
+    """Bring statements that hold a reviewer's decision to the present rules without losing a decision (E72).
+
+    A claim's identity is its statement, its kind and its span, so a claim the present rules give again is the
+    same row: it keeps its decision and takes the present cues and the present sentence above it. A claim the
+    rules no longer give is deleted when nobody decided on it. When a reviewer decided on it, or it is the
+    sentence above such a claim, it is kept as it is and marked with the version of the rules that stopped giving
+    it. The caller then stores the claims the rules give that are not stored yet, as pending."""
+    scope = "c.statement_id = ANY(%s)"
+    # The present sentences first: a list item is about to point at the sentence the present rules put above it.
+    cur.execute(
+        """INSERT INTO statement_claims (claim_id, statement_id, parent_claim_id, kind, span_start, span_end,
+                                         claim_text, rule, cues, proposed_feature_id)
+           SELECT * FROM tmp_claims WHERE kind = %s AND statement_id = ANY(%s) ON CONFLICT (claim_id) DO NOTHING""",
+        (SENTENCE, statements),
+    )
+    inserted = cur.rowcount
+    cur.execute(
+        f"""UPDATE statement_claims c SET cues = t.cues, parent_claim_id = t.parent_claim_id, superseded_by = NULL
+            FROM (SELECT DISTINCT claim_id, parent_claim_id, cues FROM tmp_claims) t
+            WHERE t.claim_id = c.claim_id AND {scope}
+              AND (c.cues <> t.cues OR c.parent_claim_id IS DISTINCT FROM t.parent_claim_id
+                   OR c.superseded_by IS NOT NULL)""",  # noqa: S608
+        (statements,),
+    )
+    adjusted = cur.rowcount
+    deleted = 0
+    # Undecided claims the rules no longer give: the list items, then the sentences no kept item stands under.
+    for kind, childless in (
+        (LIST_ITEM, ""),
+        (SENTENCE, "AND NOT EXISTS (SELECT 1 FROM statement_claims k WHERE k.parent_claim_id = c.claim_id)"),
+    ):
+        cur.execute(
+            f"DELETE FROM statement_claims c WHERE {scope} AND c.kind = %s AND NOT {DECIDED} AND NOT {_GIVEN} {childless}",  # noqa: S608
+            (statements, kind),
+        )
+        deleted += cur.rowcount
+    cur.execute(
+        f"UPDATE statement_claims c SET superseded_by = %s WHERE {scope} AND NOT {_GIVEN} AND c.superseded_by IS NULL",  # noqa: S608
+        (VERSION, statements),
+    )
+    return {
+        "statements": len(statements),
+        "kept": cur.rowcount,
+        "adjusted": adjusted,
+        "deleted": deleted,
+        "inserted": inserted,
+    }

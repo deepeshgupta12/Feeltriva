@@ -10,6 +10,7 @@ from feeltriva_ingestion.claims import (
     cues,
     item_name,
     list_items,
+    measure_cut_off,
     sentences,
     split,
 )
@@ -346,3 +347,24 @@ def test_a_list_whose_first_item_holds_a_preposition_is_marked_for_the_reviewer(
     ]
     claims, _reasons = split("Signs may include a hat (as in winter), a scarf, and gloves.")
     assert {repr(claim.cues) for claim in claims} == {"{'hedge': ['may']}"}
+
+
+def test_the_length_at_which_a_source_cuts_its_texts_is_measured_from_its_texts():
+    # M2.5e2 (decision E74): the 120 words above were measured by hand for one source. Another source with another
+    # limit is recognised by the same sign: no text is longer, several have exactly that length, most are unfinished.
+    cut = " ".join(["Word"] * 53) + ". Signs include a hat, a scarf, gloves, and a family"
+    assert len(cut.split()) == 63
+    assert measure_cut_off([cut] * 5 + ["Short and whole."]) == 63
+    assert measure_cut_off([cut] * 4 + [cut + "."]) == 63  # most of the texts at the limit are unfinished
+    # No limit: too few texts at the longest length, texts that end properly, or no text at all.
+    assert measure_cut_off([cut] * 4 + ["Short and whole."]) == 0
+    assert measure_cut_off([cut + "."] * 6) == 0
+    assert measure_cut_off([cut] * 2 + [cut + "."] * 3) == 0
+    assert measure_cut_off([]) == 0
+    # The rule for a text that was cut uses the measured length; with no limit nothing is marked.
+    marked, _reasons = split(cut, 63)
+    assert [claim.cues.get("cut_off") for claim in marked if claim.kind == SENTENCE] == [None, ["63 words"]]
+    assert [claim.text for claim in marked if claim.kind == LIST_ITEM] == ["a hat", "a scarf", "gloves"]
+    for limit in (0, 120):
+        whole, _reasons = split(cut, limit)
+        assert all("cut_off" not in claim.cues for claim in whole)

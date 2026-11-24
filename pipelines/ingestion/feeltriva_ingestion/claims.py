@@ -30,7 +30,8 @@ from .claim_sentences import _mask, sentences
 # claims-2 (M2.6a): what ends a sentence after a single letter or an abbreviation.
 # claims-3 (M2.6b): what is not an item of a list, after every stored list was read; more sentence ends.
 # claims-4 (M2.6c): a text cut off by its source; a preposition after the lead-in; what a reviewer should check.
-VERSION = "claims-4"
+# claims-5 (M2.5e2): the number of words at which a source cuts its texts is measured for each source.
+VERSION = "claims-5"
 SENTENCE, LIST_ITEM = "sentence", "list_item"
 MAX_ITEM_WORDS = 8  # a longer "item" is a clause, not an item of a list
 MIN_WORDS_BEFORE_COLON = 3  # "B: Better ..." is a label; "There are three kinds: ..." is a lead-in
@@ -195,18 +196,22 @@ def cues(sentence: str) -> dict[str, Any]:
     return found
 
 
-def split(text: str) -> tuple[list[Claim], dict[str, int]]:
+def split(text: str, cut_off_words: int | None = None) -> tuple[list[Claim], dict[str, int]]:
     """Every claim of a statement, sentences first and each sentence's list items after it, and why
-    sentences with a comma were not split."""
+    sentences with a comma were not split.
+
+    `cut_off_words` is the number of words at which the statement's source cuts its texts (`measure_cut_off`), or
+    0 for a source that cuts none. Left out, it is the limit of the one source measured by hand (`CUT_OFF_WORDS`)."""
+    limit = CUT_OFF_WORDS if cut_off_words is None else cut_off_words
     claims: list[Claim] = []
     reasons: dict[str, int] = {}
     spans = sentences(text)
     for number, (start, end) in enumerate(spans):
         noticed = cues(text[start:end])
         items, reason = list_items(text, start, end)
-        if number == len(spans) - 1 and _cut_off(text):
+        if number == len(spans) - 1 and _cut_off(text, limit):
             # The source cut the text here: the sentence is not whole, and the last item of its list is a fragment.
-            noticed = {**noticed, "cut_off": [f"{CUT_OFF_WORDS} words"]}
+            noticed = {**noticed, "cut_off": [f"{limit} words"]}
             items = items[:-1]
         claims.append(Claim(SENTENCE, start, end, text[start:end], f"{VERSION}:sentence", None, noticed))
         if reason and reason != "no comma":
@@ -374,9 +379,9 @@ CUT_OFF_WORDS = 120
 _ENDS = re.compile(r"[.!?][\"')\]]*\s*$")
 
 
-def _cut_off(text: str) -> bool:
+def _cut_off(text: str, limit: int) -> bool:
     """Whether the text was cut off by its source: it has exactly the source's limit of words and no full stop."""
-    return len(text.split()) == CUT_OFF_WORDS and not _ENDS.search(text)
+    return limit > 0 and len(text.split()) == limit and not _ENDS.search(text)
 
 
 def _bare(piece: str) -> str:
@@ -394,3 +399,21 @@ def _first_item_cue(text: str, items: list[tuple[int, int]]) -> dict[str, Any]:
         return {}
     found = sorted({match.group(1).lower() for match in _PREPOSITION_INSIDE.finditer(_mask(text[slice(*items[0])]))})
     return {"first_item_preposition": found} if found else {}
+
+
+# Found by measurement, before the texts of a source are split (decision E74). A source that cuts its texts at a
+# number of words leaves a mark: no text is longer than the limit, several texts have exactly that length, and
+# most of those stop in the middle of a sentence. `diseases_main.csv` shows it at 120 words (85 texts, 79 of them
+# unfinished). Fewer than five texts at the longest length, or mostly finished ones, is no sign of a limit.
+MIN_TEXTS_AT_A_LIMIT = 5
+
+
+def measure_cut_off(texts: list[str]) -> int:
+    """The number of words at which a source cut its texts, or 0 when the texts show no such limit."""
+    lengths = [len(text.split()) for text in texts]
+    if not lengths:
+        return 0
+    longest = max(lengths)
+    at_the_limit = [text for text, length in zip(texts, lengths, strict=True) if length == longest]
+    unfinished = sum(1 for text in at_the_limit if not _ENDS.search(text))
+    return longest if len(at_the_limit) >= MIN_TEXTS_AT_A_LIMIT and unfinished * 2 > len(at_the_limit) else 0

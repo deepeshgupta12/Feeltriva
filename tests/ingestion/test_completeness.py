@@ -693,8 +693,22 @@ def test_text_chunks_must_reproduce_the_file_at_their_offsets(tmp_path, owner_db
     assert facts["offsets_reproduce_text"] == facts["with_attribution"] == facts["with_source_category"] == 2
     assert (facts["searchable"], facts["uncovered_characters"], facts["release_status"]) == (2, 0, "pending")
     report = Report(mapping_table())
-    _texts(report, {"texts": facts, "text_statements": 0})
-    assert _mismatches(report) == [] and [check.row for check in report.deferred] == [TEXT_ROW]
+    none = {"approved": 0, "with_their_statement": 0, "decided_without_reviewer": 0, "statements_no_part_gave": 0}
+    _texts(report, {"texts": facts, "text_chunks": none})
+    # Statements of the text files are made by a reviewer's approval of a part (M2.5e): nothing is left for later.
+    assert _mismatches(report) == [] and report.deferred == []
+    assert {check.row for check in report.checks} == {TEXT_ROW}
+    # An approved part without its statement, and a statement no part gave, are mismatches.
+    report = Report(mapping_table())
+    _texts(report, {"texts": facts, "text_chunks": {**none, "approved": 2, "with_their_statement": 1}})
+    assert _mismatches(report) == [
+        "parts of the text files approved by a reviewer, each with the statement made from it"
+    ]
+    report = Report(mapping_table())
+    _texts(report, {"texts": facts, "text_chunks": {**none, "statements_no_part_gave": 1}})
+    assert _mismatches(report) == [
+        "statements of the text files that no reviewed part gave, or parts decided by no reviewer"
+    ]
 
     with scratch(url) as cur:
         cur.execute(
@@ -704,7 +718,7 @@ def test_text_chunks_must_reproduce_the_file_at_their_offsets(tmp_path, owner_db
         damaged = facts_of(cur)
     assert damaged["offsets_reproduce_text"] == 0 and damaged["records_with_file_digest"] == 0
     report = Report(mapping_table())
-    _texts(report, {"texts": damaged, "text_statements": 0})
+    _texts(report, {"texts": damaged, "text_chunks": none})
     assert _mismatches(report) == [
         "text files registered as records with the file's SHA-256",
         "chunks whose stored character offsets reproduce their text from the file",

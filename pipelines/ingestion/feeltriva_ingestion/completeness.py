@@ -501,6 +501,24 @@ def gather(
         (text_sid,),
     )
     text_statements = cur.fetchone()[0]
+    # A statement of the text files is made when a reviewer approves a part of a text (M2.5e1), and only then.
+    cur.execute(
+        """SELECT count(*) FILTER (WHERE c.status = 'approved'),
+                  count(*) FILTER (WHERE c.status = 'approved' AND st.status = 'approved'
+                                         AND st.text_content = c.chunk_text),
+                  count(*) FILTER (WHERE c.status <> 'pending' AND c.reviewer IS NULL),
+                  count(c.statement_id)
+           FROM evidence_chunks c JOIN source_records r USING (record_id)
+           LEFT JOIN statements st ON st.statement_id = c.statement_id WHERE r.source_id = %s""",
+        (text_sid,),
+    )
+    approved_parts, with_their_statement, unsigned_parts, parts_with_a_statement = cur.fetchone()
+    text_chunks = {
+        "approved": approved_parts,
+        "with_their_statement": with_their_statement,
+        "decided_without_reviewer": unsigned_parts,
+        "statements_no_part_gave": text_statements - parts_with_a_statement,
+    }
     progress("counting the stored feature values (about two minutes on the full data)")
     feature_rows = _feature_rows(cur, reference)
     progress("reading the evidence proposals and the archive registry")
@@ -516,7 +534,7 @@ def gather(
         "texts": texts,
         "main_rows": main_rows,
         "whole_file_records": whole_file_records,
-        "text_statements": text_statements,
+        "text_chunks": text_chunks,
         "feature_rows": feature_rows,
         "evidence": _evidence(cur, files, source_id(TEXT_ARCHIVE, "symptoms.csv")),
         "claims": _claims(cur, source_id(TEXT_ARCHIVE, "symptoms.csv")),
@@ -574,7 +592,7 @@ def _claims(cur: Any, narrative_sid: str) -> dict[str, int]:
     """The single claims of the symptom statements (M2.6): recomputed from the stored statements by the rules,
     and compared with what is stored."""
     from .claims import split
-    from .claims_load import claim_id
+    from .claims_load import claim_id, cut_off_limits
 
     cur.execute(
         """SELECT DISTINCT st.statement_id, st.text_content
@@ -584,25 +602,29 @@ def _claims(cur: Any, narrative_sid: str) -> dict[str, int]:
         (narrative_sid,),
     )
     statements = dict(cur.fetchall())
+    source_of, limits = cut_off_limits(cur)
     expected = {
         claim_id(statement_id, claim.kind, claim.start, claim.end)
         for statement_id, text in statements.items()
-        for claim in split(text)[0]
+        for claim in split(text, limits.get(source_of.get(statement_id, ""), 0))[0]
     }
     cur.execute(
         """SELECT c.claim_id, c.status::text, c.reviewer,
-                  substr(st.text_content, c.span_start + 1, c.span_end - c.span_start) = c.claim_text
+                  substr(st.text_content, c.span_start + 1, c.span_end - c.span_start) = c.claim_text, c.superseded_by
            FROM statement_claims c JOIN statements st USING (statement_id) WHERE c.statement_id = ANY(%s)""",
         (list(statements),),
     )
     stored = {row[0]: row[1:] for row in cur.fetchall()}
+    # A claim the rules no longer give is kept, and marked, when a reviewer decided on it (M2.5e2): no fault.
+    kept = {claim for claim, (_status, _reviewer, _same, superseded) in stored.items() if superseded}
     return {
         "statements": len(statements),
         "expected": len(expected),
         "stored_as_expected": len(expected & set(stored)),
-        "unexpected": len(set(stored) - expected),
-        "not_their_text": sum(1 for _status, _reviewer, same in stored.values() if not same),
+        "unexpected": len(set(stored) - expected - kept),
+        "kept_for_a_decision": len(kept),
+        "not_their_text": sum(1 for _status, _reviewer, same, _kept in stored.values() if not same),
         "decided_without_reviewer": sum(
-            1 for status, reviewer, _same in stored.values() if status != "pending" and not reviewer
+            1 for status, reviewer, _same, _kept in stored.values() if status != "pending" and not reviewer
         ),
     }
