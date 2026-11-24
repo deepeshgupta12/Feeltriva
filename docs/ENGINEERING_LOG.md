@@ -4814,3 +4814,12 @@ workspace asks the service for nothing. The existing tests of the design demo st
   the live workspace; the workspace itself says "Live review data".
 - `pnpm format:check` reports one older file, `scripts/e2e-live.mjs`; it was not touched.
 - The browser test is run by hand; it is not part of CI, like `pnpm e2e:live`.
+
+**Committed and indexed (M2.5e1, M2.5e2, M2.4a).** `f357465` (M2.5e1; CI passed on both jobs, run
+45362478313), `2a9d1e3` (M2.5e2; CI passed on both jobs, run 45365845875) and `fa13525` (M2.4a; CI
+passed on both jobs, run 45372328021). The code graph was re-indexed after each and reports
+up-to-date at `fa13525`. Migration `0018` is applied to the main database. The API on port 8000
+was restarted after M2.5e1 and after M2.4a; the web app on port 5173 was not, because the design
+demo it serves did not change; port 5174 was used for the browser test and stopped. This
+paragraph was added in a following documents-only commit, after which the index was refreshed
+again.
