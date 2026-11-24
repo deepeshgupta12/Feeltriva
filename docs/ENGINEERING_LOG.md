@@ -4427,3 +4427,96 @@ only; on PostgreSQL the texts of a decided set cannot be changed even by the sch
 - An assessment records the rule bundle's ID and, in its result, the rule release's ID. A column
   for the published release IDs of mapping and knowledge on the assessment is not built (R12).
 - No doctor has reviewed the rules, the features or the texts (D-C2).
+
+**Committed and indexed (M2.5f).** Committed as `02c3731` and pushed; CI passed on both jobs
+(run 45354379289). The code graph was re-indexed and reports up-to-date at `02c3731`. Migration
+`0016` is applied to the main database; the API was restarted.
+
+### M2.9 — Serving views
+
+Second of the two sub-steps the owner named on 2026-11-24 ("do M2.5f and M2.9").
+
+**What the handoff and the plan ask, checked before the work.** The exports
+`reviewed_disease_catalog` (IDs, names, aliases, definitions; from an approved mapping release),
+`reviewed_disease_feature_edges` (approved evidence and source use rights) and
+`reviewed_care_statements` (management, treatment and prevention descriptions with
+applicability) (`docs/04`). "Restrict serving queries to approved/versioned releases. Pending data
+stays research-only" (`specs/schema.sql`). Plan: a pending, rejected, retired or expired row
+never appears in any view, and the views are the only objects the serving code reads.
+
+**What was built** (decision E90).
+
+- Migration `0017`: four views over the current published releases. `reviewed_disease_catalog`;
+  `reviewed_condition_statements` (every statement of a condition, with its source records);
+  `reviewed_care_statements` (of those, the statements about care); and
+  `reviewed_disease_feature_edges`. The application role may select from them and nothing more.
+- `review.py`: `KnowledgeService.get_condition_information` reads the catalog and the condition
+  statements from the views and nothing else. Its inputs and the shape of its answer are
+  unchanged, for the REST route and for the MCP tool.
+
+**When a row is shown.** All of this must hold at the moment of reading: the row is in the
+current release; the knowledge release is pinned to the mapping release that is current; the row
+is still approved in the working tables; its source is still approved; a statement has not
+expired. A release is the only way in. A rejection, a retirement, a withdrawn source approval or
+an expiry takes a row out at once.
+
+**Changed behaviour.** Content that is approved but not published is no longer served. Before,
+an approved statement of an approved disease was served as soon as it was approved.
+
+**Real run.** Migration applied to the main database (head `0017`). The API was restarted.
+
+| What | Result |
+|---|---|
+| Rows in the four views | 0, 0, 0, 0: the current mapping release holds 85 features and no disease, and no knowledge release exists |
+| `GET /v1/conditions/{id}` for two real labels and an unknown ID | 404 `condition_not_available` each |
+| The application role on a view | may select; may not update |
+| `/readyz`, serving-bundle preview | unchanged: clinical mode off; bundle `urgency-draft.r1` assembles as before |
+
+**Impact analysis.** `get_condition_information`: LOW, two callers (the REST route `get_condition`
+and the MCP tool), both of which pass the answer through; `services/mcp/.../server.py` was read
+and `tests/mcp` run. `detect_changes` before commit: "medium", 13 names in 2 files. Compared with
+the last commit by syntax tree: `KnowledgeService.get_condition_information` and its class text
+changed; in the tests one test was replaced by two and one was added; `list_terminology_links`
+and the other names are listed because lines above them moved.
+
+**Tests actually run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 69 files |
+| `uv run pytest -m "not archives"` (SQLite) | 250 passed, 68 skipped |
+| `uv run pytest` (SQLite, archives included) | 256 passed, 71 skipped |
+| `uv run pytest` on PostgreSQL with `TEST_OBJECT_STORAGE_ENDPOINT`, real archives included | 326 passed, 1 skipped, twice; full output saved |
+| Migration `0017` on a scratch database: head, down to `0016`, head | four views present, absent, present |
+
+The new and changed tests prove, with invented rows: nothing decided, nothing is in any view;
+approved and the mapping release published, the disease is in the catalog with its other name
+and merged label, and no statement or evidence is shown without a knowledge release; with the
+knowledge release, three of eight statements and two of six evidence rows are shown, and the
+pending ones, the expired one, the one without a source, the one of a source that is not
+approved and what stands under a label that is not approved are in no view; a statement of a
+merged label stands under the label kept and carries its source record; the care view holds the
+treatment statement only; the condition route gives the same statements under either label and
+404 for a label that is not approved; retiring a statement removes it and the evidence row that
+rests on it, at once; a statement that expires after publication, a rejected evidence row, a
+retired feature, a withdrawn source approval and a rejected disease each take their rows out at
+once and restoring the approval brings them back; when a later mapping release becomes current
+the knowledge views are empty and the catalog is not, and a rollback shows them again; the
+application role reads every view and can write through none; approved content that is not
+published is not served (both databases); where the views do not exist the route answers that
+nothing is available. The one skipped test on PostgreSQL is that last one, which is for SQLite.
+
+**Bugs.** None found. The intermittent MCP parity failure did not occur.
+
+**Limits, stated plainly.**
+
+- All four views are empty on the real data. They fill when diseases, statements and evidence
+  are approved and published; the 14 sources are approved already.
+- The views unfold the current release on every read. That is fast at today's size and will need
+  a stored copy per release when releases hold tens of thousands of rows.
+- The views exist in PostgreSQL only. The unit tests on SQLite cannot show what they hold; those
+  tests run on PostgreSQL, locally and in CI.
+- Nothing reads `reviewed_disease_feature_edges` or `reviewed_care_statements` yet: candidate
+  ranking and care guidance are later steps (M4, M5).
+- Applicability is a column, not a filter: no statement carries any yet.
+- The retrieval chunks are in no view: they have no review status (M2.5e).

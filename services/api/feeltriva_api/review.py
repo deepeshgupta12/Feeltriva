@@ -2,7 +2,8 @@
 
 Imported mappings and statements are lexical/positional candidates in 'pending' status.
 A reviewer decision here changes the record's status and leaves an attributed note; it does
-not publish anything. Patient-facing reads only ever return 'approved' content.
+not publish anything. Patient-facing reads return only what is in the current published releases
+and is still approved (the serving views, M2.9).
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from .auth import Principal
 from .db import Database
@@ -316,52 +317,59 @@ class ReviewService:
 
 
 class KnowledgeService:
-    """Reviewed-only reads. Pending, rejected, retired or expired content is never returned."""
+    """Reviewed-only reads, from the serving views and from nothing else (M2.9).
+
+    The views hold what is in the current published releases and is still approved, with an approved source and
+    not expired (migration 0017). Content that is approved but not published is not served. The views exist in
+    PostgreSQL only: on the in-memory SQLite database of the unit tests nothing is available, which is the safe
+    answer."""
 
     def __init__(self, db: Database) -> None:
         self._db = db
 
     def get_condition_information(self, principal: Principal, disease_id: str) -> dict[str, Any]:
         principal.require_scope("knowledge:read")
+        unavailable = ApiError(
+            404, "condition_not_available", "No reviewed information is available for this condition."
+        )
+        if not self._db.is_postgres:
+            raise unavailable
         with self._db.transaction(principal.subject) as tx:
-            disease = tx.get(Disease, disease_id)
-            if disease is not None and disease.redirected_to:
-                disease = tx.get(Disease, disease.redirected_to)
-            if disease is None or disease.status != "approved":
-                raise ApiError(
-                    404, "condition_not_available", "No reviewed information is available for this condition."
-                )
-            now = datetime.now(UTC)
-            statements = [
-                s
-                for s in tx.execute(
-                    select(Statement)
-                    .where(Statement.disease_id == disease.disease_id, Statement.status == "approved")
-                    .order_by(Statement.statement_type, Statement.statement_id)
-                ).scalars()
-                if s.expires_at is None
-                or (s.expires_at if s.expires_at.tzinfo else s.expires_at.replace(tzinfo=UTC)) > now
-            ]
-            out = []
-            for s in statements:
-                sources = list(
-                    tx.execute(select(StatementSource).where(StatementSource.statement_id == s.statement_id)).scalars()
-                )
-                if not sources:
-                    continue  # every displayed claim needs a source
-                out.append(
-                    {
-                        "statement_id": s.statement_id,
-                        "statement_type": s.statement_type,
-                        "text": s.text_content,
-                        "sources": [{"record_id": x.record_id, "source_url": x.source_url} for x in sources],
-                    }
-                )
+            # A label merged into another answers with the label it was merged into.
+            condition = tx.execute(
+                text(
+                    "SELECT disease_id, name, definition FROM reviewed_disease_catalog "
+                    "WHERE disease_id = :id OR merged_labels @> jsonb_build_array(CAST(:id AS text)) "
+                    "ORDER BY (disease_id = :id) DESC LIMIT 1"
+                ),
+                {"id": disease_id},
+            ).first()
+            if condition is None:
+                raise unavailable
+            statements = tx.execute(
+                text(
+                    "SELECT statement_id, statement_type, text, sources FROM reviewed_condition_statements "
+                    "WHERE disease_id = :id ORDER BY statement_type, statement_id"
+                ),
+                {"id": condition.disease_id},
+            ).all()
             return {
-                "disease_id": disease.disease_id,
-                "name": disease.preferred_name,
-                "definition": disease.definition,
-                "statements": out,
+                "disease_id": condition.disease_id,
+                "name": condition.name,
+                "definition": condition.definition,
+                "statements": [
+                    {
+                        "statement_id": row.statement_id,
+                        "statement_type": row.statement_type,
+                        "text": row.text,
+                        # every displayed claim has a source: the view holds no statement without one
+                        "sources": [
+                            {"record_id": source["record_id"], "source_url": source["source_url"]}
+                            for source in row.sources
+                        ],
+                    }
+                    for row in statements
+                ],
             }
 
 

@@ -11,6 +11,7 @@ from feeltriva_api.models import (
     Disease,
     DiseaseMapping,
     FeatureMapping,
+    KnowledgeRelease,
     MappingRelease,
     ReviewNote,
     Source,
@@ -223,7 +224,12 @@ def test_invalid_review_requests(client, reviewer: Api, seeded):
 
 
 # ---- reviewed-only serving ------------------------------------------------------------
-def test_pending_content_never_reaches_serving(client, api: Api, reviewer: Api, seeded, owner_db):
+def _decide(client, reviewer: Api, target_type: str, target_id: str, status: str, note: str = "Decided in a test."):
+    body = {"target_type": target_type, "target_id": target_id, "status": status, "note": note}
+    return client.post("/internal/v1/review/decisions", headers=reviewer.headers(None), json=body)
+
+
+def test_pending_and_unpublished_content_never_reaches_serving(client, api: Api, reviewer: Api, seeded, owner_db):
     def condition(disease_id=seeded["dis"]):
         return client.get(f"/v1/conditions/{disease_id}", headers=api.headers(None))
 
@@ -231,34 +237,50 @@ def test_pending_content_never_reaches_serving(client, api: Api, reviewer: Api, 
     r = condition()
     assert r.status_code == 404 and r.json()["code"] == "condition_not_available"  # disease still pending
     assert condition(seeded["dis_old"]).status_code == 404  # a redirect to pending content is also hidden
-
+    # Approved is not enough: serving reads the current published releases, and nothing here is published.
     _approve(owner_db, Disease, seeded["dis"])
+    assert _decide(client, reviewer, "statement", seeded["st_ok"], "approved").status_code == 200
+    assert condition().status_code == 404 and condition(seeded["dis_old"]).status_code == 404
+
+
+@pytest.mark.postgres
+def test_published_content_is_served_and_a_withdrawal_takes_effect_at_once(
+    client, api: Api, reviewer: Api, seeded, owner_db
+):
+    """On PostgreSQL only: serving reads the serving views, which the migrations create there (M2.9)."""
+
+    def condition(disease_id=seeded["dis"]):
+        return client.get(f"/v1/conditions/{disease_id}", headers=api.headers(None))
+
+    def publish(path, **body):
+        return client.post(path, headers=reviewer.headers(None), json={**body, "note": "Publish in a test."})
+
+    knowledge = f"t_know_{seeded['rel']}"
+    with owner_db.transaction(None) as tx:
+        tx.add(
+            KnowledgeRelease(
+                release_id=knowledge, mapping_release_id=seeded["rel"], version=knowledge, manifest_uri="test://k"
+            )
+        )
+    for target_type, target_id in (
+        ("disease", seeded["dis"]),
+        ("source", seeded["src"]),
+        ("statement", seeded["st_ok"]),
+    ):
+        assert _decide(client, reviewer, target_type, target_id, "approved").status_code == 200
+    # The disease is published with the mapping release; no knowledge release yet, so no statement.
+    assert publish("/internal/v1/review/mapping-releases", mapping_release_id=seeded["rel"]).status_code == 200
     body = condition().json()
     assert body["name"].startswith("Synthetic condition") and body["statements"] == []
-    # approved-but-unsourced and approved-but-expired statements are withheld; pending ones too
-
-    r = client.post(
-        "/internal/v1/review/decisions",
-        headers=reviewer.headers(None),
-        json={
-            "target_type": "statement",
-            "target_id": seeded["st_ok"],
-            "status": "approved",
-            "note": "Checked against source.",
-        },
-    )
-    assert r.status_code == 200
+    assert publish("/internal/v1/review/knowledge-releases", knowledge_release_id=knowledge).status_code == 200
+    # Of the four statements only one is shown: the pending one, the one without a source and the expired one
+    # are not in the release.
     shown = condition().json()["statements"]
     assert [s["statement_id"] for s in shown] == [seeded["st_ok"]]
     assert shown[0]["sources"] == [{"record_id": seeded["rec"], "source_url": "https://example.org/s"}]
-    assert condition(seeded["dis_old"]).json()["disease_id"] == seeded["dis"]  # retired alias redirects
-
-    client.post(
-        "/internal/v1/review/decisions",
-        headers=reviewer.headers(None),
-        json={"target_type": "statement", "target_id": seeded["st_ok"], "status": "retired", "note": "Superseded."},
-    )
-    assert condition().json()["statements"] == []  # withdrawal takes effect immediately
+    assert condition(seeded["dis_old"]).json()["disease_id"] == seeded["dis"]  # a merged label answers as the kept one
+    assert _decide(client, reviewer, "statement", seeded["st_ok"], "retired", "Superseded.").status_code == 200
+    assert condition().json()["statements"] == []  # withdrawal takes effect immediately, without a new release
 
 
 def test_imported_dataset_content_is_not_served(client, api: Api):
@@ -280,3 +302,13 @@ def test_database_blocks_review_writes_outside_a_reviewer_transaction(db, seeded
         )
         assert changed.rowcount == 1
         tx.rollback()
+
+
+def test_where_the_serving_views_do_not_exist_nothing_is_served(client, api: Api, db):
+    """The views are created by the PostgreSQL migrations. On the in-memory database of the unit tests the
+    condition route answers that nothing is available, for any ID, and never reads a working table."""
+    if db.is_postgres:
+        pytest.skip("the serving views exist here; what they hold is tested in test_serving_views.py")
+    for disease_id in ("anything", "fx.possibility_a"):
+        answer = client.get(f"/v1/conditions/{disease_id}", headers=api.headers(None))
+        assert (answer.status_code, answer.json()["code"]) == (404, "condition_not_available")
