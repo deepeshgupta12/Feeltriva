@@ -71,6 +71,8 @@ export interface LiveReviewApi {
   /** The name decisions are recorded under, or null when no reviewer sign-in is configured. */
   readonly reviewer: string | null;
   get(path: string, params?: ReviewParams): Promise<Record<string, unknown>>;
+  /** One action of the review service that is not a decision on a row: publishing, going back, merging. */
+  post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>>;
   list(path: string, params?: ReviewParams): Promise<ReviewList>;
   notes(targetType: string, targetId: string): Promise<ReviewNoteRecord[]>;
   /** Records a note; with `status`, a decision. The API requires the note in both cases. */
@@ -102,6 +104,10 @@ export class HttpLiveReviewApi implements LiveReviewApi {
 
   get(path: string, params: ReviewParams = {}): Promise<Record<string, unknown>> {
     return this.request('GET', path, params);
+  }
+
+  post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('POST', path, {}, body);
   }
 
   async list(path: string, params: ReviewParams = {}): Promise<ReviewList> {

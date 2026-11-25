@@ -225,12 +225,74 @@ function fakeApi(reviewer: string | null = 'tester') {
       reviewer: `dev-reviewer:${reviewer}`,
     });
   });
+  // Published versions (M2.4h): one list of names is published; its working set has changed since.
+  const published: ReviewItem[] = [
+    {
+      release_id: 'names-sample.r1',
+      number: 1,
+      is_current: true,
+      features: 3,
+      diseases: 0,
+      disease_mappings: 0,
+      feature_mappings: 0,
+      published_by: 'dev-reviewer:tester',
+      published_at: '2026-11-24T07:04:04+00:00',
+    },
+  ];
+  const post = vi.fn((path: string, body: Record<string, unknown>) => {
+    if (path === '/mapping-releases') {
+      for (const release of published) {
+        release.is_current = false;
+      }
+      published.push({ ...published[0], release_id: 'names-sample.r2', number: 2, is_current: true, features: 4 });
+      return Promise.resolve({ release_id: 'names-sample.r2' });
+    }
+    if (path === '/mapping-releases/current') {
+      for (const release of published) {
+        release.is_current = release.release_id === body.release_id;
+      }
+      return Promise.resolve({ release_id: body.release_id });
+    }
+    return Promise.reject(new ReviewApiError(409, 'release_not_publishable', 'This release cannot be published.'));
+  });
+  const gets: Record<string, () => Record<string, unknown>> = {
+    '/working-sets': () => ({
+      rule_sets: [{ id: 'fixture-rules' }],
+      name_lists: [{ id: 'names-sample' }],
+      knowledge_sets: [{ id: 'texts-sample' }],
+    }),
+    '/mapping-releases/preview': () =>
+      published.length > 1
+        ? { publishable: false, problems: [], same_as_release: 'names-sample.r2', would_be_number: 3 }
+        : {
+            publishable: true,
+            problems: [],
+            same_as_release: null,
+            would_be_number: 2,
+            features: 4,
+            diseases: 0,
+            disease_mappings: 0,
+            feature_mappings: 0,
+            unresolved: { features: 7, diseases: 0 },
+          },
+    '/knowledge-releases/preview': () => ({
+      publishable: false,
+      problems: ['no statement and no evidence is approved'],
+      same_as_release: null,
+      would_be_number: 1,
+    }),
+    '/serving-bundle': () => ({ assembled: false, problems: ['no rule release is current'] }),
+  };
   const api: LiveReviewApi = {
     reviewer,
-    get: () => Promise.resolve({ sources: 14, disease_candidates: 960, statements: { pending: 2952 } }),
+    post,
+    get: (path: string) =>
+      gets[path]
+        ? Promise.resolve(gets[path]())
+        : Promise.resolve({ sources: 14, disease_candidates: 960, statements: { pending: 2952 } }),
     list: (path, params) => {
       requests.push({ path, params });
-      const items = structuredClone(rows[path] ?? []);
+      const items = structuredClone(path === '/mapping-releases' ? published : (rows[path] ?? []));
       return Promise.resolve({
         total: items.length,
         items,
@@ -242,7 +304,7 @@ function fakeApi(reviewer: string | null = 'tester') {
     decideMany,
     setApplicability: vi.fn(() => Promise.resolve({})),
   };
-  return { api, decide, decideMany, requests };
+  return { api, decide, decideMany, post, requests };
 }
 
 function renderLive(route: string, api: LiveReviewApi) {
@@ -455,6 +517,58 @@ describe('the review workspace against the review service', () => {
     // The list offers more rows on a page, up to the most the service decides at once.
     expect(screen.getByLabelText('Rows on a page')).toHaveValue('25');
     expect(within(screen.getByLabelText('Rows on a page')).getAllByRole('option')).toHaveLength(3);
+  });
+
+  it('publishes the next version after a note and a second click, and goes back to the earlier one', async () => {
+    const { api, post } = fakeApi();
+    const user = renderLive('/review/releases', api);
+
+    expect(await screen.findByRole('heading', { name: 'Published versions' })).toBeInTheDocument();
+    const names = screen.getByRole('region', { name: 'Published lists of names' });
+    // The one list of names is chosen by itself; the next version and what is left out are shown.
+    expect(
+      await within(names).findByText(/It would be version 2 and hold: 4 symptoms and other items/),
+    ).toBeInTheDocument();
+    expect(
+      within(names).getByText(/Left out because they still wait for a decision: 7 symptoms and other items/),
+    ).toBeInTheDocument();
+    // A set that cannot be published says why, in the service's words, and offers no button.
+    const texts = screen.getByRole('region', { name: 'Published texts and facts' });
+    expect(await within(texts).findByText('no statement and no evidence is approved')).toBeInTheDocument();
+    expect(within(texts).queryByRole('button', { name: 'Publish this version' })).not.toBeInTheDocument();
+    // The sample set of the tests is not offered.
+    expect(
+      within(screen.getByRole('region', { name: 'Published sets of urgency rules' })).getByText(
+        'There is no set of rules to publish from.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(within(names).getByRole('button', { name: 'Publish this version' }));
+    expect(within(names).getByText(/A published version can never be changed or removed/)).toBeInTheDocument();
+    await user.click(within(names).getByRole('button', { name: 'Yes, publish it' }));
+    expect(within(names).getByRole('alert')).toHaveTextContent('Write a note first.');
+    expect(post).not.toHaveBeenCalled();
+    await user.type(within(names).getByLabelText('Note (required)'), 'Four names checked.');
+    await user.click(within(names).getByRole('button', { name: 'Yes, publish it' }));
+    expect(post).toHaveBeenCalledWith('/mapping-releases', {
+      mapping_release_id: 'names-sample',
+      note: 'Four names checked.',
+    });
+    // What happened stays on the page while the lists are read again.
+    expect(await screen.findByText('Published as names-sample.r2. It is the version in use now.')).toBeInTheDocument();
+
+    // The new version is the one in use; the earlier one can be gone back to.
+    const after = await screen.findByRole('region', { name: 'Published lists of names' });
+    expect((await within(after).findAllByText('names-sample.r2')).length).toBeGreaterThan(0);
+    expect(await within(after).findByText(/Nothing has changed since/)).toBeInTheDocument();
+    await user.click(within(after).getByRole('button', { name: 'Go back to this version' }));
+    await user.type(within(after).getByLabelText('Note (required)'), 'Version 2 holds a wrong name.');
+    await user.click(within(after).getByRole('button', { name: 'Yes, make it the version in use' }));
+    expect(post).toHaveBeenLastCalledWith('/mapping-releases/current', {
+      release_id: 'names-sample.r1',
+      note: 'Version 2 holds a wrong name.',
+    });
+    expect(await screen.findByText('names-sample.r1 is the version in use now.')).toBeInTheDocument();
   });
 
   it('asks the service for nothing when no reviewer sign-in is configured', async () => {

@@ -42,6 +42,16 @@ def main() -> int:
         tx.add(Source(source_id=f"e2e_src_{tag}", source_name=f"e2e-{tag}.csv", version="1", sha256=f"e2e-{tag}"))
         tx.add(Disease(disease_id=f"e2e_dis_{tag}", preferred_name=f"pretend ache {tag}"))
         tx.add(Feature(feature_id=f"e2e_feat_{tag}", preferred_name=f"hat {tag}", kind="symptom", value_type="boolean"))
+        # M2.4h: an approved item, so that the list of names of this run can be published.
+        tx.add(
+            Feature(
+                feature_id=f"e2e_pub_{tag}",
+                preferred_name=f"scarf {tag}",
+                kind="symptom",
+                value_type="boolean",
+                status="approved",
+            )
+        )
         tx.flush()
         for column in (3, 9):  # one heading at two column positions that disagree in 12 rows
             tx.add(

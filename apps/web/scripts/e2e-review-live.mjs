@@ -318,6 +318,48 @@ try {
     JSON.stringify([together.items.map((item) => item.review_status), eachNote.items]),
   );
 
+  // ---- 6. Published versions: publish, publish again, go back to the first (M2.4h) -----------------
+  const decideByService = (targetType, targetId, status) =>
+    fetch(`${API}/internal/v1/review/decisions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${REVIEWER}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_type: targetType, target_id: targetId, status, note: `Set by the test (${TAG}).` }),
+    });
+  const names = () => page.getByRole('region', { name: 'Published lists of names' });
+  const publish = async (note) => {
+    await page.goto(`${BASE}/review/releases`);
+    await page.getByRole('heading', { name: 'Published versions' }).waitFor();
+    await names().getByLabel('Which list of names (its name in the system)').selectOption(`e2e-map-${TAG}`);
+    await names().getByRole('button', { name: 'Publish this version' }).click();
+    await names().getByLabel('Note (required)').fill(note);
+    await names().getByRole('button', { name: 'Yes, publish it' }).click();
+  };
+  await publish(`First version of this run (${TAG}).`);
+  await page.getByText(`Published as e2e-map-${TAG}.r1. It is the version in use now.`).waitFor();
+  // Something changes, so that there is a second version to publish.
+  await decideByService('feature', `e2e_feat_${TAG}`, 'approved');
+  await publish(`Second version of this run (${TAG}).`);
+  await page.getByText(`Published as e2e-map-${TAG}.r2. It is the version in use now.`).waitFor();
+  const first = names().locator('li', { hasText: `e2e-map-${TAG}.r1` });
+  await first.getByRole('button', { name: 'Go back to this version' }).click();
+  await first.getByLabel('Note (required)').fill(`The second version is withdrawn (${TAG}).`);
+  await first.getByRole('button', { name: 'Yes, make it the version in use' }).click();
+  await page.getByText(`e2e-map-${TAG}.r1 is the version in use now.`).waitFor();
+  await first.getByText('In use now').waitFor();
+  await shot('6-published-versions');
+  const versions = (await service('/mapping-releases')).items.filter((item) =>
+    item.release_id.startsWith(`e2e-map-${TAG}.`),
+  );
+  check(
+    'the service holds both versions under the reviewer, and the first is the one in use again',
+    JSON.stringify(versions.map((item) => [item.release_id, item.is_current, item.published_by]).sort()) ===
+      JSON.stringify([
+        [`e2e-map-${TAG}.r1`, true, REVIEWER],
+        [`e2e-map-${TAG}.r2`, false, REVIEWER],
+      ]),
+    JSON.stringify(versions.map((item) => [item.release_id, item.is_current])),
+  );
+
   check(
     'every request to the service carried the reviewer token and no other',
     tokens.size === 1 && tokens.has(`Bearer ${REVIEWER}`),

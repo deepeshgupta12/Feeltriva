@@ -164,3 +164,29 @@ def test_each_row_on_its_own_decides_what_the_rules_allow_and_lists_what_they_re
             note="n",
             status="approved",
         )
+
+
+def test_the_sets_a_version_is_published_from_are_listed_for_reviewers_only(client, api: Api, reviewer: Api, owner_db):
+    from feeltriva_api.models import KnowledgeRelease, MappingRelease, RuleBundle
+
+    tag = uuid.uuid4().hex[:10]
+    with owner_db.transaction(None, role="migration") as tx:
+        tx.add(RuleBundle(bundle_id=f"ws-rules-{tag}", version=f"ws-rules-{tag}-1", manifest_uri="test://ws"))
+        tx.add(MappingRelease(release_id=f"ws-names-{tag}", version=f"ws-names-{tag}-1"))
+        tx.flush()
+        tx.add(
+            KnowledgeRelease(
+                release_id=f"ws-know-{tag}",
+                mapping_release_id=f"ws-names-{tag}",
+                version=f"ws-know-{tag}-1",
+                manifest_uri="test://ws",
+            )
+        )
+    path = "/internal/v1/review/working-sets"
+    assert client.get(path).status_code == 401 and client.get(path, headers=api.headers(None)).status_code == 403
+    body = client.get(path, headers=reviewer.headers(None)).json()
+    assert set(body) == {"rule_sets", "name_lists", "knowledge_sets"}
+    for kind, wanted in (("rule_sets", "ws-rules"), ("name_lists", "ws-names"), ("knowledge_sets", "ws-know")):
+        mine = [row for row in body[kind] if row["id"] == f"{wanted}-{tag}"]
+        assert mine == [{"id": f"{wanted}-{tag}", "version": f"{wanted}-{tag}-1", "review_status": "pending"}]
+        assert [row["id"] for row in body[kind]] == sorted(row["id"] for row in body[kind])

@@ -5455,3 +5455,55 @@ with the note).
   panel.
 - A bulk decision is not a review of each row. The record says who decided and with which note;
   it cannot say how closely anyone looked.
+
+### M2.4h — Publishing and rollback from the review workspace
+
+**What it is for.** FR12: a reviewer can publish versions that cannot be changed and roll back a
+faulty one. The service has done both since M2.5; the screen only read. Found as a gap without a
+sub-step on 2026-11-25; the owner: "Implement the above now".
+
+**Impact analysis before editing** (LOW). `LiveReleasesPage`: no traced caller; used by the route
+table. `create_app`: one route added before `return app`. The publishing functions of the service
+are not changed.
+
+**Implemented.**
+
+- `review_lists.py`: `working_sets`, the sets a version is published from (sets of rules, lists of
+  names, sets of texts and facts), behind `GET /internal/v1/review/working-sets`.
+- `LiveReviewApi.post(path, body)` for the actions that are not a decision on a row.
+- "Published versions": for each kind, the published versions (with "Go back to this version" on
+  every one that is not in use), and "The next version": the set is chosen (chosen by itself when
+  there is one), the service's preview is shown (what it would hold; what was left out because it
+  waits for a decision; the service's own reasons when it cannot be published; "nothing has
+  changed" when that is so), and "Publish this version". Publishing and going back each take a
+  note and a second click and say beforehand that a published version can never be changed or
+  removed. What the service did stands at the top of the page.
+- The sample sets of the tests (`fixture-…`) are not offered.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 75 files |
+| `uv run pytest` (SQLite, archives included) | 284 passed, 79 skipped (before: 283, 79) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 362 passed, 1 skipped (before: 361, 1) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 138 passed (9 files; before: 137); built |
+| `pnpm e2e:review` against the test database | 24 passed, 0 failed: a list of names published, published again after a change, and the first version made the one in use again; the service holds both under the reviewer |
+| `detect_changes` before commit | 7 files and one new; risk medium; `create_app` (one route), `LiveReleasesPage`, `LiveReviewApi`. `review_decisions_bulk` is listed because it stands below the added route |
+
+**Bugs and slips.**
+
+- The message that a version was published stood inside the part of the page that is rebuilt after
+  the action, and so was gone at once. The browser flow failed on it; the message now stands at the
+  top of the page. The same mistake as in M2.4j, made a second time: anything a screen reports
+  after an action must stand outside what the action reloads.
+- One run of the web tests failed in a test of M2.4j that passes alone and passed in every later
+  run. The PostgreSQL suite was running at the same time. Not reproduced; noted.
+
+**Nothing was published on the real data.** I only read the page there.
+
+**Limits, stated plainly.**
+
+- The reasons the service gives when a version cannot be published are shown in its words
+  ("the bundle is not approved"), which are not yet the plain words of E97.
+- The page lists every published version; a database with very many versions gives a long page.

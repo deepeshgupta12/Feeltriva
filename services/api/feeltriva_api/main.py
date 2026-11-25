@@ -20,6 +20,7 @@ from . import (
     response_text_sets,
     review_bulk,
     review_claims,
+    review_lists,
     review_proposals,
     serving_bundle,
 )
@@ -494,6 +495,10 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     @app.get("/internal/v1/review/notes")
     def review_notes(target_type: str, target_id: str, who: Who) -> JSONResponse:
         return JSONResponse(list_notes(container.db, who, target_type=target_type, target_id=target_id))
+
+    @app.get("/internal/v1/review/working-sets")
+    def review_working_sets(who: Who) -> JSONResponse:
+        return JSONResponse(review_lists.working_sets(container.db, who))
 
     @app.post("/internal/v1/review/decisions/bulk")
     def review_decisions_bulk(body: BulkDecision, who: Who) -> JSONResponse:
