@@ -5386,3 +5386,13 @@ wording; laid out again. No product bug.
 - File names, column headings and the sample texts' own content are shown as they are.
 - `formatCount`, the dates and the figures of the demo are unchanged; only their labels changed.
 - Whether the wording is plain enough remains the owner's judgement.
+
+**Committed and indexed (M2.4e, M2.4f, M2.4g).** `4e53219` (M2.4e; CI passed on both jobs, run
+45563589527), `149f93d` (M2.4f; CI passed on both jobs, run 45567532634) and `07131d5` (M2.4g; CI
+passed on both jobs, run 45582470983). The code graph was re-indexed after each and reports
+up-to-date at `07131d5`. No migration was added. The three look-ups were run on the main database
+without `--online`: 4,587 rows for review, no link made, nothing sent to WHO. The API on port 8000
+was restarted after M2.4f. The web app on port 5173 runs in live review mode (`pnpm dev:review`);
+it was changed to the design demo for `pnpm smoke` and back. Nothing runs on port 5174. The test
+service on port 8001 ran only during the browser test and is stopped. This paragraph was added in
+a following documents-only commit, after which the index was refreshed again.
