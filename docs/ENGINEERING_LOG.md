@@ -4870,3 +4870,121 @@ is a page of this machine.
 - The browser test still needs a second copy of the service on port 8001 while it runs, on the
   test database. That is not a web port, and it is stopped when the test ends.
 - `scripts/e2e-live.mjs` is still not laid out by the formatter; three of its lines changed.
+
+### M2.4b — Close vocabulary results and names without a link, loaded for review
+
+**What it is for.** The look-ups of M2.11, M2.14 and M2.16 store a link only for an exact name or
+for the one identifier a vocabulary marks equivalent. Everything else went to three review files
+outside the database: no screen could show it and no decision could be recorded. The owner
+decided (E57) that the close results are confirmed or rejected in the review screens.
+
+**Impact analysis before editing** (all LOW). `best_result`: one caller, `link_vocabularies`.
+`link_vocabularies`, `link_ontologies`, `import_identifiers`: called by the command line (`main`)
+and their tests only. `_link_guard` is not changed; the new rule calls it. `LiveListPage` and
+`DecisionDrawer` show no callers in the graph (screen components are not traced); their real
+users are the five list screens and the claims page, and both got optional additions only.
+
+**Implemented** (decision E95).
+
+- Migration `0019`: table `link_proposals`. A row holds our name (a disease or a feature), the
+  vocabulary and its version, the kind of row, the reason in words, and either a whole term (code,
+  title and address together, as the WHO terms require) with the ID of the link it would make, or
+  no term. Only a reviewer's transaction can read it; the application role may change status and
+  reviewer. The application role may now add a row to `terminology_links`, inside a reviewer's
+  transaction only.
+- `feeltriva_ingestion/proposals.py`: the row, its ID, storing, the self-check and the report
+  lines. Each look-up builds its own rows and stores them in the transaction that stores its
+  links: `close_results` (`vocabulary.py`), `unlinked_names` (`ontology_links.py`),
+  `several_identifiers` (`identifier_links.py`). `best_result` now also returns the address of the
+  entity and whether it is a residual sub-code. A stored row is never changed by a later run; a
+  full run removes rows of its own kinds that it no longer gives, unless a row carries a decision
+  or a note.
+- `feeltriva_api/review_proposals.py`: `GET /internal/v1/review/link-proposals` (filters: status,
+  vocabulary, kind, disease or feature, whether a term can be confirmed, search; the rows that can
+  be confirmed come first) and the review target `link_proposal`. Confirming a row makes its link,
+  approved under the reviewer, through the rules of every link (`_link_guard`); a refusal leaves
+  nothing behind. A link that exists by another route is approved, not made twice. Rejecting makes
+  no link. A row without a term, or with a term that cannot be linked, takes notes only.
+- Web: the screen "Suggested matches" (`/review/suggestions` in live mode), written in plain
+  words: why a name was not matched automatically, the suggested entry, how close it is, whether
+  the match has been made. The buttons read "Confirm match" and "Reject match"; a row without a
+  suggestion shows "No decision needed" and offers a note only.
+
+**Loaded on the real data** (three commands, each exited 0 with no difference reported).
+
+| Kind of row | Vocabulary | Rows | Names | Rows naming a term |
+|---|---|---:|---:|---:|
+| Close search result (score 0.9 or more, no exact name) | ICD-11 MMS | 431 | 431 | 431 |
+| Only a looser synonym equals our name | HPO / MONDO | 43 / 20 | 43 / 17 | 43 / 20 |
+| Nearest terms by shared words | HPO / MONDO | 799 / 550 | 484 / 326 | 799 / 550 |
+| An ordinary word, not the abbreviation; nearest terms | MONDO | 3 | 1 | 3 |
+| Several identifiers marked equivalent | SNOMED CT / ICD-11 MMS / ICD-11 Foundation | 8 / 7 / 3 | 4 / 5 / 3 | 8 / 7 / 3 |
+| The only term with our name cannot be linked (obsolete) | HPO / MONDO | 2 / 11 | 2 / 11 | 2 / 11 (shown, not confirmable) |
+| No term near our name | HPO / MONDO | 596 / 749 | 596 / 749 | 0 |
+| A question sentence, not looked up | HPO / MONDO | 223 / 223 | 223 / 223 | 0 |
+
+3,668 rows in all; 1,864 name a term a reviewer can confirm; 1,804 record only why a name has no
+link. All `pending`. No link was made: `terminology_links` holds 2,542 rows as before (2,531
+pending, 5 approved, 6 rejected). For 16 rows the link they would make exists already by another
+route; the screen says so. `link-vocabularies` made 0 calls to WHO (all answers were cached);
+`import-identifiers` made 20, each for one ICD-11 entity number, to fetch WHO's own title and code
+for the identifiers of the five labels with several. `link-ontologies` reads two local files.
+
+**Two figures of the plan do not hold on today's data, reported as found.** (1) "The 19
+abbreviation matches first": none is left. They were settled in M2.15 through
+`specs/confirmed_readings.json`; the order of the list still puts that kind first, should one
+appear. (2) "The 13 labels without a single equivalent": today 9 label-and-vocabulary pairs have
+several identifiers marked equivalent (5 for ICD-11, 4 for SNOMED CT), giving 18 rows. I could not
+reproduce 13 from the stored data and have not changed anything to make it fit.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 72 files |
+| `uv run pytest` (SQLite, archives included) | 273 passed, 78 skipped (before: 263, 75) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 350 passed, 1 skipped (before: 337, 1) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 131 passed (8 files); built |
+| `pnpm e2e:review` against the test database (no web port; test service on 8001, stopped afterwards) | 20 passed, 0 failed |
+| Migration `0019` on the main database | applied; `alembic upgrade head` |
+| `detect_changes` before commit | 18 files. Changed definitions confirmed by comparing each file with the last commit: `best_result`, `link_vocabularies`, `link_ontologies`, `import_identifiers`, the three `check` functions, `main` (three print lines), `create_app` (one route); added: `close_results`, `unlinked_names`, `several_identifiers`, `LinkProposal`. The other symbols it lists (`write_review`, `summarise`, `_link`, `link_id`, the request bodies of `main.py`) stand below inserted lines and are unchanged. Risk "critical" is by the number of flows through the three commands |
+
+New tests: `tests/api/test_review_proposals.py` (7: reviewers only; order and filters; confirming
+makes the link and rejecting makes none; the link follows its row; a row without a term is not
+decided; the general-term rule refuses a confirmation and leaves nothing behind, and its message
+names no code; a link from another route is approved, not made twice; outside a reviewer's
+transaction no row is seen and no link is added), `tests/ingestion/test_proposals.py` (3: the
+service and the look-ups name the same kinds; what a row must hold; what a full run removes and
+what it never removes), and additions to the three look-up tests (rows stored, none a link, a
+decision survives a rerun, a decision nobody signed is reported). The browser flow of the plan,
+"confirm one close vocabulary result and reject another", is step 4 of `pnpm e2e:review`.
+
+**A guarantee changed on purpose, and two older tests with it.** Until now two tests asserted that
+the application role can never add a row to `terminology_links`, not even in a reviewer's
+transaction (`test_vocabulary.py`, `test_review_links.py`). Confirming a term has to make a link,
+so a reviewer's transaction now can; a user's still cannot. Both tests now assert that boundary.
+
+**Bugs and slips.**
+
+- While the old assertion still stood, the first PostgreSQL run of `test_review_links.py` added a
+  link row in a reviewer's transaction and kept it; three other tests then failed, because their
+  self-checks read the whole table and found a link without an address. The row was removed from
+  the test database, and the test now undoes what it writes. No product bug.
+- Two expectations in my new tests were wrong (the order of two rows of one name depends on how
+  the database sorts punctuation; the recorded reviewer name carries the prefix `dev-reviewer:`).
+  One test used a PostgreSQL-only cast in a check that also runs on SQLite. The code was right in
+  all three; the tests were corrected.
+- The first version did not let a reviewer confirm the nearest terms listed for the one name
+  that is a plain word and not an abbreviation. Seen in the counts of the real run; corrected.
+- Seen in the screenshot of the new screen and corrected: a rejected suggestion read "Not yet"
+  under "Match made", and a row that takes no decision showed "Pending review".
+
+**Limits, stated plainly.**
+
+- ICD-11 results below 0.9 (235 names) and names with no ICD-11 result (679, the question
+  sentences among them) are not loaded: the plan names the close results only.
+- The rows of a kind cannot be decided together; each is opened and decided on its own.
+- A reviewer who is not a clinician can confirm a match. The decision is recorded with the name;
+  it is not a clinical judgement, and nothing confirmed here is shown to anyone (E63).
+- The titles of SNOMED CT rows are MONDO's names, because the SNOMED CT release is not held.
+- The review files in `data/derived/review/` are still written, as before; nothing reads them.

@@ -20,6 +20,13 @@ export interface ReviewTarget {
   title: string;
   status: string;
   details: readonly { label: string; value: ReactNode }[];
+  /**
+   * Set for an item that takes notes but no decision (the service would refuse one): the reason, in
+   * words for the reviewer. The decision buttons are then not offered.
+   */
+  notesOnly?: string | null;
+  /** Other words for the two decisions on this kind of item, for example "Confirm match". */
+  decisionLabels?: { approved?: string; rejected?: string };
 }
 
 interface DecisionDrawerProps {
@@ -184,18 +191,23 @@ export function DecisionDrawer({ api, target, onClose, onChanged, children }: De
               <Button size="sm" loading={busy} loadingLabel="Saving…" onClick={() => void record()}>
                 Save note
               </Button>
-              {DECISIONS.map((decision) => (
-                <Button
-                  key={decision.status}
-                  variant="secondary"
-                  size="sm"
-                  disabled={busy || target.status === decision.status}
-                  onClick={() => void record(decision.status)}
-                >
-                  {decision.label}
-                </Button>
-              ))}
+              {target.notesOnly
+                ? null
+                : DECISIONS.map((decision) => (
+                    <Button
+                      key={decision.status}
+                      variant="secondary"
+                      size="sm"
+                      disabled={busy || target.status === decision.status}
+                      onClick={() => void record(decision.status)}
+                    >
+                      {(decision.status === 'approved' && target.decisionLabels?.approved) ||
+                        (decision.status === 'rejected' && target.decisionLabels?.rejected) ||
+                        decision.label}
+                    </Button>
+                  ))}
             </div>
+            {target.notesOnly ? <p className="mt-2 text-ink-secondary">{target.notesOnly}</p> : null}
             <p role="status" className="mt-2 min-h-6 font-medium text-info">
               {message}
             </p>

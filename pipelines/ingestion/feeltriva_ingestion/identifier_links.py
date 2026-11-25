@@ -30,12 +30,14 @@ from typing import Any
 from feeltriva_api.settings import Settings
 from sqlalchemy import create_engine
 
+from . import proposals
 from .archives import RAW_DIR
 from .cases import _raw_cursor
 from .mondo_identifiers import (
     ICD_FOUNDATION,
     LINKED,
     LINKED_FOUNDATION,
+    SEVERAL,
     SNOMED,
     SNOMED_URI,
     UNKNOWN_TO_WHO,
@@ -46,7 +48,7 @@ from .mondo_identifiers import (
 )
 from .ontologies import MONDO
 from .release import load_supplementary
-from .vocabulary import ICD, REVIEW_DIR, IcdClient, IcdSettings, store_links
+from .vocabulary import ICD, REVIEW_DIR, IcdClient, IcdSettings, link_id, store_links
 
 REVIEW_FILE = "mondo_identifiers.csv"
 METHOD = "mondo_equivalent"
@@ -172,6 +174,12 @@ def import_identifiers(
                 item["outcomes"][SNOMED]["stored"] = link
             outcome, chosen, of = grade(listed, ICD_FOUNDATION)
             record: dict[str, Any] = {"outcome": outcome, "identifiers": of, "stored": None, "who": None}
+            if outcome == SEVERAL:  # none is chosen; each goes before a reviewer under WHO's own title (M2.4b)
+                client = client or IcdClient(IcdSettings())
+                release = release or client.release()
+                record["who_of_each"] = {
+                    found.number: resolve_icd(client, release, found.number) for found in of if found.equivalent
+                }
             if chosen is not None:
                 client = client or IcdClient(IcdSettings())
                 release = release or client.release()
@@ -207,6 +215,12 @@ def import_identifiers(
             items.append(item)
         with _raw_cursor(engine) as cur:
             inserted = store_links(cur, items)
+            proposed = proposals.store(
+                cur,
+                several_identifiers(items, version, release),
+                bases=(proposals.SEVERAL_EQUIVALENT,),
+                complete=source_ids is None,
+            )
             # One row per label and code: a code the name search already stored is noted, not repeated. Where the
             # name search stored the unspecified sub-code, that row is noted with the category MONDO leads to.
             for item in items:
@@ -278,6 +292,8 @@ def import_identifiers(
             "label_has_icd_11": int(with_icd),
             "label_has_any_link": int(with_any),
         },
+        "proposals": proposed,
+        "for_review": proposals.lines(proposed),
     }
 
 
@@ -328,7 +344,7 @@ def check(result: dict[str, Any]) -> list[str]:
         diffs.append(
             f"{result['resting_on_a_rejected_mondo_link']} pending links rest on a MONDO link a reviewer has rejected"
         )
-    return diffs
+    return diffs + proposals.check(result["proposals"])
 
 
 def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
@@ -382,3 +398,82 @@ def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
                         ]
                     )
     return path
+
+
+# -- several identifiers marked equivalent, for a reviewer (M2.4b) ------------------------------------
+_SEVERAL_REASON = "MONDO marks {n} {vocabulary} identifiers as equivalent to this term; a person chooses"
+
+
+def several_identifiers(items: list[dict[str, Any]], mondo_version: str, icd_release: str) -> list[dict[str, Any]]:
+    """One proposal per identifier, for each label whose MONDO term lists several of one vocabulary as equivalent.
+
+    An ICD-11 identifier is kept in the same form as the single equivalent one is (decision E62): its MMS
+    code when WHO codes the entity as itself, otherwise the foundation entity with the broader MMS code noted
+    beside it. An identifier WHO has no entity for gets a row without a term."""
+    rows = []
+    for item in items:
+        via = {"vocabulary": MONDO, **item["mondo"]}
+        record = item["outcomes"][SNOMED]
+        if record["outcome"] == SEVERAL:
+            equivalent = [found for found in record["identifiers"] if found.equivalent]
+            listed = f"as listed in MONDO {mondo_version}"
+            for found in equivalent:
+                rows.append(
+                    proposals.row(
+                        item,
+                        SNOMED,
+                        listed,
+                        proposals.SEVERAL_EQUIVALENT,
+                        _SEVERAL_REASON.format(n=len(equivalent), vocabulary=SNOMED),
+                        {"code": found.number, "title": item["mondo"]["title"], "uri": SNOMED_URI + found.number},
+                        link_id(item["id"], SNOMED, listed, found.number),
+                        via=via,
+                        marks=list(found.marks),
+                        title_is="MONDO's name of the equivalent disease; the SNOMED CT release, and so its own name, "
+                        "is not held",
+                    )
+                )
+        record = item["outcomes"][ICD11]
+        if record["outcome"] == SEVERAL:
+            equivalent = [found for found in record["identifiers"] if found.equivalent]
+            reason = _SEVERAL_REASON.format(n=len(equivalent), vocabulary=ICD11)
+            for found in equivalent:
+                who = record["who_of_each"].get(found.number)
+                if who is None:
+                    rows.append(
+                        proposals.row(
+                            item,
+                            ICD_FOUNDATION,
+                            icd_release,
+                            proposals.SEVERAL_EQUIVALENT,
+                            f"{reason}; WHO has no entity with the identifier {found.number}",
+                            None,
+                            None,
+                            via=via,
+                            marks=list(found.marks),
+                            identifier=found.number,
+                        )
+                    )
+                    continue
+                coded = who["mms"]
+                if coded and coded["same_entity"]:
+                    system, term = ICD, {"code": coded["code"], "title": coded["title"], "uri": coded["uri"]}
+                    more: dict[str, Any] = {"foundation_uri": who["uri"], "residual": False}
+                else:
+                    system, term = ICD_FOUNDATION, {"code": found.number, "title": who["title"], "uri": who["uri"]}
+                    more = {"coded_in_mms_under": coded}
+                rows.append(
+                    proposals.row(
+                        item,
+                        system,
+                        icd_release,
+                        proposals.SEVERAL_EQUIVALENT,
+                        reason,
+                        term,
+                        link_id(item["id"], system, icd_release, term["code"]),
+                        via=via,
+                        marks=list(found.marks),
+                        **more,
+                    )
+                )
+    return rows

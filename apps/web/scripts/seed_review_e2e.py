@@ -18,6 +18,7 @@ from feeltriva_api.models import (
     Disease,
     Feature,
     FeatureMapping,
+    LinkProposal,
     MappingRelease,
     Source,
     SourceRecord,
@@ -118,6 +119,40 @@ def main() -> int:
                 rule="e2e:enumeration",
                 cues={"first_item_preposition": ["of"]},
                 proposed_feature_id=f"e2e_feat_{tag}",
+            )
+        )
+        # M2.4b: two close search results, each for its own invented condition, and one name without a suggestion.
+        for key, name in (("near", "pretend chill"), ("far", "pretend shiver")):
+            tx.add(Disease(disease_id=f"e2e_dis_{tag}_{key}", preferred_name=f"{name} {tag}"))
+        tx.flush()
+        for key, code, title, score in (
+            ("near", f"YY{tag}.1", f"Pretend chilling {tag}", 0.96),
+            ("far", f"YY{tag}.2", f"Pretend shaking {tag}", 0.91),
+        ):
+            tx.add(
+                LinkProposal(
+                    proposal_id=f"e2e_lp_{tag}_{key}",
+                    disease_id=f"e2e_dis_{tag}_{key}",
+                    system="ICD-11 MMS",
+                    system_version="e2e",
+                    basis="close_search_result",
+                    reason="no ICD-11 entity carries exactly this name; this is the best result of the name search",
+                    code=code,
+                    title=title,
+                    uri=f"http://example.invalid/{code}",
+                    link_id=f"e2e_tl_{tag}_{key}",
+                    detail={"score": score},
+                )
+            )
+        tx.add(
+            LinkProposal(
+                proposal_id=f"e2e_lp_{tag}_none",
+                feature_id=f"e2e_feat_{tag}",
+                system="HPO",
+                system_version="e2e",
+                basis="no_term_near",
+                reason="no term carries this name or shares half of its words",
+                detail={},
             )
         )
     print(tag)

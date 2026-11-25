@@ -19,6 +19,7 @@ from . import (
     releases,
     response_text_sets,
     review_claims,
+    review_proposals,
     serving_bundle,
 )
 from . import schemas as sc
@@ -492,6 +493,33 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     @app.get("/internal/v1/review/notes")
     def review_notes(target_type: str, target_id: str, who: Who) -> JSONResponse:
         return JSONResponse(list_notes(container.db, who, target_type=target_type, target_id=target_id))
+
+    @app.get("/internal/v1/review/link-proposals")
+    def review_link_proposals(
+        who: Who,
+        status: str | None = None,
+        system: str | None = None,
+        basis: str | None = None,
+        subject_type: str | None = None,
+        decidable: bool | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> JSONResponse:
+        return JSONResponse(
+            review_proposals.list_link_proposals(
+                container.db,
+                who,
+                status=status,
+                system=system,
+                basis=basis,
+                subject_type=subject_type,
+                decidable=decidable,
+                q=q,
+                limit=limit,
+                offset=offset,
+            )
+        )
 
     return app
 

@@ -17,13 +17,16 @@ from feeltriva_api.models import Disease, DiseaseMapping, Feature, FeatureMappin
 from feeltriva_ingestion.archives import ArchiveError, sha256_file
 from feeltriva_ingestion.load import RELEASE_ID, source_id
 from feeltriva_ingestion.vocabulary import (
+    CLOSE_SCORE,
     ICD,
     LOINC,
     IcdClient,
     IcdSettings,
     best_result,
     check,
+    close_results,
     exact_matches,
+    link_id,
     link_vocabularies,
     loinc_matches,
     loinc_table,
@@ -114,7 +117,15 @@ def test_only_an_entity_carrying_exactly_the_name_is_a_match():
     assert exact_matches("coughing", reply)[0]["method"] == "exact_synonym"
     assert exact_matches("chronic cough", reply) == []  # close is not the same name: no link
     assert (
-        best_result(reply) == {"code": "MD12", "title": "Cough", "score": 1.0, "chapter": "21"}
+        best_result(reply)
+        == {
+            "code": "MD12",
+            "title": "Cough",
+            "score": 1.0,
+            "chapter": "21",
+            "uri": "http://id.who.int/icd/release/11/2026-01/mms/MD12",
+            "residual": False,
+        }
         and best_result({}) is None
     )
 
@@ -289,7 +300,11 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
         "title": "Something nearby",
         "score": 0.71,
         "chapter": "05",
+        "uri": "http://id.who.int/icd/release/11/2026-01/mms/XB07",
+        "residual": False,
     }
+    # A weak result (below 0.9) is not put before a reviewer; nothing was proposed for these names.
+    assert result["proposals"]["given"] == 0 and result["for_review"][0].startswith("For review")
     assert [
         (link["code"], link["method"], link["detail"]["chapter_title"][:8]) for link in by[f"{cough} symptom"]["links"]
     ] == [("MD12", "exact_synonym", "Symptoms")]
@@ -313,7 +328,9 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
             {"p": f"dis_{tag}_%", "q": f"feat_{tag}_%"},
         ).all()
         # Since M2.17 the API role may read these rows and set a decision, inside a reviewer transaction only
-        # (tests/api/test_review_links.py). It still cannot write a code or a title, nor add or remove a link.
+        # (tests/api/test_review_links.py). Since M2.4b it may also add a link, again inside a reviewer transaction
+        # only: the link a reviewer makes by confirming a proposed term (tests/api/test_review_proposals.py). It
+        # still cannot write a code or a title of a stored link, nor remove one.
         guarded = tx.execute(
             text(
                 """SELECT (SELECT relrowsecurity FROM pg_class WHERE relname = 'terminology_links'),
@@ -330,7 +347,7 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
     ]
     assert all(r[3] and r[4] for r in rows)  # code, title and URI are always stored together
     assert [bool(r[7]) != bool(r[8]) for r in rows] == [True, True, True]
-    assert tuple(guarded) == (True, False, False, False, False)
+    assert tuple(guarded) == (True, False, False, True, False)
     assert sum(run()["inserted"].values()) == 0  # a rerun adds nothing, and asks the API nothing new
     with write_review(result, tmp_path / "review").open(encoding="utf-8", newline="") as handle:
         review = {row["name"]: row for row in csv.DictReader(handle)}
@@ -366,4 +383,155 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
         with owner_db.transaction(None) as tx:
             tx.execute(
                 text("UPDATE terminology_links SET reviewer = 'dev-reviewer:test' WHERE disease_id = :d"), decided
+            )
+
+
+# ---- M2.4b: the close results go before a reviewer -------------------------------------------------
+def _named(owner_db, tag, sid, names):
+    """Invented disease labels of one invented source, each mapped, so that the look-up reads them."""
+    with owner_db.transaction(None) as tx:
+        if tx.get(MappingRelease, RELEASE_ID) is None:
+            tx.add(MappingRelease(release_id=RELEASE_ID, version="lexical-0"))
+        tx.add(Source(source_id=sid, source_name=f"close-{tag}.zip/data.csv", version="t", sha256="0"))
+        for key, name in names.items():
+            tx.add(Disease(disease_id=f"dis_{tag}_{key}", preferred_name=name))
+        tx.flush()
+        for key, name in names.items():
+            tx.add(
+                DiseaseMapping(
+                    mapping_id=f"dm_{tag}_{key}",
+                    release_id=RELEASE_ID,
+                    source_id=sid,
+                    original_label=name,
+                    disease_id=f"dis_{tag}_{key}",
+                    method="lexical_casefold_whitespace",
+                )
+            )
+
+
+def test_a_close_result_is_a_proposal_only_from_the_score_and_only_without_an_exact_name():
+    def item(key, best, links=(), sent="a name"):
+        return {"type": "disease", "id": f"dis_{key}", "name": key, "sent": sent, "best": best, "links": list(links)}
+
+    def best(score, uri="http://id.who.int/x", code="XC10.Z"):
+        return {
+            "code": code,
+            "title": "Near, unspecified",
+            "score": score,
+            "chapter": "21",
+            "uri": uri,
+            "residual": True,
+        }
+
+    rows = close_results(
+        [
+            item("close", best(CLOSE_SCORE)),
+            item("weak", best(0.89)),
+            item("exact", best(1.0), [{"system": ICD}]),  # an entity carries the name: that is the link
+            item("other", best(1.0), [{"system": LOINC}]),  # a link to another vocabulary does not stand in for it
+            item("no-address", best(1.0, uri="")),
+            item("sentence", best(1.0), sent=""),
+            item("nothing", None),
+        ],
+        "2026-01",
+        {"21": "Symptoms"},
+    )
+    assert [(row["disease_id"], row["basis"], row["code"]) for row in rows] == [
+        ("dis_close", "close_search_result", "XC10.Z"),
+        ("dis_other", "close_search_result", "XC10.Z"),
+    ]
+    close = rows[0]
+    assert (close["system"], close["version"], close["title"], close["uri"]) == (
+        ICD,
+        "2026-01",
+        "Near, unspecified",
+        "http://id.who.int/x",
+    )
+    assert close["link_id"] == link_id("dis_close", ICD, "2026-01", "XC10.Z") and close["feature_id"] is None
+    assert close["detail"] == {
+        "query": "a name",
+        "score": CLOSE_SCORE,
+        "chapter": "21",
+        "chapter_title": "Symptoms",
+        "residual": True,
+    }
+    assert "no ICD-11 entity carries exactly this name" in close["reason"]
+
+
+@pytest.mark.postgres
+def test_close_results_are_stored_for_review_never_as_links_and_a_decision_survives_a_rerun(tmp_path, owner_db):
+    tag = uuid.uuid4().hex[:10]
+    sid = source_id(f"close-{tag}.zip", "data.csv")
+    names = {"near": f"near thing {tag}", "far": f"far thing {tag}", "same": f"same thing {tag}"}
+    _named(owner_db, tag, sid, names)
+    replies = {
+        names["near"]: [entity("XC10.Z", "Near thing, unspecified", "05", 0.93, isResidualUnspecified=True)],
+        names["far"]: [entity("XC20", "Something else", "05", 0.5)],
+        names["same"]: [entity("XC30", f"Same thing {tag}", "05")],
+    }
+    url = os.environ["TEST_MIGRATION_DATABASE_URL"]
+
+    def run(table=replies):
+        client = IcdClient(SETTINGS, tmp_path / f"cache-{len(table)}", FakeApi(table), pause=0)
+        return link_vocabularies(tmp_path, url, client, None, [sid])
+
+    def stored():
+        with owner_db.transaction(None) as tx:
+            return tx.execute(
+                text(
+                    """SELECT disease_id, system, system_version, basis, code, title, uri, link_id, status::text, reviewer,
+                              detail ->> 'score', detail ->> 'residual'
+                       FROM link_proposals WHERE disease_id LIKE :d ORDER BY disease_id"""
+                ),
+                {"d": f"dis_{tag}_%"},
+            ).all()
+
+    result = run()
+    assert check(result) == [] and result["inserted"] == {ICD: 1}
+    assert (result["proposals"]["given"], result["proposals"]["inserted"]) == (1, 1)
+    near = link_id(f"dis_{tag}_near", ICD, "2026-01", "XC10.Z")
+    assert [tuple(row) for row in stored()] == [
+        (
+            f"dis_{tag}_near",
+            ICD,
+            "2026-01",
+            "close_search_result",
+            "XC10.Z",
+            "Near thing, unspecified",
+            "http://id.who.int/icd/release/11/2026-01/mms/XC10.Z",
+            near,
+            "pending",
+            None,
+            "0.93",
+            "true",
+        )
+    ]
+    with owner_db.transaction(None) as tx:  # the close result is not a link, and nothing made one of it
+        links = tx.execute(
+            text("SELECT code FROM terminology_links WHERE disease_id LIKE :d"), {"d": f"dis_{tag}_%"}
+        ).all()
+        assert [row[0] for row in links] == ["XC30"]
+        assert tx.execute(text("SELECT count(*) FROM terminology_links WHERE link_id = :l"), {"l": near}).scalar() == 0
+
+    # A reviewer's decision survives a rerun, and nothing is stored twice.
+    with owner_db.transaction(None) as tx:
+        tx.execute(
+            text("UPDATE link_proposals SET status = 'rejected', reviewer = 'dev-reviewer:test' WHERE disease_id = :d"),
+            {"d": f"dis_{tag}_near"},
+        )
+    again = run()
+    assert check(again) == [] and (again["proposals"]["given"], again["proposals"]["inserted"]) == (1, 0)
+    assert [(row[8], row[9]) for row in stored()] == [("rejected", "dev-reviewer:test")]
+    # A decision nobody signed is reported; the name is put back so that no other test sees it.
+    try:
+        with owner_db.transaction(None) as tx:
+            tx.execute(
+                text("UPDATE link_proposals SET reviewer = NULL WHERE disease_id LIKE :d"), {"d": f"dis_{tag}_%"}
+            )
+        assert check(run()) == ["1 proposals were decided without a recorded reviewer; only a reviewer may decide one"]
+    finally:
+        with owner_db.transaction(None) as tx:
+            tx.execute(
+                text("UPDATE link_proposals SET reviewer = 'dev-reviewer:test' WHERE disease_id LIKE :d"),
+                {"d": f"dis_{tag}_%"},
             )

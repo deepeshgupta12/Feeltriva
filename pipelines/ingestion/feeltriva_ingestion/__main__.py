@@ -291,7 +291,7 @@ def main() -> int:
                 print(f"  {group}: {outcome}: {n}")
             for (group, chapter), n in sorted(summary["chapters"].items(), key=lambda kv: (kv[0][0], -kv[1])):
                 print(f"  {group}: ICD-11 chapter {chapter} {result['chapters'].get(chapter, '')}: {n}")
-            print(f"stored: {result['table']}")
+            print(f"stored: {result['table']}", *result["for_review"], sep="\n")
             print(f"review file (outside Git): {write_links_review(result)}")
             diffs = check_links(result)
             for diff in diffs[:20]:
@@ -342,6 +342,7 @@ def main() -> int:
             print(f"links inserted now: {result['inserted']}")
             for system, status, count, _incomplete, _unsigned in result["stored"]:
                 print(f"stored: {system}: {status}: {count}")
+            print(*result["for_review"], sep="\n")
             print(f"review file (outside Git): {write_ontology_review(result)}")
             diffs = check_ontology_links(result)
             for diff in diffs[:20]:
@@ -390,6 +391,7 @@ def main() -> int:
             print(f"links inserted now: {result['inserted']}")
             for system, status, count, _incomplete, _unsigned in result["stored"]:
                 print(f"stored through MONDO: {system}: {status}: {count}")
+            print(*result["for_review"], sep="\n")
             print(f"review file (outside Git): {write_identifier_review(result)}")
             diffs = check_identifiers(result)
             for diff in diffs[:20]:

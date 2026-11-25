@@ -35,6 +35,9 @@ export interface ListScreen {
   /** The label of the search field; leave out for a list that cannot be searched. */
   searchLabel?: string;
   pageSize?: number;
+  /** For a row that takes notes but no decision: the reason, in words. Otherwise null. */
+  notesOnly?: (item: ReviewItem) => string | null;
+  decisionLabels?: ReviewTarget['decisionLabels'];
 }
 
 /**
@@ -75,6 +78,8 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
         title: screen.titleOf(open),
         status: field(open, 'review_status'),
         details: screen.details(open),
+        notesOnly: screen.notesOnly?.(open) ?? null,
+        decisionLabels: screen.decisionLabels,
       }
     : null;
 
@@ -187,7 +192,11 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
                         ),
                       )}
                       <td className="px-3 py-2.5">
-                        <StateBadge status={field(item, 'review_status')} />
+                        {screen.notesOnly?.(item) ? (
+                          <StatusBadge tone="neutral">No decision needed</StatusBadge>
+                        ) : (
+                          <StateBadge status={field(item, 'review_status')} />
+                        )}
                       </td>
                     </tr>
                   );

@@ -46,6 +46,38 @@ function fakeApi(reviewer: string | null = 'tester') {
         reviewer: null,
       },
     ],
+    '/link-proposals': [
+      {
+        proposal_id: 'lp_close',
+        subject: { type: 'disease', id: 'dis_1', term: 'pretend ache' },
+        system: 'ICD-11 MMS',
+        system_version: 'test',
+        basis: 'close_search_result',
+        meaning: 'Close search result, no exact name',
+        reason: 'no ICD-11 entity carries exactly this name; this is the best result of the name search',
+        term: { code: 'ZZ10.Z', title: 'Pretend aching, unspecified', uri: 'http://example.invalid/ZZ10.Z' },
+        can_be_confirmed: true,
+        detail: { score: 0.93 },
+        review_status: 'pending',
+        reviewer: null,
+        link: null,
+      },
+      {
+        proposal_id: 'lp_none',
+        subject: { type: 'feature', id: 'feat_1', term: 'pretend glow' },
+        system: 'HPO',
+        system_version: 'test',
+        basis: 'no_term_near',
+        meaning: 'No term near our name',
+        reason: 'no term carries this name or shares half of its words',
+        term: null,
+        can_be_confirmed: false,
+        detail: {},
+        review_status: 'pending',
+        reviewer: null,
+        link: null,
+      },
+    ],
     '/claims': [
       {
         statement_id: 'st_1',
@@ -103,7 +135,7 @@ function fakeApi(reviewer: string | null = 'tester') {
     });
     for (const list of Object.values(rows)) {
       for (const row of list) {
-        if (status && (row.mapping_id === targetId || row.link_id === targetId)) {
+        if (status && [row.mapping_id, row.link_id, row.proposal_id].includes(targetId)) {
           row.review_status = status;
         }
       }
@@ -222,6 +254,43 @@ describe('the review workspace against the review service', () => {
     await user.type(within(drawer).getByLabelText('For whom or when this holds'), 'in winter');
     await user.click(within(drawer).getByRole('button', { name: 'Save applicability' }));
     expect(api.setApplicability).toHaveBeenCalledWith('cl_hat', 'in winter', 'Applicability recorded: in winter');
+  });
+
+  it('shows a suggested match in plain words, lets a reviewer confirm it, and offers no decision without a suggestion', async () => {
+    const { api, decide } = fakeApi();
+    const user = renderLive('/review/suggestions', api);
+
+    expect(await screen.findByRole('heading', { name: 'Suggested matches to check' })).toBeInTheDocument();
+    expect(screen.getByText(/Nothing on this page counts as a match until a reviewer confirms it/)).toBeInTheDocument();
+    expect(
+      await screen.findByText('The search found an entry that comes close, but none with exactly our name'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('No entry has this name or a similar one')).toBeInTheDocument();
+    expect(screen.getByText('Not possible: nothing to confirm')).toBeInTheDocument();
+    expect(screen.getByText('No decision needed')).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Review pretend ache → Pretend aching, unspecified (ICD-11 MMS)' }),
+    );
+    let drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('ZZ10.Z')).toBeInTheDocument(); // codes are for reviewers
+    expect(within(drawer).getByText('Search score 0.93 out of 1')).toBeInTheDocument();
+    expect(within(drawer).getByText('pretend ache (a condition)')).toBeInTheDocument();
+    await user.type(within(drawer).getByLabelText('Note (required)'), 'It names the same condition.');
+    await user.click(within(drawer).getByRole('button', { name: 'Confirm match' }));
+    expect(decide).toHaveBeenLastCalledWith('link_proposal', 'lp_close', 'It names the same condition.', 'approved');
+    expect(await within(drawer).findByText('Recorded: Approved, under tester.')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    // A row without a suggestion takes a note, and no decision is offered for it.
+    await user.click(await screen.findByRole('button', { name: 'Review pretend glow → no suggestion (HPO)' }));
+    drawer = await screen.findByRole('dialog');
+    expect(
+      within(drawer).getByText(/There is no suggested entry to confirm or reject for this row/),
+    ).toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'Confirm match' })).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'Reject match' })).not.toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'Save note' })).toBeInTheDocument();
   });
 
   it('asks the service for nothing when no reviewer sign-in is configured', async () => {

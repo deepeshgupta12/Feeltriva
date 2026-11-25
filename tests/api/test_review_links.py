@@ -135,6 +135,10 @@ def test_a_decision_on_a_link_is_recorded_with_the_reviewer_and_changes_nothing_
     assert decide("general", "nonsense", "x").status_code == 422
 
 
+class _UndoneError(Exception):
+    """Raised inside a transaction of a test to undo what it wrote."""
+
+
 @pytest.mark.postgres
 def test_outside_a_reviewer_transaction_the_api_role_sees_and_changes_no_link(links, db):
     one = {"l": f"tl_{links}_general"}
@@ -146,19 +150,39 @@ def test_outside_a_reviewer_transaction_the_api_role_sees_and_changes_no_link(li
         )
     with db.transaction("dev-reviewer:someone", role="reviewer") as tx:
         assert tx.execute(text("SELECT count(*) FROM terminology_links WHERE link_id = :l"), one).scalar_one() == 1
-    # Even a reviewer transaction can change only the status and the reviewer; it cannot rewrite, add or remove a link.
+    # Even a reviewer transaction can change only the status and the reviewer of a stored link; it cannot rewrite or
+    # remove one.
     for statement in (
         "UPDATE terminology_links SET code = 'X' WHERE link_id = :l",
         "UPDATE terminology_links SET title = 'X' WHERE link_id = :l",
         "DELETE FROM terminology_links WHERE link_id = :l",
-        "INSERT INTO terminology_links (link_id, disease_id, system, system_version, code, title, match_method) "
-        "SELECT :l || 'x', disease_id, system, system_version, code, title, match_method FROM terminology_links WHERE link_id = :l",
     ):
         with (
             pytest.raises(DBAPIError, match="permission denied"),
             db.transaction("dev-reviewer:someone", role="reviewer") as tx,
         ):
             tx.execute(text(statement), one)
+    # Adding a link. Since M2.4b a reviewer transaction can: it is how the link is made when a reviewer confirms a
+    # proposed term (tests/api/test_review_proposals.py). A user's transaction still cannot.
+    add = text(
+        """INSERT INTO terminology_links (link_id, disease_id, system, system_version, code, title, match_method)
+           SELECT :l || :suffix, disease_id, system, system_version, code, title, match_method
+           FROM terminology_links WHERE link_id = :l"""
+    )
+    with pytest.raises(_UndoneError), db.transaction("dev-reviewer:someone", role="reviewer") as tx:
+        assert tx.execute(add, {**one, "suffix": "_added"}).rowcount == 1
+        raise _UndoneError  # the row is not kept: other tests check the whole table
+    with db.transaction("dev:someone", role="user") as tx:
+        # A user's transaction reads no link, so there is nothing to copy; a row written out in full is refused.
+        assert tx.execute(add, {**one, "suffix": "_by_user"}).rowcount == 0
+    with pytest.raises(DBAPIError, match="row-level security"), db.transaction("dev:someone", role="user") as tx:
+        tx.execute(
+            text(
+                """INSERT INTO terminology_links (link_id, disease_id, system, system_version, code, title, match_method)
+                   VALUES (:l || '_by_user', :d, 'ICD-11 MMS', 'test', 'X', 'made by a user', 'none')"""
+            ),
+            {**one, "d": f"dis_{links}"},
+        )
 
 
 # ---- what a decision on a link entails (M2.5d2) -------------------------------------------------------------

@@ -490,3 +490,27 @@ class EvidenceChunk(Base):
     details: Mapped[Any] = mapped_column("metadata", Json, default=dict)
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
     reviewer: Mapped[str | None] = mapped_column(Text)
+
+
+class LinkProposal(Base):
+    """One of our names without a link to an outside vocabulary, with the term a reviewer could confirm for it (M2.4b).
+
+    Written by the ingestion pipeline (the look-ups of M2.11, M2.14 and M2.16). It is a proposal, not a link:
+    only the review screens read it. The API records a reviewer's decision on a row and, on confirmation, makes
+    the link `link_id`, both only inside a reviewer transaction. Codes are internal (decision E63)."""
+
+    __tablename__ = "link_proposals"
+    proposal_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    disease_id: Mapped[str | None] = mapped_column(Text)
+    feature_id: Mapped[str | None] = mapped_column(Text)
+    system: Mapped[str] = mapped_column(Text)
+    system_version: Mapped[str] = mapped_column(Text)
+    basis: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text)
+    code: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(Text)
+    uri: Mapped[str | None] = mapped_column(Text)
+    link_id: Mapped[str | None] = mapped_column(Text)
+    detail: Mapped[Any] = mapped_column(Json, default=dict)
+    status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    reviewer: Mapped[str | None] = mapped_column(Text)

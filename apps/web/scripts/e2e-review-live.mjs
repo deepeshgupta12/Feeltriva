@@ -222,6 +222,63 @@ try {
     JSON.stringify(evidence.items),
   );
 
+  // ---- 4. Suggested matches: confirm one close search result and reject another (M2.4b) -------------
+  await page.goto(`${BASE}/review/suggestions`);
+  await page.getByRole('heading', { name: 'Suggested matches to check' }).waitFor();
+  await search(TAG);
+  const chill = new RegExp(`Review pretend chill ${TAG} → Pretend chilling ${TAG}`);
+  await page.getByRole('button', { name: chill }).waitFor();
+  const before = await service(`/terminology-links?q=YY${TAG}`);
+  check('a close search result is not a link before a reviewer confirms it', before.total === 0, String(before.total));
+  await page.getByRole('button', { name: chill }).click();
+  await drawer().waitFor();
+  check(
+    'the suggestion shows why it was not matched automatically, in plain words, and how close it is',
+    (await drawer()
+      .getByText('The search found an entry that comes close, but none with exactly our name')
+      .isVisible()) && (await drawer().getByText('Search score 0.96 out of 1').isVisible()),
+  );
+  await record('The entry names the same condition.', 'Confirm match');
+  await drawer().getByText('Recorded: Approved, under e2e.').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: new RegExp(`Review pretend shiver ${TAG} → Pretend shaking ${TAG}`) }).click();
+  await drawer().waitFor();
+  await record('Shaking is not the same as shivering here.', 'Reject match');
+  await drawer().getByText('Recorded: Rejected, under e2e.').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByText('Yes, confirmed').waitFor();
+  await shot('4-suggested-matches');
+  const made = await service(`/terminology-links?q=YY${TAG}`);
+  check(
+    'confirming made exactly one link, approved under the reviewer; rejecting made none',
+    made.total === 1 &&
+      made.items[0].code === `YY${TAG}.1` &&
+      made.items[0].review_status === 'approved' &&
+      made.items[0].reviewer === REVIEWER &&
+      made.items[0].match_method === 'reviewer_confirmed',
+    JSON.stringify(made.items),
+  );
+  const decided = await service(`/link-proposals?q=${TAG}&basis=close_search_result`);
+  const outcome = Object.fromEntries(
+    decided.items.map((item) => [item.proposal_id.split('_').pop(), [item.review_status, item.reviewer]]),
+  );
+  check(
+    'the service holds one suggestion confirmed and one rejected, both under the reviewer',
+    JSON.stringify(outcome) === JSON.stringify({ near: ['approved', REVIEWER], far: ['rejected', REVIEWER] }),
+    JSON.stringify(outcome),
+  );
+  // A name without a suggestion: a note can be written, no decision is offered.
+  await page.getByRole('button', { name: new RegExp(`Review hat ${TAG} → no suggestion`) }).click();
+  await drawer().waitFor();
+  check(
+    'a row without a suggestion offers a note and no decision',
+    (await drawer()
+      .getByText(/There is no suggested entry to confirm or reject/)
+      .isVisible()) &&
+      (await drawer().getByRole('button', { name: 'Confirm match' }).count()) === 0 &&
+      (await drawer().getByRole('button', { name: 'Save note' }).isVisible()),
+  );
+
   check(
     'every request to the service carried the reviewer token and no other',
     tokens.size === 1 && tokens.has(`Bearer ${REVIEWER}`),

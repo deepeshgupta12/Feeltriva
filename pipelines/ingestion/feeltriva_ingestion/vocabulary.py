@@ -43,6 +43,7 @@ from feeltriva_api.settings import Settings
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import create_engine
 
+from . import proposals
 from .archives import RAW_DIR, ROOT, ArchiveError, sha256_file
 from .cases import _raw_cursor
 from .meanings import is_question
@@ -231,6 +232,8 @@ def best_result(reply: dict[str, Any]) -> dict[str, Any] | None:
         "title": top.get("title", ""),
         "score": round(float(top.get("score") or 0), 3),
         "chapter": str(top.get("chapter", "")),
+        "uri": str(top.get("id", "")),
+        "residual": bool(top.get("isResidualUnspecified") or top.get("isResidualOther")),
     }
 
 
@@ -346,6 +349,13 @@ def link_vocabularies(
             items.append(item)
         with _raw_cursor(engine) as cur:
             stored = store_links(cur, items)
+            # The close results go before a reviewer as proposals; none of them is a link (decision E56).
+            proposed = proposals.store(
+                cur,
+                close_results(items, release, chapters),
+                bases=(proposals.CLOSE_RESULT,),
+                complete=source_ids is None,
+            )
             cur.execute(
                 """SELECT count(*), count(*) FILTER (WHERE status <> 'pending' AND reviewer IS NULL),
                           count(*) FILTER (WHERE system = ANY(%s) AND (uri IS NULL OR title = ''))
@@ -364,6 +374,8 @@ def link_vocabularies(
         "inserted": dict(stored),
         "api_calls": client.calls,
         "table": {"links": total, "decided_without_reviewer": unsigned, "without_title_or_uri": incomplete},
+        "proposals": proposed,
+        "for_review": proposals.lines(proposed),
     }
 
 
@@ -409,7 +421,10 @@ def check(result: dict[str, Any]) -> list[str]:
                 and not link["method"].startswith("exact_")
             ):
                 diffs.append(f"{item['name']}: a link that is not a name match")
-    return diffs
+        best = item["best"]
+        if best and best["score"] >= CLOSE_SCORE and not best["uri"]:
+            diffs.append(f"{item['name']}: the best search result has no address, so it cannot go before a reviewer")
+    return diffs + proposals.check(result["proposals"])
 
 
 def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
@@ -516,3 +531,38 @@ def store_links(cur: Any, items: list[dict[str, Any]]) -> Counter[str]:
             )
             stored[link["system"]] += cur.rowcount
     return stored
+
+
+# -- the close results, for a reviewer (M2.4b) --------------------------------------------------------
+CLOSE_SCORE = 0.9  # from this score the best search result of a name is put before a reviewer (M2.11)
+
+
+def close_results(items: list[dict[str, Any]], release: str, chapters: dict[str, str]) -> list[dict[str, Any]]:
+    """One proposal for each name that no ICD-11 entity carries exactly and whose best search result is close.
+
+    A result without an address is left out here and reported by `check`: code, title and address belong
+    together wherever ICD-11 is stored."""
+    rows = []
+    for item in items:
+        best = item["best"]
+        if not item["sent"] or best is None or best["score"] < CLOSE_SCORE or not best["uri"]:
+            continue
+        if any(link["system"] == ICD for link in item["links"]):
+            continue  # an entity carries the name exactly: that is the link
+        rows.append(
+            proposals.row(
+                item,
+                ICD,
+                release,
+                proposals.CLOSE_RESULT,
+                "no ICD-11 entity carries exactly this name; this is the best result of the name search",
+                {"code": best["code"], "title": best["title"], "uri": best["uri"]},
+                link_id(item["id"], ICD, release, best["code"]),
+                query=item["sent"],
+                score=best["score"],
+                chapter=best["chapter"],
+                chapter_title=chapters.get(best["chapter"], ""),
+                residual=best["residual"],
+            )
+        )
+    return rows

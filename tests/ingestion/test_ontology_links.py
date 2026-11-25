@@ -27,6 +27,7 @@ from feeltriva_ingestion.ontologies import (
 )
 from feeltriva_ingestion.ontology_links import REVIEW_FILE, check, link_ontologies, summarise, write_review
 from feeltriva_ingestion.release import load_supplementary
+from feeltriva_ingestion.vocabulary import link_id
 from sqlalchemy import text
 
 from tests.ontology_fixtures import entry, write_hpo, write_mondo
@@ -111,6 +112,32 @@ def test_exact_names_become_pending_links_and_every_name_gets_a_recorded_outcome
     assert [(v.system, v.version) for v in result["vocabularies"]] == [(HPO, "2026-01-01"), (MONDO, "2026-01-01")]
     assert result["inserted"] == {HPO: 2, MONDO: 1}
     by = {item["name"]: item for item in result["items"]}
+    # M2.4b: each name without a link is stored for a reviewer with its reason and its near terms; none is a link.
+    review = _for_review(owner_db, tag)
+    without_link = {
+        (item["id"], system)
+        for item in result["items"]
+        for system, outcome in item["outcomes"].items()
+        if outcome.outcome != LINKED
+    }
+    assert {(row.subject, row.system) for row in review} == without_link
+    assert len(without_link) == result["names_for_review"] == 9 and all(row.reason for row in review)
+    abbreviation = [row for row in review if row.subject == f"dis_{tag}_1" and row.system == MONDO]
+    assert [(row.basis, row.code, row.status, row.reviewer) for row in abbreviation] == [
+        ("abbreviation_only", "MONDO:9000001", "pending", None)
+    ]
+    assert abbreviation[0].link_id == link_id(f"dis_{tag}_1", MONDO, "2026-01-01", "MONDO:9000001")
+    assert abbreviation[0].title and abbreviation[0].uri and abbreviation[0].looked_up == f"sfd {tag}"
+    assert [(row.basis, row.code, row.link_id) for row in review if row.subject == f"dis_{tag}_3"] == [
+        ("no_term_near", None, None)
+    ] * 2
+    assert {row.basis for row in review if row.subject == f"feat_{tag}_q"} == {"question_sentence_not_looked_up"}
+    with owner_db.transaction(None) as tx:
+        made = tx.execute(
+            text("SELECT count(*) FROM terminology_links WHERE link_id = ANY(:l)"),
+            {"l": [row.link_id for row in review if row.link_id]},
+        ).scalar()
+    assert made == 0
     assert len(by) == 6 and all(set(item["outcomes"]) == {HPO, MONDO} for item in by.values())
     assert [(link["system"], link["code"], link["method"]) for link in by[fever]["links"]] == [
         (MONDO, "MONDO:9000001", "exact_label")
@@ -216,6 +243,10 @@ def test_exact_names_become_pending_links_and_every_name_gets_a_recorded_outcome
         )
     again = run()
     assert again["inserted"] == {HPO: 0, MONDO: 0} and check(again) == []
+    assert (again["proposals"]["inserted"], again["proposals"]["given"]) == (
+        0,
+        len(review),
+    )  # nor are these stored twice
     with owner_db.transaction(None) as tx:
         kept = tx.execute(
             text(
@@ -407,3 +438,16 @@ def test_the_confirmed_readings_lead_to_the_terms_the_owner_meant_on_the_real_fi
         lookup_as_read(v, name, reading).link is not None for v in (hpo, mondo) for name, reading in readings.items()
     )
     assert linked == 25
+
+
+def _for_review(owner_db, tag):
+    """The rows stored for a reviewer for the invented names of one test (M2.4b)."""
+    with owner_db.transaction(None) as tx:
+        return tx.execute(
+            text(
+                """SELECT coalesce(disease_id, feature_id) AS subject, system, basis, code, title, uri, link_id,
+                          status::text AS status, reviewer, reason, detail ->> 'looked_up' AS looked_up
+                   FROM link_proposals WHERE disease_id LIKE :d OR feature_id LIKE :f ORDER BY 1, 2, 4"""
+            ),
+            {"d": f"dis_{tag}_%", "f": f"feat_{tag}_%"},
+        ).all()

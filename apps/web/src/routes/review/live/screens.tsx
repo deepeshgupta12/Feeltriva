@@ -190,3 +190,151 @@ export const LiveFeatureMappingsPage = () => <LiveListPage screen={featureMappin
 export const LiveDataQualityPage = () => <LiveListPage screen={featureMappings(true)} />;
 export const LiveVocabularyLinksPage = () => <LiveListPage screen={VOCABULARY_LINKS} />;
 export const LiveRulesPage = () => <LiveListPage screen={RULES} />;
+
+// ---- Names that were not matched automatically, and the entries suggested for them (M2.4b) ----------------
+
+/** Why a row is on the page, in plain words, by the kind the service gives. */
+const WHY_NOT_MATCHED: Record<string, string> = {
+  abbreviation_only: 'Our name is only an abbreviation of this entry, and an abbreviation can stand for several things',
+  several_terms_carry_the_name: 'Several entries have this name, so one has to be chosen',
+  several_identifiers_marked_equivalent:
+    'The reference list gives several codes for this condition, so one has to be chosen',
+  close_search_result: 'The search found an entry that comes close, but none with exactly our name',
+  looser_synonym: 'Our name is listed for this entry only as a broader, narrower or related name',
+  nearest_by_shared_words: 'No entry has our name; this one shares the most words with it',
+  plain_word_not_the_abbreviation:
+    'Our name is an ordinary word, not the abbreviation it looks like; this entry shares the most words with it',
+  term_not_linkable: 'The only entry with our name is out of use or of another kind, so it cannot be used',
+  no_term_near: 'No entry has this name or a similar one',
+  question_sentence_not_looked_up: 'This is a whole question, not a name, so it was not looked up',
+};
+
+const NO_SUGGESTION =
+  'There is no suggested entry to confirm or reject for this row. It is listed so that you can see why the name has no match. You can still write a note.';
+
+const whyNotMatched = (item: ReviewItem): string => WHY_NOT_MATCHED[field(item, 'basis')] ?? field(item, 'meaning');
+
+function matchMade(item: ReviewItem): string {
+  const made = field(part(item, 'link'), 'review_status');
+  if (!item.can_be_confirmed) {
+    return 'Not possible: nothing to confirm';
+  }
+  if (made === 'approved') {
+    return 'Yes, confirmed';
+  }
+  if (made === 'rejected' || (!made && field(item, 'review_status') === 'rejected')) {
+    return 'No, rejected';
+  }
+  return made === 'pending' ? 'Also found another way; waiting for a decision' : 'Not yet';
+}
+
+function howClose(item: ReviewItem): string {
+  const detail = part(item, 'detail');
+  const parts = [
+    detail.score !== undefined ? `Search score ${field(detail, 'score')} out of 1` : '',
+    field(detail, 'note'),
+    field(detail, 'matched_text') ? `Compared with the name "${field(detail, 'matched_text')}"` : '',
+    field(detail, 'read_as') ? `Our name was read as "${field(detail, 'read_as')}"` : '',
+  ].filter((text) => text.length > 0);
+  return parts.length > 0 ? parts.join(' · ') : 'Not recorded';
+}
+
+const LINK_PROPOSALS: ListScreen = {
+  title: 'Suggested matches to check',
+  intro: (
+    <>
+      <p>
+        Each of our names for a condition or a symptom is looked up in standard medical reference lists (ICD-11, HPO,
+        MONDO, SNOMED CT). A name is matched automatically only when a list has an entry with exactly the same name.
+        This page shows the names that were not matched, and why.
+      </p>
+      <p>
+        Where the look-up found an entry that comes close, confirm it if it means the same as our name, or reject it if
+        it does not. Nothing on this page counts as a match until a reviewer confirms it. Rows without a suggestion are
+        here so that you can see why a name has no match.
+      </p>
+    </>
+  ),
+  path: '/link-proposals',
+  targetType: 'link_proposal',
+  idField: 'proposal_id',
+  caption: 'Names without a match and the entries suggested for them',
+  searchLabel: 'Search our names, suggested entries or codes',
+  filters: [
+    {
+      param: 'decidable',
+      label: 'What you can do',
+      options: [
+        { value: 'true', label: 'Confirm or reject a suggestion' },
+        { value: 'false', label: 'Read only: no suggestion' },
+      ],
+    },
+    {
+      param: 'system',
+      label: 'Reference list',
+      options: ['ICD-11 MMS', 'ICD-11 Foundation', 'MONDO', 'HPO', 'SNOMED CT'].map((value) => ({
+        value,
+        label: value,
+      })),
+    },
+    {
+      param: 'basis',
+      label: 'Why it is here',
+      options: [
+        { value: 'close_search_result', label: 'Close search result' },
+        { value: 'several_identifiers_marked_equivalent', label: 'Several codes to choose from' },
+        { value: 'several_terms_carry_the_name', label: 'Several entries with this name' },
+        { value: 'abbreviation_only', label: 'Abbreviation only' },
+        { value: 'looser_synonym', label: 'Broader, narrower or related name' },
+        { value: 'nearest_by_shared_words', label: 'Nearest entry by shared words' },
+        { value: 'plain_word_not_the_abbreviation', label: 'Ordinary word, not an abbreviation' },
+        { value: 'term_not_linkable', label: 'Entry cannot be used' },
+        { value: 'no_term_near', label: 'No similar entry' },
+        { value: 'question_sentence_not_looked_up', label: 'A question, not looked up' },
+      ],
+    },
+    {
+      param: 'subject_type',
+      label: 'Kind of name',
+      options: [
+        { value: 'disease', label: 'Conditions' },
+        { value: 'feature', label: 'Symptoms and other items' },
+      ],
+    },
+  ],
+  titleOf: (item) =>
+    `${field(part(item, 'subject'), 'term')} → ${field(part(item, 'term'), 'title') || 'no suggestion'} (${field(item, 'system')})`,
+  columns: [
+    { heading: 'Our name', cell: (item) => field(part(item, 'subject'), 'term') },
+    { heading: 'Reference list', cell: (item) => field(item, 'system') },
+    { heading: 'Suggested entry', cell: (item) => field(part(item, 'term'), 'title') || 'No suggestion' },
+    { heading: 'Why it was not matched automatically', cell: whyNotMatched },
+    { heading: 'Match made', cell: matchMade },
+  ],
+  details: (item) => {
+    const via = part(part(item, 'detail'), 'via');
+    const term = part(item, 'term');
+    return [
+      {
+        label: 'Our name',
+        value: `${field(part(item, 'subject'), 'term')} (${field(part(item, 'subject'), 'type') === 'disease' ? 'a condition' : 'a symptom or other item'})`,
+      },
+      { label: 'Reference list and its edition', value: `${field(item, 'system')} · ${field(item, 'system_version')}` },
+      { label: 'Suggested entry', value: field(term, 'title') || 'No suggestion' },
+      { label: 'Code of the entry (for reviewers only)', value: term.code ? code(field(term, 'code')) : 'None' },
+      { label: 'Why it was not matched automatically', value: whyNotMatched(item) },
+      { label: 'What the look-up recorded', value: field(item, 'reason') },
+      { label: 'How close it is', value: howClose(item) },
+      {
+        label: 'Found by way of',
+        value: via.title ? `The MONDO entry "${field(via, 'title')}", which our name is matched to` : 'Our name itself',
+      },
+      { label: 'Match made', value: matchMade(item) },
+      { label: 'Decided by', value: field(item, 'reviewer') || 'Nobody yet' },
+    ];
+  },
+  notesOnly: (item) => (item.can_be_confirmed ? null : NO_SUGGESTION),
+  decisionLabels: { approved: 'Confirm match', rejected: 'Reject match' },
+};
+
+export const LiveLinkProposalsPage = () => <LiveListPage screen={LINK_PROPOSALS} />;

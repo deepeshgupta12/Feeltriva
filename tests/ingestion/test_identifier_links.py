@@ -20,6 +20,7 @@ from feeltriva_ingestion.identifier_links import (
     SAME_CATEGORY,
     check,
     import_identifiers,
+    several_identifiers,
     summarise,
     write_review,
 )
@@ -33,6 +34,7 @@ from feeltriva_ingestion.mondo_identifiers import (
     SEVERAL,
     SNOMED,
     UNKNOWN_TO_WHO,
+    Identifier,
     read_identifiers,
 )
 from feeltriva_ingestion.release import load_supplementary
@@ -156,6 +158,36 @@ def test_identifiers_mondo_marks_equivalent_become_pending_links_one_row_per_lab
     assert counts["groups"] == {"disease labels": 7}
     assert counts["agreement"] == {SAME: 1, DIFFERENT: 1, SAME_CATEGORY: 1}
     assert counts["rows"][("disease labels", SNOMED, "several identifiers marked equivalent")] == 1
+    # M2.4b: "cut" has two SNOMED CT identifiers marked equivalent. Each goes before a reviewer; neither is a link.
+    with owner_db.transaction(None) as tx:
+        review = tx.execute(
+            text(
+                """SELECT system, system_version, basis, code, title, uri, link_id, status::text,
+                          detail -> 'via' ->> 'code', detail ->> 'marks', reason
+                   FROM link_proposals WHERE disease_id LIKE :d ORDER BY code"""
+            ),
+            {"d": f"dis_{tag}_%"},
+        ).all()
+        links_of_cut = tx.execute(
+            text("SELECT count(*) FROM terminology_links WHERE disease_id = :d AND system <> 'MONDO'"),
+            {"d": ids["cut"]},
+        ).scalar()
+    as_listed = "as listed in MONDO 2026-01-01"
+    assert [tuple(row[:6]) for row in review] == [
+        (
+            SNOMED,
+            as_listed,
+            "several_identifiers_marked_equivalent",
+            n,
+            "mondo name of cut",
+            f"http://snomed.info/id/{n}",
+        )
+        for n in ("113", "114")
+    ]
+    assert [row[6] for row in review] == [link_id(ids["cut"], SNOMED, as_listed, n) for n in ("113", "114")]
+    assert {(row[7], row[8], row[9]) for row in review} == {("pending", "MONDO:9000003", '["MONDO:equivalentTo"]')}
+    assert "MONDO marks 2 SNOMED CT identifiers as equivalent" in review[0][10] and links_of_cut == 0
+    assert (result["proposals"]["given"], result["proposals"]["inserted"]) == (2, 2)
 
     with owner_db.transaction(None) as tx:
         found = tx.execute(
@@ -362,3 +394,52 @@ def test_the_identifiers_in_the_registered_mondo_file_are_all_counted():
     heart_attack = {found.vocabulary: found for found in identifiers["MONDO:0005068"]}
     assert (heart_attack[SNOMED].number, heart_attack[SNOMED].equivalent) == ("22298006", True)
     assert counted[SNOMED]["marked_equivalent"] > 8000 and counted[ICD_FOUNDATION]["marked_equivalent"] > 4000
+
+
+def test_several_icd_identifiers_are_each_proposed_in_the_form_a_single_one_is_kept_in():
+    """M2.4b. No database: the rows are built from what the import found."""
+    equivalent = ("MONDO:equivalentTo",)
+    listed = (
+        *(Identifier(ICD_FOUNDATION, n, equivalent) for n in ("1", "2", "3")),
+        Identifier(ICD_FOUNDATION, "4", ()),
+    )
+    entity = "http://id.who.int/icd/entity/"
+    broader = {"code": "AA", "title": "Broader", "uri": "mms/aa", "same_entity": False}
+    item = {
+        "type": "disease",
+        "id": "dis_x",
+        "name": "x",
+        "mondo": {"code": "MONDO:1", "title": "X", "release": "r", "our_match": "exact_label", "link_id": "tl_m"},
+        "outcomes": {
+            SNOMED: {"outcome": NONE_LISTED, "identifiers": ()},
+            ICD11: {
+                "outcome": SEVERAL,
+                "identifiers": listed,
+                "who_of_each": {
+                    "1": {
+                        "title": "One",
+                        "uri": entity + "1",
+                        "mms": {"code": "AA1", "title": "One", "uri": "mms/1", "same_entity": True},
+                    },
+                    "2": {"title": "Two", "uri": entity + "2", "mms": broader},
+                    "3": None,  # WHO has no such entity
+                },
+            },
+        },
+    }
+    rows = several_identifiers([item], "2026-01-01", "2026-01")
+    assert [(row["system"], row["code"], row["title"], row["uri"]) for row in rows] == [
+        (ICD, "AA1", "One", "mms/1"),  # WHO codes the entity as itself: kept as its MMS code
+        (ICD_FOUNDATION, "2", "Two", entity + "2"),  # coded under a broader one: kept as the entity itself
+        (ICD_FOUNDATION, None, None, None),
+    ]
+    assert [row["link_id"] for row in rows] == [
+        link_id("dis_x", ICD, "2026-01", "AA1"),
+        link_id("dis_x", ICD_FOUNDATION, "2026-01", "2"),
+        None,
+    ]
+    assert rows[0]["detail"]["foundation_uri"] == entity + "1" and rows[1]["detail"]["coded_in_mms_under"] == broader
+    assert all(row["detail"]["via"]["link_id"] == "tl_m" and row["basis"].startswith("several") for row in rows)
+    assert all("MONDO marks 3 ICD-11 identifiers as equivalent" in row["reason"] for row in rows)
+    assert "WHO has no entity with the identifier 3" in rows[2]["reason"] and rows[2]["detail"]["identifier"] == "3"
+    assert len({row["proposal_id"] for row in rows}) == 3

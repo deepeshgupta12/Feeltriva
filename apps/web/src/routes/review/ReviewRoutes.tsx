@@ -9,6 +9,7 @@ import {
   LiveDataQualityPage,
   LiveDiseaseMappingsPage,
   LiveFeatureMappingsPage,
+  LiveLinkProposalsPage,
   LiveRulesPage,
   LiveVocabularyLinksPage,
 } from './live/screens';
@@ -39,6 +40,7 @@ export default function ReviewRoutes() {
           <Route path="features" element={<LiveFeatureMappingsPage />} />
           <Route path="data" element={<LiveDataQualityPage />} />
           <Route path="links" element={<LiveVocabularyLinksPage />} />
+          <Route path="suggestions" element={<LiveLinkProposalsPage />} />
           <Route path="evidence" element={<LiveClaimsPage />} />
           <Route path="rules" element={<LiveRulesPage />} />
           <Route path="releases" element={<LiveReleasesPage />} />

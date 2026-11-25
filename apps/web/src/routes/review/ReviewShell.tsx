@@ -28,6 +28,7 @@ const LIVE_SECTIONS = [
   { to: '/review/features', label: 'Feature mappings', end: false },
   { to: '/review/data', label: 'Data quality', end: false },
   { to: '/review/links', label: 'Vocabulary links', end: false },
+  { to: '/review/suggestions', label: 'Suggested matches', end: false },
   { to: '/review/evidence', label: 'Statements and claims', end: false },
   { to: '/review/rules', label: 'Urgency rules', end: false },
   { to: '/review/releases', label: 'Releases', end: false },

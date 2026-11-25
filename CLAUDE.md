@@ -25,7 +25,9 @@ Codes and identifiers of outside vocabularies (ICD-11, LOINC, HPO, MONDO, SNOMED
 internal database only. They are never shown to a user: not in the web app, not in an API or MCP response, not in
 generated text. (Owner's instruction, 2026-11-18; decision E63.) The API's database role can read
 `terminology_links` and set a decision on a row only inside a reviewer transaction (row-level security, migration 0008);
-a user-facing request sees no row of it. Keep it so, and do not add a code field to a user-facing contract or route.
+since M2.4b it can also add a row there, again only inside a reviewer transaction: the link a reviewer makes by confirming
+a proposed term of `link_proposals` (migration 0019, decision E95). A user-facing request sees no row of either table.
+Keep it so, and do not add a code field to a user-facing contract or route.
 
 For each milestone: implement, run meaningful tests, document changes/limits and
 update the handoff checklist. Verify API/SDK syntax against official installed-version
@@ -138,9 +140,9 @@ uv run python -m feeltriva_ingestion load-release              # trace archive 1
 uv run python -m feeltriva_ingestion derive-meanings           # proposed feature kinds and zero meanings (pending)
 uv run python -m feeltriva_ingestion load-answers              # archive-15 answers that are not yes/no, from the release (run load-release first; first run about 80 min)
 uv run python -m feeltriva_ingestion load-conditions           # what the release lists per condition, as pending source-provided evidence and links
-uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-11 and LOINC codes (needs the ICD key in .env)
-uv run python -m feeltriva_ingestion link-ontologies           # candidate HPO and MONDO terms from hp.json and mondo.owl in data/raw (offline)
-uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent (needs the ICD key)
+uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-11 and LOINC codes; close results stored for review (needs the ICD key in .env)
+uv run python -m feeltriva_ingestion link-ontologies           # candidate HPO and MONDO terms from hp.json and mondo.owl in data/raw (offline); names without a link stored for review
+uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent; several for one label stored for review (needs the ICD key)
 uv run python -m feeltriva_ingestion suggest-relations         # possible synonyms and subtypes for review (nothing merged)
 uv run python -m feeltriva_ingestion extract-claims            # statements split into single claims with spans (pending); --remake after a change of the rules
 uv run python -m feeltriva_api.rule_drafts                     # the draft urgency rules, checked against the feature vocabulary and stored pending

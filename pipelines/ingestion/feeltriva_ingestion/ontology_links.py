@@ -29,14 +29,22 @@ from typing import Any
 from feeltriva_api.settings import Settings
 from sqlalchemy import create_engine
 
+from . import proposals
 from .archives import RAW_DIR
 from .cases import _raw_cursor
 from .ontologies import (
+    ABBREVIATION_ONLY,
     EXACT,
     KINDS,
     LABEL,
     LINKED,
+    LOOSER_ONLY,
+    NEAREST,
+    NOT_LINKABLE,
+    NOTHING,
+    PLAIN_WORD,
     SENTENCE,
+    SEVERAL,
     Candidate,
     Outcome,
     Vocabulary,
@@ -46,7 +54,7 @@ from .ontologies import (
     read_vocabulary,
 )
 from .release import load_supplementary
-from .vocabulary import REVIEW_DIR, plain, query_for, read_subjects, store_links
+from .vocabulary import REVIEW_DIR, link_id, plain, query_for, read_subjects, store_links
 
 REVIEW_FILE = "ontology_links.csv"
 _SENTENCE = Outcome(SENTENCE, "a question sentence is not a name; it is not looked up")
@@ -137,6 +145,9 @@ def link_ontologies(
             items.append(item)
         with _raw_cursor(engine) as cur:
             inserted = store_links(cur, items)
+            # Every name without a link goes before a reviewer with its reason and its near terms (M2.4b).
+            unlinked = unlinked_names(items, vocabularies)
+            proposed = proposals.store(cur, unlinked, bases=tuple(_BASIS.values()), complete=source_ids is None)
             cur.execute(
                 """SELECT system, status::text, count(*), count(*) FILTER (WHERE uri IS NULL OR uri = '' OR title = ''),
                           count(*) FILTER (WHERE status <> 'pending' AND reviewer IS NULL)
@@ -175,6 +186,10 @@ def link_ontologies(
             "label_linked_in_another_vocabulary": int(elsewhere),
             "label_linked_anywhere": int(either),
         },
+        "proposals": proposed,
+        "for_review": proposals.lines(proposed),
+        # Each name without a link in a vocabulary must have at least one row there: counted both ways.
+        "names_for_review": len({(row["disease_id"] or row["feature_id"], row["system"]) for row in unlinked}),
     }
 
 
@@ -247,7 +262,15 @@ def check(result: dict[str, Any]) -> list[str]:
             diffs.append(f"{incomplete} stored {system} links ({status}) lack a title or an address")
         if unsigned:  # a decided link is expected once review has begun; a decision without a reviewer's name is not
             diffs.append(f"{unsigned} stored {system} links are {status} without a recorded reviewer")
-    return diffs
+    without_link = sum(
+        1 for item in result["items"] for outcome in item["outcomes"].values() if outcome.outcome != LINKED
+    )
+    if without_link != result["names_for_review"]:
+        diffs.append(
+            f"{without_link} names have no link in a vocabulary, but {result['names_for_review']} of them were "
+            "given a row for review"
+        )
+    return diffs + proposals.check(result["proposals"])
 
 
 def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
@@ -323,3 +346,56 @@ def write_review(result: dict[str, Any], out_dir: Path = REVIEW_DIR) -> Path:
                     ]
                 )
     return path
+
+
+# -- the names without a link, for a reviewer (M2.4b) -------------------------------------------------
+# Every outcome that is not a link, and the kind of proposal it becomes. An outcome that is not listed here
+# stops the command: no name may be left without a row.
+_BASIS = {
+    ABBREVIATION_ONLY: proposals.ABBREVIATION,
+    SEVERAL: proposals.SEVERAL_TERMS,
+    LOOSER_ONLY: proposals.LOOSER,
+    NEAREST: proposals.NEAREST,
+    NOT_LINKABLE: proposals.NOT_LINKABLE,
+    PLAIN_WORD: proposals.PLAIN_WORD,
+    NOTHING: proposals.NO_TERM,
+    SENTENCE: proposals.SENTENCE,
+}
+
+
+def unlinked_names(items: list[dict[str, Any]], vocabularies: list[Vocabulary]) -> list[dict[str, Any]]:
+    """For each name and vocabulary without a link: one proposal per term the look-up found near it, or one
+    row without a term that records the reason."""
+    rows = []
+    for item in items:
+        for vocabulary in vocabularies:
+            outcome = item["outcomes"][vocabulary.system]
+            if outcome.outcome == LINKED:
+                continue
+            basis = _BASIS[outcome.outcome]
+            common = {"looked_up": item["looked_up"], "read_as": item["read_as"]}
+            if not outcome.candidates:
+                rows.append(
+                    proposals.row(
+                        item, vocabulary.system, vocabulary.version, basis, outcome.reason, None, None, **common
+                    )
+                )
+            for found in outcome.candidates:
+                rows.append(
+                    proposals.row(
+                        item,
+                        vocabulary.system,
+                        vocabulary.version,
+                        basis,
+                        outcome.reason,
+                        {"code": found.code, "title": found.title, "uri": found.uri},
+                        link_id(item["id"], vocabulary.system, vocabulary.version, found.code),
+                        matched_text=found.matched,
+                        how=found.how,
+                        synonym_type=found.kind,
+                        branch=found.branch,
+                        note=found.note,
+                        **common,
+                    )
+                )
+    return rows
