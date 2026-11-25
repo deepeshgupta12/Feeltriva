@@ -5564,3 +5564,54 @@ special here, the merge and the split. The plan row says so.
 - The facts have no search by words; the service filters them by where they come from.
 - The four follow-up questions and one of the two sets of rules are the invented samples of the
   tests; the pages say so.
+
+### M2.9a — The condition page reads the service
+
+**What it is for.** The web page of a condition showed sample fixtures in every mode, although
+the service has answered from reviewed content since M2.2. Found without a sub-step on
+2026-11-25; the owner: "Implement the above now".
+
+**Impact analysis before editing** (LOW). `createAppServices`: 3 direct users (the app's providers
+and tests). `ConditionPage` is not changed: it already shows "No reviewed information is
+available" when it is given nothing.
+
+**Implemented.**
+
+- `conditionInfoService.ts`: `HttpConditionInfoService` asks `GET /v1/conditions/{disease_id}`
+  with the visit's bearer token and no cookies. `toConditionInfo` lays the answer out as the page
+  shows it: the definition and the descriptions as the overview, then symptoms, causes, and
+  treatment, management and prevention together; one source line per text and record. A section
+  without a published text is left out; a kind of text the page has no section for is not shown
+  under another heading. "Not available" (404) gives nothing; any other failure is an error the
+  page reports with a retry.
+- `services.ts`: live mode uses it; the design demo keeps the labelled placeholders. One token
+  provider now serves the assessment and the condition page of a visit.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 75 files |
+| `uv run pytest` (SQLite, archives included) | 285 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 363 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 143 passed (10 files; before: 140, 9); built |
+| `pnpm e2e:lists`, read-only on the real data | 13 passed, 0 failed: the page of a real condition asks the service, gets "not available", and shows that nothing reviewed is available, not the sample content |
+| `pnpm e2e:live` (the patient flow through the service) | 43 passed, 0 failed on the second run; see below |
+| `detect_changes` before commit | 6 files and one new; risk medium; `createAppServices` with the five flows of the app's start, as intended. `ConditionInfo` is listed because it stands below the changed comment |
+
+New tests: `conditionInfoService.test.ts` (3: the layout by section with nothing added and no
+code of an outside vocabulary; the request with the token and without cookies; nothing on "not
+available" and an error on any other failure).
+
+**A timing weakness in an older test, not caused by this change.** `pnpm e2e:live` failed once in
+"after a reload the API refuses the session to the new identity": the test waits a fixed 2.5
+seconds after the reload and then looks at the requests seen so far; the machine was busy. The
+next run passed all 43. The test should wait for the answer and not for a time; not changed here.
+
+**Limits, stated plainly.**
+
+- Nothing is published, so on the real data the page can only say that nothing is available.
+  What a published condition looks like is covered by the unit test, not seen on real data.
+- The answer of the service does not name the published version it came from; the page does not
+  show one.
+- The route is not in `specs/openapi.json`; its answer is typed by hand in the web app (M3.12).

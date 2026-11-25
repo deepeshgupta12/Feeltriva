@@ -281,7 +281,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | 8 | Ten urgent/incomplete/unsupported states | Done | | M3.6 |
 | 9 | Print-friendly summary, review acknowledgement, no auto-share | Done | | M3.6 |
 | 10 | History and privacy screens; nothing sensitive in browser storage | Partial | History is in-memory only | M3.10 |
-| 11 | Condition information page from reviewed content | Partial | The service answers from the reviewed serving views (`GET /v1/conditions/{disease_id}`, M2.2 and M2.9). The web page still shows sample fixtures in every mode: it has no reader for that route. This had no sub-step (it was assigned to M2.4, none of whose parts carries it); added as M2.9a | M2.9a |
+| 11 | Condition information page from reviewed content | Partial | The service answers from the reviewed serving views (`GET /v1/conditions/{disease_id}`, M2.2 and M2.9). In live mode the web page reads that route (M2.9a) and shows only what is published; today that is nothing, so it says that no reviewed information is available. The design demo shows labelled placeholders | M2.9a |
 | 12 | Reviewer console with real audit facts | Partial | In live mode the workspace shows the stored data and records notes and decisions through the service (M2.4a to M2.4d). The design demo (`pnpm dev`) still runs on fixtures, by design; its review screens use the same plain wording (M2.4g) | M2.4 |
 | 13 | Twenty components, state model, service interface, OpenAPI types, idempotency | Done | BUG-010 (latent) | M3.6; M3.14 |
 | 14 | Responsive 320 – 1440, 200 % zoom, keyboard, screen reader, focus restore | Partial | Zoom and screen reader untested; BUG-007 | M3.14, M3.15 |
