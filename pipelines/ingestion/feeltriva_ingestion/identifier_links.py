@@ -230,6 +230,7 @@ def import_identifiers(
                 cur,
                 several_identifiers(items, version, release),
                 bases=(proposals.SEVERAL_EQUIVALENT,),
+                systems=(SNOMED, ICD, ICD_FOUNDATION),
                 complete=source_ids is None,
             )
             # One row per label and code: a code the name search already stored is noted, not repeated. Where the

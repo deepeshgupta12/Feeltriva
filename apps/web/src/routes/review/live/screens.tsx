@@ -183,8 +183,10 @@ const WHY_NOT_MATCHED: Record<string, string> = {
   nearest_by_shared_words: 'No entry has our name; this one shares the most words with it',
   plain_word_not_the_abbreviation:
     'Our name is an ordinary word, not the abbreviation it looks like; this entry shares the most words with it',
+  weak_search_result: 'The search found only an entry that is not close; it is probably not the same thing',
   term_not_linkable: 'The only entry with our name is out of use or of another kind, so it cannot be used',
   no_term_near: 'No entry has this name or a similar one',
+  no_search_result: 'The search of this list found nothing for this name',
   question_sentence_not_looked_up: 'This is a whole question, not a name, so it was not looked up',
 };
 
@@ -210,7 +212,8 @@ function matchMade(item: ReviewItem): string {
 function howClose(item: ReviewItem): string {
   const detail = part(item, 'detail');
   const parts = [
-    detail.score !== undefined ? `Search score ${field(detail, 'score')} out of 1` : '',
+    // The search's own score: 1 when every word matches; it falls, below 0 too, the further the entry is.
+    detail.score !== undefined ? `Search score ${field(detail, 'score')} (the best possible is 1)` : '',
     field(detail, 'note'),
     field(detail, 'matched_text') ? `Compared with the name "${field(detail, 'matched_text')}"` : '',
     field(detail, 'read_as') ? `Our name was read as "${field(detail, 'read_as')}"` : '',
@@ -267,8 +270,10 @@ const LINK_PROPOSALS: ListScreen = {
         { value: 'looser_synonym', label: 'Broader, narrower or related name' },
         { value: 'nearest_by_shared_words', label: 'Nearest entry by shared words' },
         { value: 'plain_word_not_the_abbreviation', label: 'Ordinary word, not an abbreviation' },
+        { value: 'weak_search_result', label: 'Weak search result' },
         { value: 'term_not_linkable', label: 'Entry cannot be used' },
         { value: 'no_term_near', label: 'No similar entry' },
+        { value: 'no_search_result', label: 'Search found nothing' },
         { value: 'question_sentence_not_looked_up', label: 'A question, not looked up' },
       ],
     },

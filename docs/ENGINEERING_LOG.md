@@ -5242,3 +5242,69 @@ no row, stops plainly when nothing is saved, and asks for exactly the missing na
 - A name or entity that has no saved answer stays "not asked" until a run with `--online`.
   Today there is none.
 - The other look-up, `link-ontologies`, reads two local files and never contacted anything.
+
+### M2.4f — Weak ICD-11 results and names without a result, loaded for review
+
+**What it is for.** M2.4b loaded only the close ICD-11 results, as the plan named them. The
+owner on 2026-11-25: the results below a score of 0.9 (239 names) and the names with no ICD-11
+result (457) "need to be done" as well.
+
+**Impact analysis before editing** (all LOW). `proposals.store`: no caller in the graph, because
+it is called through its module; its real callers, found by reading, are the three look-ups and
+`tests/ingestion/test_proposals.py`, all changed with it. `list_link_proposals`: LOW.
+
+**Implemented** (decision E99).
+
+- `other_results` beside `close_results`: a weak result (a term, with its score), no result, and
+  a question sentence that was not sent (both without a term). A name that was not looked up for
+  want of a saved answer gets no row. Both functions now live in `vocabulary_review.py`:
+  `vocabulary.py` had reached 30.5 KB of the 32 KB the code graph can read; it is 26.7 KB again.
+- `proposals.store` takes the vocabularies as well as the kinds. A question sentence is now a kind
+  two look-ups give (for HPO and MONDO, and for ICD-11), and a full run of one must not remove the
+  rows of the other.
+- `link-vocabularies` checks that the names without an ICD-11 link and the names with a row are
+  equal in number.
+- The service knows the two new kinds; a weak result can be confirmed. The screen "Suggested
+  matches" names them in plain words and offers both in the filter "Why it is here". The score
+  is shown as "Search score … (the best possible is 1)", because the search gives scores below 0.
+
+**Loaded on the real data, without `--online`: 0 requests, the saved answers unchanged (2,382).**
+
+| Kind of row for ICD-11 | Rows | Names | Naming a term |
+|---|---:|---:|---:|
+| Close search result (as before) | 431 | 431 | 431 |
+| Weak search result (new) | 239 | 239 | 239 |
+| The search found nothing (new) | 457 | 457 | 0 |
+| A question sentence, not sent (new) | 223 | 223 | 0 |
+
+919 new rows; 1,350 names have no ICD-11 link and 1,350 have a row. In all 4,587 rows for
+review: 2,103 with a term a reviewer can confirm, 13 with a term that cannot be linked, 2,471
+that record only why a name has no link. All `pending`; no link was made (2,542 as before). The
+two other look-ups, run again with the changed storing function, gave 0 new and 0 removed rows.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 73 files |
+| `uv run pytest` (SQLite, archives included) | 279 passed, 79 skipped (before: 278, 79) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 357 passed, 1 skipped (before: 356, 1) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` | clean; 135 passed (9 files) |
+| `pnpm e2e:review` against the test database | 21 passed, 0 failed |
+| `detect_changes` before commit | 14 files and the new `vocabulary_review.py`; risk "high" by the 13 flows through the three look-ups, each of which calls the changed storing function. Changed definitions confirmed by comparing each file with the last commit: `store`, `link_vocabularies`, `check` of `vocabulary.py`, `link_ontologies`, `import_identifiers`, `KINDS`, `CONFIRMABLE`; `close_results` and `CLOSE_SCORE` moved to the new module unchanged; added: `other_results`, `WEAK_RESULT`, `NO_RESULT`. The other symbols it lists (`proposal_id`, `TARGET`, `summarise`, `write_review`) stand below changed lines and are unchanged |
+
+New and changed tests: the three kinds of row and the cases that get none (a linked name, a name
+not asked, a result without an address); the stored rows of the look-up (a close and a weak one,
+a decision survives a rerun); a full run for one vocabulary leaves and does not count the rows of
+the same kind of another vocabulary.
+
+**Bugs and slips.** The automatic fix of the linter removed an import I had added before the test
+that uses it; seen at once in the test run and put back. No product bug.
+
+**Limits, stated plainly.**
+
+- A weak result is the best the name search gave, and most of the 239 will not be the same thing
+  as our name. The screen says so; nothing hides them or ranks them beyond the score.
+- The 223 question sentences now have three rows each (ICD-11, HPO, MONDO), all saying the same:
+  a question is not a name. They are there so that the count of names is complete.
+- LOINC has no rows for review: it fits measurements, and the data hold one measurement item.

@@ -22,7 +22,9 @@ def test_the_review_service_and_the_look_ups_name_the_same_kinds_of_row():
     assert written == set(review_proposals.KINDS) and proposals.TARGET == review_proposals.TARGET
     assert review_proposals.CONFIRMABLE <= set(review_proposals.KINDS)
     # A row that only records a reason is never one a reviewer can confirm.
-    assert not {proposals.NO_TERM, proposals.SENTENCE, proposals.NOT_LINKABLE} & set(review_proposals.CONFIRMABLE)
+    assert not {proposals.NO_TERM, proposals.NO_RESULT, proposals.SENTENCE, proposals.NOT_LINKABLE} & set(
+        review_proposals.CONFIRMABLE
+    )
 
 
 def test_a_row_names_a_whole_term_and_the_link_it_would_make_or_neither():
@@ -57,7 +59,7 @@ def test_a_full_run_removes_what_is_out_of_date_but_never_a_decided_or_noted_row
 
     def store(given, complete):
         with _raw_cursor(engine) as cur:
-            return proposals.store(cur, given, bases=(kind,), complete=complete)
+            return proposals.store(cur, given, bases=(kind,), systems=("HPO",), complete=complete)
 
     def codes():
         with owner_db.transaction(None) as tx:
@@ -97,5 +99,15 @@ def test_a_full_run_removes_what_is_out_of_date_but_never_a_decided_or_noted_row
             (kind, "rejected", 1, 1),
         ]
         assert "1 out of date and removed, 2 kept from an earlier run" in proposals.lines(full)[0]
+        # M2.4f: a look-up's own rows are those of its kinds AND its vocabularies. A row of the same kind that
+        # another look-up stored for another vocabulary is not this run's to remove, and is not counted by it.
+        term = {"code": "x", "title": "Term x", "uri": "http://example.invalid/x"}
+        other = proposals.row(item, "MONDO", "v1", kind, "invented reason", term, f"tl_{tag}_x")
+        with _raw_cursor(engine) as cur:
+            proposals.store(cur, [other], bases=(kind,), systems=("MONDO",), complete=True)
+        assert codes() == ["a", "b", "c", "x"]
+        again = store(rows[:1], complete=True)  # a full run for HPO only
+        assert codes() == ["a", "b", "c", "x"] and (again["removed_out_of_date"], again["kept_not_given"]) == (0, 2)
+        assert {row[1] for row in again["table"]} == {"HPO"}
     finally:
         engine.dispose()

@@ -5,8 +5,10 @@ vocabulary marks equivalent (M2.16). What they could not link was written to rev
 where no screen could show it and no decision could be recorded. Each look-up now also stores
 those results as rows of `link_proposals`:
 
-- `link-vocabularies`: the best ICD-11 search result of a name that no entity carries exactly, when
-  its score is 0.9 or more (the "close results" of M2.11);
+- `link-vocabularies`: for each name that no ICD-11 entity carries exactly, the best result of the
+  name search, as a close result when its score is 0.9 or more (M2.11) and as a weak one below
+  that; a name the search found nothing for, and a question sentence that was not sent, get one
+  row without a term (M2.4f);
 - `link-ontologies`: for each name and each of HPO and MONDO, the reason it has no link, with one
   row per near term; a name with no near term, and a question sentence, get one row without a term;
 - `import-identifiers`: for a label whose MONDO term lists several identifiers of SNOMED CT or of
@@ -17,8 +19,8 @@ the row, by the review service. A row keeps the code, the title and the address 
 together, as the WHO terms require wherever ICD-11 is stored.
 
 A later run adds what is new and leaves every stored row as it is. A full run also removes the rows
-of its own kinds that the look-up no longer gives, but never one a reviewer has decided or written
-a note on.
+of its own kinds and vocabularies that the look-up no longer gives, but never one a reviewer has
+decided or written a note on.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import hashlib
 import json
 from typing import Any
 
-# Why a row is there. The first seven name a term a reviewer may confirm (for a plain word these are the nearest
+# Why a row is there. The first eight name a term a reviewer may confirm (for a plain word these are the nearest
 # terms; the abbreviation is ruled out). A row of the others records only why a name has no link: the term of a
 # `term_not_linkable` row is shown and cannot be confirmed. Which kinds can be confirmed is the review service's
 # rule (`feeltriva_api.review_proposals.CONFIRMABLE`).
@@ -38,8 +40,10 @@ SEVERAL_EQUIVALENT = "several_identifiers_marked_equivalent"
 LOOSER = "looser_synonym"
 NEAREST = "nearest_by_shared_words"
 PLAIN_WORD = "plain_word_not_the_abbreviation"
+WEAK_RESULT = "weak_search_result"
 NOT_LINKABLE = "term_not_linkable"
 NO_TERM = "no_term_near"
+NO_RESULT = "no_search_result"
 SENTENCE = "question_sentence_not_looked_up"
 TARGET = "link_proposal"  # the review target type the service records notes and decisions under
 
@@ -81,12 +85,17 @@ def row(
     }
 
 
-def store(cur: Any, rows: list[dict[str, Any]], *, bases: tuple[str, ...], complete: bool) -> dict[str, Any]:
+def store(
+    cur: Any, rows: list[dict[str, Any]], *, bases: tuple[str, ...], systems: tuple[str, ...], complete: bool
+) -> dict[str, Any]:
     """Insert the proposals; a row already stored keeps everything, its review decision included.
 
-    bases: the kinds of proposal the calling look-up gives. complete: the look-up covered every name
-    (not only those of some sources), so a stored row of these kinds that it no longer gives is out of
-    date and is removed, unless a reviewer has decided it or written a note on it."""
+    bases and systems: the kinds of proposal the calling look-up gives, and the vocabularies it gives them
+    for. Two look-ups may give the same kind for different vocabularies (a question sentence that was not
+    looked up), so the two together say which stored rows are this look-up's own.
+    complete: the look-up covered every name (not only those of some sources), so one of its own stored rows
+    that it no longer gives is out of date and is removed, unless a reviewer has decided it or written a note
+    on it."""
     unique = {entry["proposal_id"]: entry for entry in rows}
     inserted = 0
     for entry in unique.values():
@@ -110,15 +119,16 @@ def store(cur: Any, rows: list[dict[str, Any]], *, bases: tuple[str, ...], compl
             ),
         )
         inserted += cur.rowcount
-    ids, kinds = list(unique), list(bases)
+    ids, kinds, lists = list(unique), list(bases), list(systems)
     removed = 0
     if complete:
         cur.execute(
             """DELETE FROM link_proposals p
-               WHERE p.basis = ANY(%s) AND NOT (p.proposal_id = ANY(%s)) AND p.status = 'pending' AND p.reviewer IS NULL
+               WHERE p.basis = ANY(%s) AND p.system = ANY(%s) AND NOT (p.proposal_id = ANY(%s))
+                 AND p.status = 'pending' AND p.reviewer IS NULL
                  AND NOT EXISTS (SELECT 1 FROM review_notes n
                                  WHERE n.target_type = %s AND n.target_id = p.proposal_id)""",
-            (kinds, ids, TARGET),
+            (kinds, lists, ids, TARGET),
         )
         removed = cur.rowcount
     cur.execute("SELECT count(*) FROM link_proposals WHERE proposal_id = ANY(%s)", (ids,))
@@ -126,15 +136,15 @@ def store(cur: Any, rows: list[dict[str, Any]], *, bases: tuple[str, ...], compl
     cur.execute(
         """SELECT count(*) FILTER (WHERE NOT (proposal_id = ANY(%s))),
                   count(*) FILTER (WHERE status <> 'pending' AND reviewer IS NULL)
-           FROM link_proposals WHERE basis = ANY(%s)""",
-        (ids, kinds),
+           FROM link_proposals WHERE basis = ANY(%s) AND system = ANY(%s)""",
+        (ids, kinds, lists),
     )
     kept, unsigned = cur.fetchone()
     cur.execute(
         """SELECT basis, system, status::text, count(*), count(*) FILTER (WHERE code IS NOT NULL),
                   count(DISTINCT coalesce(disease_id, feature_id))
-           FROM link_proposals WHERE basis = ANY(%s) GROUP BY 1, 2, 3 ORDER BY 1, 2, 3""",
-        (kinds,),
+           FROM link_proposals WHERE basis = ANY(%s) AND system = ANY(%s) GROUP BY 1, 2, 3 ORDER BY 1, 2, 3""",
+        (kinds, lists),
     )
     return {
         "given": len(unique),

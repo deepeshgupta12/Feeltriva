@@ -48,8 +48,10 @@ KINDS: dict[str, str] = {
     "looser_synonym": "Our name matches only a looser synonym of the term",
     "nearest_by_shared_words": "Nearest term by shared words",
     "plain_word_not_the_abbreviation": "An ordinary word, not the abbreviation; nearest terms",
+    "weak_search_result": "Weak search result, probably not the same",
     "term_not_linkable": "The only term with our name cannot be linked",
     "no_term_near": "No term near our name",
+    "no_search_result": "The search found nothing for our name",
     "question_sentence_not_looked_up": "A question sentence, not looked up",
 }
 CONFIRMABLE = frozenset(
@@ -61,6 +63,7 @@ CONFIRMABLE = frozenset(
         "looser_synonym",
         "nearest_by_shared_words",
         "plain_word_not_the_abbreviation",  # the terms listed are the nearest ones; the abbreviation is ruled out
+        "weak_search_result",  # the best the search gave, with a low score: a reviewer may still find it right
     }
 )
 

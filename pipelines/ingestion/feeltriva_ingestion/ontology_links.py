@@ -147,7 +147,9 @@ def link_ontologies(
             inserted = store_links(cur, items)
             # Every name without a link goes before a reviewer with its reason and its near terms (M2.4b).
             unlinked = unlinked_names(items, vocabularies)
-            proposed = proposals.store(cur, unlinked, bases=tuple(_BASIS.values()), complete=source_ids is None)
+            proposed = proposals.store(
+                cur, unlinked, bases=tuple(_BASIS.values()), systems=tuple(systems), complete=source_ids is None
+            )
             cur.execute(
                 """SELECT system, status::text, count(*), count(*) FILTER (WHERE uri IS NULL OR uri = '' OR title = ''),
                           count(*) FILTER (WHERE status <> 'pending' AND reviewer IS NULL)

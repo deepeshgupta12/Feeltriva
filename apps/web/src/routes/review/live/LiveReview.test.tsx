@@ -331,7 +331,7 @@ describe('the review workspace against the review service', () => {
     );
     let drawer = await screen.findByRole('dialog');
     expect(within(drawer).getByText('ZZ10.Z')).toBeInTheDocument(); // codes are for reviewers
-    expect(within(drawer).getByText('Search score 0.93 out of 1')).toBeInTheDocument();
+    expect(within(drawer).getByText('Search score 0.93 (the best possible is 1)')).toBeInTheDocument();
     expect(within(drawer).getByText('pretend ache (a condition)')).toBeInTheDocument();
     await user.type(within(drawer).getByLabelText('Note (required)'), 'It names the same condition.');
     await user.click(within(drawer).getByRole('button', { name: 'Confirm match' }));

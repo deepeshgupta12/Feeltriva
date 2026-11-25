@@ -385,10 +385,15 @@ def link_vocabularies(
         with _raw_cursor(engine) as cur:
             stored = store_links(cur, items)
             # The close results go before a reviewer as proposals; none of them is a link (decision E56).
+            # Imported here: the module reads this one's names, and by now this one is fully loaded.
+            from .vocabulary_review import close_results, other_results
+
+            for_review = close_results(items, release, chapters) + other_results(items, release, chapters)
             proposed = proposals.store(
                 cur,
-                close_results(items, release, chapters),
-                bases=(proposals.CLOSE_RESULT,),
+                for_review,
+                bases=(proposals.CLOSE_RESULT, proposals.WEAK_RESULT, proposals.NO_RESULT, proposals.SENTENCE),
+                systems=(ICD,),
                 complete=source_ids is None,
             )
             cur.execute(
@@ -413,6 +418,8 @@ def link_vocabularies(
         "table": {"links": total, "decided_without_reviewer": unsigned, "without_title_or_uri": incomplete},
         "proposals": proposed,
         "for_review": proposals.lines(proposed),
+        # Each name without an ICD-11 link must have a row for a reviewer: counted both ways by `check`.
+        "names_for_review": len({row["disease_id"] or row["feature_id"] for row in for_review}),
     }
 
 
@@ -461,8 +468,18 @@ def check(result: dict[str, Any]) -> list[str]:
             ):
                 diffs.append(f"{item['name']}: a link that is not a name match")
         best = item["best"]
-        if best and best["score"] >= CLOSE_SCORE and not best["uri"]:
+        if best and not best["uri"]:
             diffs.append(f"{item['name']}: the best search result has no address, so it cannot go before a reviewer")
+    without_link = sum(
+        1
+        for item in result["items"]
+        if not item["not_asked"] and not any(link["system"] == ICD for link in item["links"])
+    )
+    if without_link != result["names_for_review"]:
+        diffs.append(
+            f"{without_link} names have no ICD-11 link, but {result['names_for_review']} of them were given a row "
+            "for review"
+        )
     return diffs + proposals.check(result["proposals"])
 
 
@@ -570,41 +587,6 @@ def store_links(cur: Any, items: list[dict[str, Any]]) -> Counter[str]:
             )
             stored[link["system"]] += cur.rowcount
     return stored
-
-
-# -- the close results, for a reviewer (M2.4b) --------------------------------------------------------
-CLOSE_SCORE = 0.9  # from this score the best search result of a name is put before a reviewer (M2.11)
-
-
-def close_results(items: list[dict[str, Any]], release: str, chapters: dict[str, str]) -> list[dict[str, Any]]:
-    """One proposal for each name that no ICD-11 entity carries exactly and whose best search result is close.
-
-    A result without an address is left out here and reported by `check`: code, title and address belong
-    together wherever ICD-11 is stored."""
-    rows = []
-    for item in items:
-        best = item["best"]
-        if not item["sent"] or best is None or best["score"] < CLOSE_SCORE or not best["uri"]:
-            continue
-        if any(link["system"] == ICD for link in item["links"]):
-            continue  # an entity carries the name exactly: that is the link
-        rows.append(
-            proposals.row(
-                item,
-                ICD,
-                release,
-                proposals.CLOSE_RESULT,
-                "no ICD-11 entity carries exactly this name; this is the best result of the name search",
-                {"code": best["code"], "title": best["title"], "uri": best["uri"]},
-                link_id(item["id"], ICD, release, best["code"]),
-                query=item["sent"],
-                score=best["score"],
-                chapter=best["chapter"],
-                chapter_title=chapters.get(best["chapter"], ""),
-                residual=best["residual"],
-            )
-        )
-    return rows
 
 
 # -- asking WHO only when told to (decision E98) --------------------------------------------------------

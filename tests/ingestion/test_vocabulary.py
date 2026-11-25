@@ -18,7 +18,6 @@ from feeltriva_ingestion import vocabulary
 from feeltriva_ingestion.archives import ArchiveError, sha256_file
 from feeltriva_ingestion.load import RELEASE_ID, source_id
 from feeltriva_ingestion.vocabulary import (
-    CLOSE_SCORE,
     ICD,
     LOINC,
     IcdClient,
@@ -26,7 +25,6 @@ from feeltriva_ingestion.vocabulary import (
     NotAsked,
     best_result,
     check,
-    close_results,
     exact_matches,
     link_id,
     link_vocabularies,
@@ -37,6 +35,7 @@ from feeltriva_ingestion.vocabulary import (
     summarise,
     write_review,
 )
+from feeltriva_ingestion.vocabulary_review import CLOSE_SCORE, close_results, other_results
 from sqlalchemy import text
 
 SETTINGS = IcdSettings(_env_file=None, icd_api_client_id="id-1", icd_api_client_secret="s3cret")  # noqa: S106 - a test value
@@ -305,8 +304,10 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
         "uri": "http://id.who.int/icd/release/11/2026-01/mms/XB07",
         "residual": False,
     }
-    # A weak result (below 0.9) is not put before a reviewer; nothing was proposed for these names.
-    assert result["proposals"]["given"] == 0 and result["for_review"][0].startswith("For review")
+    # M2.4f: every name without an ICD-11 link has a row for a reviewer: the weak result of the unknown name,
+    # and the question sentence that was never sent. Neither is a link.
+    assert result["proposals"]["given"] == result["names_for_review"] == 2
+    assert result["for_review"][0].startswith("For review")
     assert [
         (link["code"], link["method"], link["detail"]["chapter_title"][:8]) for link in by[f"{cough} symptom"]["links"]
     ] == [("MD12", "exact_synonym", "Symptoms")]
@@ -490,24 +491,33 @@ def test_close_results_are_stored_for_review_never_as_links_and_a_decision_survi
 
     result = run()
     assert check(result) == [] and result["inserted"] == {ICD: 1}
-    assert (result["proposals"]["given"], result["proposals"]["inserted"]) == (1, 1)
+    # The close result and, since M2.4f, the weak one: two names without a link, two rows.
+    assert (result["proposals"]["given"], result["proposals"]["inserted"], result["names_for_review"]) == (2, 2, 2)
     near = link_id(f"dis_{tag}_near", ICD, "2026-01", "XC10.Z")
-    assert [tuple(row) for row in stored()] == [
-        (
-            f"dis_{tag}_near",
-            ICD,
-            "2026-01",
-            "close_search_result",
-            "XC10.Z",
-            "Near thing, unspecified",
-            "http://id.who.int/icd/release/11/2026-01/mms/XC10.Z",
-            near,
-            "pending",
-            None,
-            "0.93",
-            "true",
-        )
-    ]
+    by = {row[0].rsplit("_", 1)[1]: tuple(row) for row in stored()}
+    assert set(by) == {"near", "far"}
+    assert by["near"] == (
+        f"dis_{tag}_near",
+        ICD,
+        "2026-01",
+        "close_search_result",
+        "XC10.Z",
+        "Near thing, unspecified",
+        "http://id.who.int/icd/release/11/2026-01/mms/XC10.Z",
+        near,
+        "pending",
+        None,
+        "0.93",
+        "true",
+    )
+    assert by["far"][3:8] == (
+        "weak_search_result",
+        "XC20",
+        "Something else",
+        "http://id.who.int/icd/release/11/2026-01/mms/XC20",
+        link_id(f"dis_{tag}_far", ICD, "2026-01", "XC20"),
+    )
+    assert by["far"][8:11] == ("pending", None, "0.5")
     with owner_db.transaction(None) as tx:  # the close result is not a link, and nothing made one of it
         links = tx.execute(
             text("SELECT code FROM terminology_links WHERE disease_id LIKE :d"), {"d": f"dis_{tag}_%"}
@@ -522,8 +532,11 @@ def test_close_results_are_stored_for_review_never_as_links_and_a_decision_survi
             {"d": f"dis_{tag}_near"},
         )
     again = run()
-    assert check(again) == [] and (again["proposals"]["given"], again["proposals"]["inserted"]) == (1, 0)
-    assert [(row[8], row[9]) for row in stored()] == [("rejected", "dev-reviewer:test")]
+    assert check(again) == [] and (again["proposals"]["given"], again["proposals"]["inserted"]) == (2, 0)
+    assert {row[0].rsplit("_", 1)[1]: (row[8], row[9]) for row in stored()} == {
+        "near": ("rejected", "dev-reviewer:test"),
+        "far": ("pending", None),
+    }
     # A decision nobody signed is reported; the name is put back so that no other test sees it.
     try:
         with owner_db.transaction(None) as tx:
@@ -642,3 +655,48 @@ def test_an_answer_not_found_is_saved_like_any_other_and_every_request_sent_is_c
         assert saved.value.code == 404 and "saved answer" in str(saved.value)
         assert again.get("https://id.who.int/known", "known") == {"title": "Known"}
     assert (len(seen), client.sent) == (3, 3)
+
+
+# ---- M2.4f: every name without an ICD-11 link has a row --------------------------------------------
+def test_a_weak_result_a_name_without_a_result_and_a_question_each_get_a_row_and_an_unasked_name_none():
+    def item(key, best, links=(), sent="a name", not_asked=False):
+        return {
+            "type": "feature",
+            "id": f"feat_{key}",
+            "name": key,
+            "sent": sent,
+            "best": best,
+            "links": list(links),
+            "not_asked": not_asked,
+        }
+
+    def best(score, uri="http://id.who.int/y"):
+        return {"code": "XD9", "title": "Distant", "score": score, "chapter": "05", "uri": uri, "residual": False}
+
+    rows = other_results(
+        [
+            item("weak", best(0.42)),
+            item("just-below", best(0.899)),
+            item("close", best(CLOSE_SCORE)),  # a close result is the other function's row
+            item("exact", best(0.3), [{"system": ICD}]),  # linked: no row
+            item("nothing", None),
+            item("question", None, sent=""),
+            item("unasked", None, not_asked=True),  # nothing is known about it: no row
+            item("no-address", best(0.3, uri="")),  # reported by the self-check, not stored without its address
+        ],
+        "2026-01",
+        {"05": "Mental disorders"},
+    )
+    assert [(row["feature_id"], row["basis"], row["code"]) for row in rows] == [
+        ("feat_weak", "weak_search_result", "XD9"),
+        ("feat_just-below", "weak_search_result", "XD9"),
+        ("feat_nothing", "no_search_result", None),
+        ("feat_question", "question_sentence_not_looked_up", None),
+    ]
+    weak, _below, nothing, question = rows
+    assert weak["link_id"] == link_id("feat_weak", ICD, "2026-01", "XD9") and weak["detail"]["score"] == 0.42
+    assert weak["detail"]["chapter_title"] == "Mental disorders" and "is not close" in weak["reason"]
+    assert (nothing["link_id"], nothing["uri"], nothing["detail"]) == (None, None, {"query": "a name"})
+    assert "gave no result" in nothing["reason"] and "not sent to the name search" in question["reason"]
+    assert all(row["system"] == ICD and row["version"] == "2026-01" for row in rows)
+    assert len({row["proposal_id"] for row in rows}) == 4

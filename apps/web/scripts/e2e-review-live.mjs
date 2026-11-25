@@ -243,7 +243,7 @@ try {
     'the suggestion shows why it was not matched automatically, in plain words, and how close it is',
     (await drawer()
       .getByText('The search found an entry that comes close, but none with exactly our name')
-      .isVisible()) && (await drawer().getByText('Search score 0.96 out of 1').isVisible()),
+      .isVisible()) && (await drawer().getByText('Search score 0.96 (the best possible is 1)').isVisible()),
   );
   await record('The entry names the same condition.', 'Confirm match');
   await drawer().getByText('Recorded: Approved, under e2e.').waitFor();
