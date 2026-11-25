@@ -7,6 +7,18 @@ import { LiveOverviewPage } from './live/LiveOverviewPage';
 import { LiveReleasesPage } from './live/LiveReleasesPage';
 import { LiveRulesPage } from './live/LiveRulesPage';
 import {
+  LiveConditionsPage,
+  LiveFactsPage,
+  LiveItemsPage,
+  LiveMorePage,
+  LivePairsPage,
+  LiveQuestionsPage,
+  LiveRepliesPage,
+  LiveRuleSetsPage,
+  LiveSourcesPage,
+  LiveTextPartsPage,
+} from './live/moreScreens';
+import {
   LiveDataQualityPage,
   LiveDiseaseMappingsPage,
   LiveFeatureMappingsPage,
@@ -44,6 +56,16 @@ export default function ReviewRoutes() {
           <Route path="evidence" element={<LiveClaimsPage />} />
           <Route path="rules" element={<LiveRulesPage />} />
           <Route path="releases" element={<LiveReleasesPage />} />
+          <Route path="more" element={<LiveMorePage />} />
+          <Route path="conditions" element={<LiveConditionsPage />} />
+          <Route path="items" element={<LiveItemsPage />} />
+          <Route path="pairs" element={<LivePairsPage />} />
+          <Route path="facts" element={<LiveFactsPage />} />
+          <Route path="text-parts" element={<LiveTextPartsPage />} />
+          <Route path="sources" element={<LiveSourcesPage />} />
+          <Route path="questions" element={<LiveQuestionsPage />} />
+          <Route path="replies" element={<LiveRepliesPage />} />
+          <Route path="rule-sets" element={<LiveRuleSetsPage />} />
           <Route path="*" element={<LiveOverviewPage />} />
         </Route>
       </Routes>

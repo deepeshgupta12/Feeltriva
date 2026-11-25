@@ -496,6 +496,14 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     def review_notes(target_type: str, target_id: str, who: Who) -> JSONResponse:
         return JSONResponse(list_notes(container.db, who, target_type=target_type, target_id=target_id))
 
+    @app.get("/internal/v1/review/questions")
+    def review_questions(who: Who, status: str | None = None, limit: int = 50, offset: int = 0) -> JSONResponse:
+        return JSONResponse(review_lists.list_questions(container.db, who, status=status, limit=limit, offset=offset))
+
+    @app.get("/internal/v1/review/rule-sets")
+    def review_rule_sets(who: Who) -> JSONResponse:
+        return JSONResponse(review_lists.list_rule_sets(container.db, who))
+
     @app.get("/internal/v1/review/working-sets")
     def review_working_sets(who: Who) -> JSONResponse:
         return JSONResponse(review_lists.working_sets(container.db, who))

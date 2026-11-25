@@ -360,6 +360,38 @@ try {
     JSON.stringify(versions.map((item) => [item.release_id, item.is_current])),
   );
 
+  // ---- 7. Two names for one condition: merge one into the other, then take it out again (M2.4i) ----
+  await page.goto(`${BASE}/review/conditions`);
+  await page.getByRole('heading', { name: 'Conditions', exact: true }).waitFor();
+  await search(`pretend shiver ${TAG}`);
+  await page.getByRole('button', { name: `Review pretend shiver ${TAG}` }).click();
+  await drawer().getByRole('heading', { name: 'Two names for one condition' }).waitFor();
+  await drawer().getByLabel('Name in the system of the condition to keep').fill(`e2e_dis_${TAG}_near`);
+  await drawer().getByLabel('Note for the merge (required)').fill(`Shiver and chill are one condition here (${TAG}).`);
+  await drawer().getByRole('button', { name: 'Merge this name into that condition' }).click();
+  await drawer().getByRole('button', { name: 'Yes, merge it' }).click();
+  await drawer().getByText('Merged. This name is now kept as another name of that condition.').waitFor();
+  const kept = await service(`/diseases/e2e_dis_${TAG}_near/history`);
+  check(
+    'the service keeps the merged name as another name of the condition, under the reviewer',
+    JSON.stringify(kept.synonyms) === JSON.stringify([`pretend shiver ${TAG}`]) &&
+      kept.history.length === 1 &&
+      kept.history[0].reviewer === REVIEWER,
+    JSON.stringify([kept.synonyms, kept.history]),
+  );
+  await drawer().getByLabel('Note for the merge (required)').fill(`On a second look they differ (${TAG}).`);
+  await drawer().getByRole('button', { name: 'Take this name out again' }).click();
+  await drawer().getByRole('button', { name: 'Yes, take it out' }).click();
+  await drawer().getByText('Taken out again. This name stands on its own.').waitFor();
+  await shot('7-two-names-one-condition');
+  const apart = await service(`/diseases/e2e_dis_${TAG}_near/history`);
+  check(
+    'taken out again, the name stands on its own and the history keeps both steps',
+    apart.synonyms.length === 0 && apart.history.length === 2,
+    JSON.stringify([apart.synonyms, apart.history.map((event) => event.action)]),
+  );
+  await page.keyboard.press('Escape');
+
   check(
     'every request to the service carried the reviewer token and no other',
     tokens.size === 1 && tokens.has(`Bearer ${REVIEWER}`),

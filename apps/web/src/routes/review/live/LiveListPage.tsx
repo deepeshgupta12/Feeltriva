@@ -4,6 +4,7 @@ import {
   field,
   REVIEW_STATE_LABELS,
   REVIEW_STATES,
+  type LiveReviewApi,
   type ReviewItem,
   type ReviewParams,
   type ReviewState,
@@ -42,6 +43,10 @@ export interface ListScreen {
   /** For a row that takes notes but no decision: the reason, in words. Otherwise null. */
   notesOnly?: (item: ReviewItem) => string | null;
   decisionLabels?: ReviewTarget['decisionLabels'];
+  /** A short list the service gives whole: no search, no filter and no paging are offered. */
+  plain?: boolean;
+  /** More to do with the opened row than a note and a decision, shown in its panel. */
+  extra?: (item: ReviewItem, tools: { api: LiveReviewApi; reload: () => void }) => ReactNode;
 }
 
 /**
@@ -95,7 +100,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
         {screen.intro}
       </ReviewPageHeader>
 
-      <form onSubmit={apply} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={apply} className={screen.plain ? 'hidden' : 'flex flex-wrap items-end gap-3'}>
         {screen.searchLabel ? (
           <div className="min-w-[14rem] flex-1">
             <label htmlFor={`${id}-search`} className="mb-1 block text-sm font-medium text-ink-secondary">
@@ -272,7 +277,9 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
           }
           reload();
         }}
-      />
+      >
+        {open && screen.extra ? screen.extra(open, { api: liveReview, reload }) : null}
+      </DecisionDrawer>
     </div>
   );
 }

@@ -63,3 +63,52 @@ export const wordingCue = lookup({
 });
 
 export const kindOfName = (type: string): string => (type === 'disease' ? 'a condition' : 'a symptom or other item');
+
+/** The kind of a symptom or other item. */
+export const itemKind = lookup({
+  symptom: 'Symptom',
+  sign: 'Sign found on examination',
+  history: 'Past history',
+  risk_factor: 'Risk factor',
+  measurement: 'Measurement',
+  other: 'Other',
+});
+
+/** The kind of answer an item or a question takes. */
+export const answerKind = lookup({
+  boolean: 'Yes or no',
+  number: 'A number',
+  category: 'One of several choices',
+  text: 'Free text',
+  yes_no_unsure: 'Yes, no or not sure',
+  single_choice: 'One of several choices',
+  multi_choice: 'Several of the choices',
+  duration: 'A length of time',
+});
+
+/** Where a fact that links a condition and a symptom comes from. */
+export const factKind = lookup({
+  dataset_cooccurrence: 'Counted in a data file',
+  source_condition_list: 'Listed for the condition by the source',
+  narrative_lexical_mention: 'Mentioned in a text about the condition',
+  reviewed_claim: 'From a list item a reviewer approved',
+});
+
+/** What a pair of names is suggested to be. */
+export const pairSuggestion = lookup({
+  possible_synonym: 'Two names for the same thing',
+  possible_subtype: 'The first is a kind of the second',
+});
+
+const PAIR_REASONS: Record<string, string> = {
+  same_standard_code: 'Both are matched to the same entry of a reference list',
+  same_words_other_punctuation: 'The same words, written with other punctuation',
+  same_words_other_order_or_number: 'The same words, in another order or in the plural',
+  british_or_american_spelling: 'The same word in British and American spelling',
+};
+
+/** Why a pair of names was put forward. */
+export const pairReason = (signal: string, words: readonly string[]): string =>
+  signal === 'adds_words'
+    ? `The first has the same words and adds: ${words.join(', ')}`
+    : (PAIR_REASONS[signal] ?? spaced(signal));

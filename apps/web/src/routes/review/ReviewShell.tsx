@@ -32,6 +32,7 @@ const LIVE_SECTIONS = [
   { to: '/review/evidence', label: 'Texts about conditions', end: false },
   { to: '/review/rules', label: 'Urgency rules', end: false },
   { to: '/review/releases', label: 'Published versions', end: false },
+  { to: '/review/more', label: 'More lists', end: false },
 ] as const;
 
 /**

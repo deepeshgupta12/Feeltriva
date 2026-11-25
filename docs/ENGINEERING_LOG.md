@@ -5507,3 +5507,60 @@ are not changed.
 - The reasons the service gives when a version cannot be published are shown in its words
   ("the bundle is not approved"), which are not yet the plain words of E97.
 - The page lists every published version; a database with very many versions gives a long page.
+
+### M2.4i — The remaining review lists on a screen
+
+**What it is for.** The service listed and recorded decisions on more than the screens showed.
+Found as a gap without a sub-step on 2026-11-25; the owner: "Implement the above now".
+
+**Impact analysis before editing** (LOW). `LiveListPage`: no traced caller; used by every list
+screen; it gained two optional settings. `list_rules`: called by its route and now by
+`list_rule_sets`; not changed. `create_app`: two routes added.
+
+**Implemented.**
+
+- `review_lists.py`: `list_questions` (`GET /internal/v1/review/questions`) and `list_rule_sets`
+  (`GET /internal/v1/review/rule-sets`). The other seven lists had routes already.
+- `routes/review/live/moreScreens.tsx`: nine lists through the same list page as the others, so
+  each has search or filters where the service offers them, the panel of one row with notes and
+  the decision, and all rows shown decided at once. A page "More lists to review" names them; the
+  navigation has one new entry for it.
+- Conditions: the panel of a row also merges this name into another condition (the name in the
+  system of the one to keep, optionally the name to show, a note, a second click), takes it out
+  again, and shows what was done before. The service's merge and split are used unchanged.
+- `words.ts`: the kinds of item and of answer, where a fact comes from, what a pair of names is
+  suggested to be and why.
+- `LiveListPage`: `plain` (a short list the service gives whole: no search, filter or paging) and
+  `extra` (more to do with the opened row).
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 75 files |
+| `uv run pytest` (SQLite, archives included) | 285 passed, 79 skipped (before: 284, 79) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 363 passed, 1 skipped (before: 362, 1) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 140 passed (9 files; before: 138); built |
+| `pnpm e2e:lists`, read-only on the real data | 12 passed, 0 failed: the nine lists open (25, 25, 25, 25, 20, 14, 4, 1 and 2 rows shown), a row of each opens, no old term and no raw code is shown, and the browser sent no request that changes data |
+| `pnpm e2e:review` against the test database | 26 passed, 0 failed: one condition name merged into another and taken out again; the service keeps both steps under the reviewer |
+| `pnpm e2e:rules` | 4 passed, 0 failed |
+| `detect_changes` before commit | 10 files and three new; risk medium; `create_app` (two routes), `LiveListPage`, `ReviewRoutes`. `review_working_sets`, `review_decisions_bulk` and `working_sets` are listed because they stand below added lines |
+
+**Bugs and slips.** My read-only check first reported "NaN" on four lists. It was the check: it
+looked for the letters inside words, and "pregnancy" holds them. It now looks for whole words.
+Two assertions of my new component tests matched a text that stands twice on the page. No product
+bug.
+
+**The acceptance I wrote into the plan was wider than what I built, and I changed it openly.** It
+said "one decision of each kind in the browser flow". The decision on a row is one generic path
+for every list and is tested per kind in the service's tests; the browser flow covers what is
+special here, the merge and the split. The plan row says so.
+
+**Limits, stated plainly.**
+
+- To merge, the reviewer copies the name in the system of the condition to keep from the list.
+  There is no picker.
+- Symptoms and other items cannot be merged: the service has merging for conditions only.
+- The facts have no search by words; the service filters them by where they come from.
+- The four follow-up questions and one of the two sets of rules are the invented samples of the
+  tests; the pages say so.

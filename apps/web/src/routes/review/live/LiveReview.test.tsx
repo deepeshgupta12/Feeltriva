@@ -130,6 +130,30 @@ function fakeApi(reviewer: string | null = 'tester') {
         in_words_unavailable: 'The rule file this rule set was stored from is not on this installation.',
       },
     ],
+    '/diseases': [
+      {
+        disease_id: 'dis_flu',
+        name: 'flu',
+        definition: null,
+        merged_into: null,
+        review_status: 'pending',
+        decided_by: null,
+        decision_note: null,
+      },
+    ],
+    '/evidence': [
+      {
+        evidence_id: 'ev_1',
+        disease: { id: 'dis_flu', term: 'flu' },
+        feature: { id: 'feat_cough', term: 'cough' },
+        relationship: 'co_occurs_in_source_sample',
+        evidence_type: 'dataset_cooccurrence',
+        context: { source: 'sample.zip/data.csv', exact_duplicate_rows_with_label: 12 },
+        frequency: 0.528158,
+        frequency_denominator: 657,
+        review_status: 'pending',
+      },
+    ],
     '/claims': [
       {
         statement_id: 'st_1',
@@ -247,6 +271,15 @@ function fakeApi(reviewer: string | null = 'tester') {
       published.push({ ...published[0], release_id: 'names-sample.r2', number: 2, is_current: true, features: 4 });
       return Promise.resolve({ release_id: 'names-sample.r2' });
     }
+    if (path === '/disease-merges') {
+      if (body.target_disease_id === 'dis_flu') {
+        return Promise.reject(new ReviewApiError(409, 'same_label', 'A label cannot be merged into itself.'));
+      }
+      (rows['/diseases'] ?? []).forEach((row) => {
+        row.merged_into = body.target_disease_id;
+      });
+      return Promise.resolve({ disease_id: 'dis_flu', merged_into: body.target_disease_id });
+    }
     if (path === '/mapping-releases/current') {
       for (const release of published) {
         release.is_current = release.release_id === body.release_id;
@@ -282,6 +315,7 @@ function fakeApi(reviewer: string | null = 'tester') {
       would_be_number: 1,
     }),
     '/serving-bundle': () => ({ assembled: false, problems: ['no rule release is current'] }),
+    '/diseases/dis_flu/history': () => ({ disease_id: 'dis_flu', synonyms: [], merged_labels: [], history: [] }),
   };
   const api: LiveReviewApi = {
     reviewer,
@@ -569,6 +603,76 @@ describe('the review workspace against the review service', () => {
       note: 'Version 2 holds a wrong name.',
     });
     expect(await screen.findByText('names-sample.r1 is the version in use now.')).toBeInTheDocument();
+  });
+
+  it('lists the remaining review lists in plain words and opens a fact with what its count means', async () => {
+    const { api } = fakeApi();
+    const user = renderLive('/review/more', api);
+
+    expect(await screen.findByRole('heading', { name: 'More lists to review' })).toBeInTheDocument();
+    for (const name of [
+      'Conditions',
+      'Symptoms and other items',
+      'Names that may mean the same',
+      'Facts from the data files',
+      'Parts of the text files',
+      'Data sources',
+      'Follow-up questions',
+      'Standard replies',
+      'Sets of urgency rules',
+    ]) {
+      expect(screen.getByRole('link', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('link', { name: /^Facts from the data files/ }));
+    expect(await screen.findByRole('heading', { name: 'Facts from the data files' })).toBeInTheDocument();
+    expect(screen.getByText(/It is not how common the symptom is among real patients/)).toBeInTheDocument();
+    // The stored code and the share are put into words.
+    const facts = await screen.findByRole('table');
+    expect(within(facts).getByText('Counted in a data file')).toBeInTheDocument();
+    expect(within(facts).getByText('52.8% of 657 rows with this condition')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Review flu and cough' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('sample.zip/data.csv')).toBeInTheDocument();
+    expect(within(drawer).getByText('12')).toBeInTheDocument();
+  });
+
+  it('merges one condition name into another after a note and a second click, and shows a refusal', async () => {
+    const { api, post } = fakeApi();
+    const user = renderLive('/review/conditions', api);
+
+    await user.click(await screen.findByRole('button', { name: 'Review flu' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(await within(drawer).findByRole('heading', { name: 'Two names for one condition' })).toBeInTheDocument();
+    await user.click(within(drawer).getByRole('button', { name: 'Merge this name into that condition' }));
+    expect(within(drawer).getByRole('alert')).toHaveTextContent('Give the name in the system of the condition to keep');
+    expect(post).not.toHaveBeenCalled();
+
+    // The service refuses a merge into itself; its own words are shown.
+    await user.type(within(drawer).getByLabelText('Name in the system of the condition to keep'), 'dis_flu');
+    await user.type(within(drawer).getByLabelText('Note for the merge (required)'), 'Both are influenza.');
+    await user.click(within(drawer).getByRole('button', { name: 'Merge this name into that condition' }));
+    await user.click(within(drawer).getByRole('button', { name: 'Yes, merge it' }));
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent('A label cannot be merged into itself.');
+
+    await user.clear(within(drawer).getByLabelText('Name in the system of the condition to keep'));
+    await user.type(within(drawer).getByLabelText('Name in the system of the condition to keep'), 'dis_influenza');
+    await user.type(
+      within(drawer).getByLabelText('Name to show for it (leave empty to keep its present name)'),
+      'influenza',
+    );
+    await user.click(within(drawer).getByRole('button', { name: 'Merge this name into that condition' }));
+    await user.click(within(drawer).getByRole('button', { name: 'Yes, merge it' }));
+    expect(post).toHaveBeenLastCalledWith('/disease-merges', {
+      source_disease_id: 'dis_flu',
+      target_disease_id: 'dis_influenza',
+      note: 'Both are influenza.',
+      kept_name: 'influenza',
+    });
+    expect(
+      await within(drawer).findByText('Merged. This name is now kept as another name of that condition.'),
+    ).toBeInTheDocument();
+    // Once merged, the panel offers to take the name out again.
+    expect(await within(drawer).findByRole('button', { name: 'Take this name out again' })).toBeInTheDocument();
   });
 
   it('asks the service for nothing when no reviewer sign-in is configured', async () => {

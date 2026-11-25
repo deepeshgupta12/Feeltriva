@@ -190,3 +190,64 @@ def test_the_sets_a_version_is_published_from_are_listed_for_reviewers_only(clie
         mine = [row for row in body[kind] if row["id"] == f"{wanted}-{tag}"]
         assert mine == [{"id": f"{wanted}-{tag}", "version": f"{wanted}-{tag}-1", "review_status": "pending"}]
         assert [row["id"] for row in body[kind]] == sorted(row["id"] for row in body[kind])
+
+
+def test_follow_up_questions_and_sets_of_rules_are_listed_and_decided_like_any_other_row(
+    client, api: Api, reviewer: Api, owner_db
+):
+    from feeltriva_api.models import Feature, FollowupQuestion, RuleBundle
+
+    tag = uuid.uuid4().hex[:10]
+    with owner_db.transaction(None, role="migration") as tx:
+        tx.add(RuleBundle(bundle_id=f"aa-{tag}", version=f"aa-{tag}-1", manifest_uri="test://q"))
+        tx.add(Feature(feature_id=f"feat_q_{tag}", preferred_name=f"hat {tag}", kind="symptom", value_type="boolean"))
+        tx.flush()
+        for key, about in (("one", f"feat_q_{tag}"), ("two", None)):
+            tx.add(
+                FollowupQuestion(
+                    question_id=f"q.{tag}.{key}",
+                    bundle_id=f"aa-{tag}",
+                    feature_id=about,
+                    wording=f"An invented question {key}?",
+                    answer_schema={"type": "yes_no_unsure"},
+                    applicability={},
+                    branch_rules={},
+                    evidence_ids=[],
+                )
+            )
+    questions, sets = "/internal/v1/review/questions", "/internal/v1/review/rule-sets"
+    for path in (questions, sets):
+        assert client.get(path).status_code == 401 and client.get(path, headers=api.headers(None)).status_code == 403
+    listed = client.get(questions, params={"limit": 200}, headers=reviewer.headers(None)).json()
+    mine = [item for item in listed["items"] if item["bundle_id"] == f"aa-{tag}"]
+    assert mine == [
+        {
+            "question_id": f"q.{tag}.one",
+            "bundle_id": f"aa-{tag}",
+            "wording": "An invented question one?",
+            "answer_type": "yes_no_unsure",
+            "asks_about": {"id": f"feat_q_{tag}", "term": f"hat {tag}"},
+            "review_status": "pending",
+        },
+        {
+            "question_id": f"q.{tag}.two",
+            "bundle_id": f"aa-{tag}",
+            "wording": "An invented question two?",
+            "answer_type": "yes_no_unsure",
+            "asks_about": None,
+            "review_status": "pending",
+        },
+    ]
+    assert client.get(questions, params={"status": "nonsense"}, headers=reviewer.headers(None)).status_code == 422
+    decided = client.post(
+        "/internal/v1/review/decisions",
+        json={"target_type": "followup_question", "target_id": f"q.{tag}.one", "status": "approved", "note": "ok"},
+        headers=reviewer.headers(None),
+    )
+    assert decided.status_code == 200
+    approved = client.get(questions, params={"status": "approved", "limit": 200}, headers=reviewer.headers(None)).json()
+    assert f"q.{tag}.one" in [item["question_id"] for item in approved["items"]]
+    body = client.get(sets, headers=reviewer.headers(None)).json()
+    assert body["total"] == len(body["items"])
+    (mine_set,) = [item for item in body["items"] if item["bundle_id"] == f"aa-{tag}"]
+    assert (mine_set["review_status"], mine_set["approved_by"], mine_set["rules_by_status"]) == ("pending", None, {})
