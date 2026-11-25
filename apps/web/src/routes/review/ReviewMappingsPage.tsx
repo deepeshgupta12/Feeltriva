@@ -24,7 +24,10 @@ function MappingsView({ kind, title, caption, children }: MappingsViewProps) {
 
   return (
     <div>
-      <ReviewPageHeader title={title} badge={<StatusBadge tone="neutral">Counted from the data files</StatusBadge>}>
+      <ReviewPageHeader
+        title={title}
+        badge={<StatusBadge tone="neutral">Imported dataset audit · counted from the data files</StatusBadge>}
+      >
         {children}
       </ReviewPageHeader>
       {state.status === 'loading' ? <ReviewLoading label="Loading…" /> : null}

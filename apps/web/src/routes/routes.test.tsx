@@ -485,13 +485,15 @@ describe('internal review', () => {
     for (const figure of ['6', '960', '37', '27,622']) {
       expect(await screen.findByText(figure)).toBeInTheDocument();
     }
-    expect(screen.getAllByText('Counted from the data files')).toHaveLength(4);
+    expect(screen.getAllByText('Imported dataset audit · counted from the data files')).toHaveLength(4);
     expect(screen.getByText(/Not clinically approved conditions/)).toBeInTheDocument();
     expect(screen.getByText(/Not a count of unique patients/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('link', { name: 'Model test results' }));
     expect(
-      await screen.findByText('The trial model was rejected: it must not be used for patients.'),
+      await screen.findByText(
+        'Baseline rejected for clinical serving. In plain words: the trial model must not be used for patients.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('Research only')).toBeInTheDocument();
     for (const value of ['15.71%', '20.56%', '39.67%', '39 / 46']) {

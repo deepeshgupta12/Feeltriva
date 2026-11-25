@@ -750,7 +750,9 @@ async function run() {
     await reviewNav.getByRole('link', { name: 'Model test results' }).click();
     await expectVisible(
       page,
-      page.getByText('The trial model was rejected: it must not be used for patients.'),
+      page.getByText(
+        'Baseline rejected for clinical serving. In plain words: the trial model must not be used for patients.',
+      ),
       's10: research baseline verdict',
     );
     await expectVisible(page, page.getByText('Not evaluated').first(), 's10: clinical validation says "Not evaluated"');

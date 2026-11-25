@@ -5615,3 +5615,44 @@ next run passed all 43. The test should wait for the answer and not for a time; 
 - The answer of the service does not name the published version it came from; the page does not
   show one.
 - The route is not in `specs/openapi.json`; its answer is typed by hand in the web app (M3.12).
+
+### Cross-check — the design demo's review screens against section 12 of the handoff
+
+**What it is for.** After M2.4g I found that section 12 of `docs/06_LOVABLE_FRONTEND_PROMPT.md`
+prescribes words for the design demo's reviewer console, and that I had reworded them without
+checking. The owner on 2026-11-25: "cross check this as well".
+
+**Checked, requirement by requirement.**
+
+| Section 12 asks for | In the design demo now | Verdict |
+|---|---|---|
+| A denser layout with its own navigation: Overview, Disease mappings, Feature mappings, Evidence, Questions/rules, Releases, Data quality | The same seven sections and a model tab: Overview, Condition names, Symptom and question names, Texts and facts, Questions and rules, Published versions, Repeated columns, Model test results | Met; the names are the plain ones of E97 |
+| Clearly labelled "Internal review" | "Internal review" in the header | Met, word for word |
+| Overview cards with "Imported dataset audit" labels: 6 archives, 960 candidates, 37 repeated header names, 27,622 shared signatures | The four figures 6, 960, 37 and 27,622, each labelled "Imported dataset audit · counted from the data files" | Met; the label was missing after M2.4g and is put back |
+| Not described as clinically approved conditions or unique patients | "Not clinically approved conditions"; "Not a count of unique patients" | Met |
+| Mapping table: source, original term, proposed canonical term, mapping method, review status, conflicts, last reviewed | Seven columns in that order: Data file, Name in the data file, Name it is grouped under, How it was grouped, Decision so far, Disagreements, Last looked at | Met; plain names |
+| Search, status filter, detail drawer, reviewer notes; source term and column position preserved | All four; the name is shown as in the file with each column number | Met |
+| Review actions on mock state only, showing "Demo change"; nothing approved for live serving | "Demo change" on every changed row; "They approve no medical content for real use" | Met |
+| Evidence detail: original statement, source URL/locator, proposed atomic claim, applicability, status, reviewer notes | Six fields: Original wording, Where it comes from (with the address), The single point taken from it, For whom or when it holds, Decision so far, Notes | Met; plain names |
+| Release view: version, included sources/mappings/rules, pending items, a disabled publication control with a reason | Version, "What it holds" (data sources, names, rules and questions), "Still to do before it can be published", a disabled "Publish this version" with the reason | Met |
+| No invented clinical metrics; only the measured archive-11 values, labelled research-only | 15.71%, 20.56%, 39.67%, 39 / 46, under "Research only" | Met |
+| State "Baseline rejected for clinical serving." | "Baseline rejected for clinical serving. In plain words: the trial model must not be used for patients." | Met; the sentence was missing after M2.4g and is put back |
+| Empty clinical-validation fields say "Not evaluated", not 0% | "Not evaluated" three times; no "0%" | Met, word for word |
+
+**Changed.** The badge of the overview cards and of the three mapping pages, the description of
+the mapping panel, and the verdict sentence of the sample evaluation; the test and the smoke
+check that name them.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 143 passed (10 files); built |
+| `pnpm smoke` (design demo on port 5173) | 375 passed, 0 failed |
+| `uv run pytest` (SQLite) / on PostgreSQL with archives, full output saved | 285 passed, 79 skipped / 363 passed, 1 skipped |
+| `detect_changes` before commit | text of the demo's pages and of two tests only; no flow of the service |
+
+**What remains different from the handoff, deliberately.** The names of the navigation, of the
+table's columns and of the detail's fields are the plain ones of E97, by the owner's later
+instruction. If the owner wants the handoff's own names back on the design demo, that is one
+list of words to turn round.
