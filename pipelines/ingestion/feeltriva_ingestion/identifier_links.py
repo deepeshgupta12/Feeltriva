@@ -48,7 +48,7 @@ from .mondo_identifiers import (
 )
 from .ontologies import MONDO
 from .release import load_supplementary
-from .vocabulary import ICD, REVIEW_DIR, IcdClient, IcdSettings, link_id, store_links
+from .vocabulary import ICD, REVIEW_DIR, IcdClient, IcdSettings, NotAsked, link_id, store_links
 
 REVIEW_FILE = "mondo_identifiers.csv"
 METHOD = "mondo_equivalent"
@@ -87,10 +87,13 @@ def import_identifiers(
     entries: list[dict[str, Any]] | None = None,
     source_ids: list[str] | None = None,
     progress: Callable[[str], None] = lambda _message: None,
+    online: bool = False,
 ) -> dict[str, Any]:
     """Store, as pending links, the SNOMED CT and ICD-11 identifiers MONDO marks equivalent to the terms our labels link to.
 
-    source_ids limits the labels to those mapped from these sources (used by tests); default all."""
+    source_ids limits the labels to those mapped from these sources (used by tests); default all.
+    online: ask WHO for the title and code of an ICD-11 entity whose answer is not saved. Without it nothing is
+    sent: such an identifier gets the outcome `who_was_not_asked` and neither a link nor a proposal."""
     entry = next(
         (e for e in (load_supplementary() if entries is None else entries) if e.get("kind") == "mondo_release"), None
     )
@@ -175,17 +178,25 @@ def import_identifiers(
             outcome, chosen, of = grade(listed, ICD_FOUNDATION)
             record: dict[str, Any] = {"outcome": outcome, "identifiers": of, "stored": None, "who": None}
             if outcome == SEVERAL:  # none is chosen; each goes before a reviewer under WHO's own title (M2.4b)
-                client = client or IcdClient(IcdSettings())
-                release = release or client.release()
-                record["who_of_each"] = {
-                    found.number: resolve_icd(client, release, found.number) for found in of if found.equivalent
-                }
+                client = client or IcdClient(IcdSettings(), online=online)
+                try:
+                    release = release or client.release()
+                    record["who_of_each"] = {
+                        found.number: resolve_icd(client, release, found.number) for found in of if found.equivalent
+                    }
+                except NotAsked:  # no saved answer, and WHO may not be asked: no proposal for this label
+                    record["who_of_each"] = None
             if chosen is not None:
-                client = client or IcdClient(IcdSettings())
-                release = release or client.release()
-                who = resolve_icd(client, release, chosen.number)
+                client = client or IcdClient(IcdSettings(), online=online)
+                try:
+                    release = release or client.release()
+                    who, asked = resolve_icd(client, release, chosen.number), True
+                except NotAsked:  # no saved answer, and WHO may not be asked: nothing is stored for it
+                    who, asked = None, False
                 record["who"] = who
-                if who is None:
+                if not asked:
+                    record["outcome"] = NOT_ASKED
+                elif who is None:
                     record["outcome"] = UNKNOWN_TO_WHO
                 elif who["mms"] and who["mms"]["same_entity"]:
                     record["stored"] = {
@@ -286,6 +297,14 @@ def import_identifiers(
         "stored": stored,
         "resting_on_a_rejected_mondo_link": on_rejected,
         "who_calls": client.calls if client else 0,
+        "requests_sent": client.sent if client else 0,
+        # ICD-11 entities whose answer is not saved while WHO was not to be asked: nothing was sent for them.
+        "not_asked": sum(
+            (record["outcome"] == NOT_ASKED)
+            + (sum(found.equivalent for found in record["identifiers"]) if record.get("who_of_each", {}) is None else 0)
+            for item in items
+            for record in item["outcomes"].values()
+        ),
         "case_labels": {
             "all": int(total),
             "label_has_snomed_ct": int(with_snomed),
@@ -434,7 +453,7 @@ def several_identifiers(items: list[dict[str, Any]], mondo_version: str, icd_rel
                     )
                 )
         record = item["outcomes"][ICD11]
-        if record["outcome"] == SEVERAL:
+        if record["outcome"] == SEVERAL and record["who_of_each"] is not None:
             equivalent = [found for found in record["identifiers"] if found.equivalent]
             reason = _SEVERAL_REASON.format(n=len(equivalent), vocabulary=ICD11)
             for found in equivalent:
@@ -477,3 +496,7 @@ def several_identifiers(items: list[dict[str, Any]], mondo_version: str, icd_rel
                     )
                 )
     return rows
+
+
+# The outcome of an ICD-11 identifier whose answer is not saved while WHO was not to be asked (decision E98).
+NOT_ASKED = "who_was_not_asked"

@@ -78,6 +78,10 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
   person who is neither a programmer nor a clinician must understand every title, explanation, column
   heading, button and message. Use the word list of E97 for any new screen or message, put system codes
   into words through `apps/web/src/routes/review/live/words.ts`, and never change the stored data to do so.
+- **No command contacts an outside service on its own** (owner's instruction, 2026-11-25; decision E98). The
+  look-ups that use the WHO ICD API work from the answers saved in `data/derived/icd_cache/` and send nothing;
+  run one with `--online` only when the owner has asked for that run, and report every request it sent. A new
+  command that needs an outside service is built the same way: offline by default, an explicit switch, a count.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
 
 ### GitNexus impact analysis before ANY code change (mandatory)
@@ -144,9 +148,9 @@ uv run python -m feeltriva_ingestion load-release              # trace archive 1
 uv run python -m feeltriva_ingestion derive-meanings           # proposed feature kinds and zero meanings (pending)
 uv run python -m feeltriva_ingestion load-answers              # archive-15 answers that are not yes/no, from the release (run load-release first; first run about 80 min)
 uv run python -m feeltriva_ingestion load-conditions           # what the release lists per condition, as pending source-provided evidence and links
-uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-11 and LOINC codes; close results stored for review (needs the ICD key in .env)
+uv run python -m feeltriva_ingestion link-vocabularies         # candidate ICD-11 and LOINC codes; other results stored for review. Works from saved answers and sends nothing; `--online` asks WHO for what is missing (needs the ICD key in .env; only on the owner's instruction)
 uv run python -m feeltriva_ingestion link-ontologies           # candidate HPO and MONDO terms from hp.json and mondo.owl in data/raw (offline); names without a link stored for review
-uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent; several for one label stored for review (needs the ICD key)
+uv run python -m feeltriva_ingestion import-identifiers        # SNOMED CT and ICD-11 identifiers MONDO marks equivalent; several for one label stored for review. Works from saved answers; `--online` as above
 uv run python -m feeltriva_ingestion suggest-relations         # possible synonyms and subtypes for review (nothing merged)
 uv run python -m feeltriva_ingestion extract-claims            # statements split into single claims with spans (pending); --remake after a change of the rules
 uv run python -m feeltriva_api.rule_drafts                     # the draft urgency rules, checked against the feature vocabulary and stored pending

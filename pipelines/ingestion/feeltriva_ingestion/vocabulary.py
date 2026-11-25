@@ -36,6 +36,7 @@ import urllib.request
 import zipfile
 from collections import Counter
 from collections.abc import Callable
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -105,7 +106,11 @@ def query_for(term: str) -> str:
 
 
 class IcdClient:
-    """The WHO ICD API, version 2: client-credentials token, MMS search, an on-disk cache."""
+    """The WHO ICD API, version 2: client-credentials token, MMS search, an on-disk cache.
+
+    A client asks WHO nothing unless it was made with `online=True` (decision E98). Without it, an answer
+    that is saved on disk is returned, and one that is not raises `NotAsked`: no token is requested and
+    nothing leaves this machine."""
 
     def __init__(
         self,
@@ -114,15 +119,19 @@ class IcdClient:
         fetch: Fetch = _fetch,
         pause: float = 0.2,
         retry_wait: float = 2.0,
+        online: bool = False,
     ) -> None:
         self._settings, self._fetch, self._pause, self._retry_wait = settings, fetch, pause, retry_wait
         self._cache, self._token, self.calls = cache_dir, "", 0
+        self.online, self.not_asked = online, 0
+        self.sent = 0  # every request sent to WHO: access tokens, repeated attempts and "not found" answers too
 
     def _headers(self) -> dict[str, str]:
         if not self._token:
             if not (self._settings.icd_api_client_id and self._settings.icd_api_client_secret):
                 raise SystemExit("ICD_API_CLIENT_ID and ICD_API_CLIENT_SECRET are required (in .env, never in Git)")
             pair = f"{self._settings.icd_api_client_id}:{self._settings.icd_api_client_secret}".encode()
+            self.sent += 1
             reply = self._fetch(
                 TOKEN_URL,
                 {
@@ -142,13 +151,26 @@ class IcdClient:
     def get(self, url: str, cache_key: str) -> dict[str, Any]:
         path = self._cache / f"{hashlib.sha256(cache_key.encode()).hexdigest()[:32]}.json"
         if path.is_file():
-            return dict(json.loads(path.read_text(encoding="utf-8")))
+            saved = dict(json.loads(path.read_text(encoding="utf-8")))
+            if saved.get(_NOT_FOUND):  # WHO's saved answer was "not found": given again as that, without asking
+                raise urllib.error.HTTPError(url, 404, "Not Found (saved answer)", Message(), None)
+            return saved
+        if not self.online:
+            self.not_asked += 1
+            raise NotAsked(cache_key)
         reply = None
         for attempt in range(5):
             try:
-                reply = self._fetch(url, self._headers(), None)
+                headers = self._headers()
+                self.sent += 1
+                reply = self._fetch(url, headers, None)
                 break
             except urllib.error.HTTPError as error:
+                if error.code == 404:  # an answer as well: saved, so that WHO is never asked for it again
+                    self.calls += 1
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(json.dumps({_NOT_FOUND: True}), encoding="utf-8")
+                    raise
                 if error.code == 401 and attempt == 0:
                     self._token = ""  # the token lasts about an hour
                 elif error.code not in (429, 500, 502, 503, 504):
@@ -298,18 +320,27 @@ def link_vocabularies(
     loinc_entry: dict[str, Any] | None = None,
     source_ids: list[str] | None = None,
     progress: Callable[[str], None] = lambda _message: None,
+    online: bool = False,
 ) -> dict[str, Any]:
     """Look up every disease candidate and named feature term, and store the exact matches as pending links.
 
-    source_ids limits the subjects to those mapped from these sources (used by tests); default all."""
+    source_ids limits the subjects to those mapped from these sources (used by tests); default all.
+    online: ask WHO for a name whose answer is not saved. Without it nothing is sent: such a name is counted
+    as not asked and gets neither a link nor a proposal."""
     if database_url is None:
         app = Settings()
         database_url = app.migration_database_url or app.database_url
     if not database_url:
         raise SystemExit("MIGRATION_DATABASE_URL (or DATABASE_URL) is required")
-    client = client or IcdClient(IcdSettings())
-    release = client.release()
-    chapters = client.chapters(release)
+    client = client or IcdClient(IcdSettings(), online=online)
+    try:
+        release = client.release()
+        chapters = client.chapters(release)
+    except NotAsked as missing:
+        raise SystemExit(
+            f"the ICD-11 release and its chapters are not among the saved answers ({missing}). Nothing was sent to "
+            "WHO. Run the command with --online to ask WHO; it sends only the text of a name"
+        ) from missing
     table = loinc_table(raw_dir, loinc_entry) if loinc_entry else []
     engine = create_engine(database_url)
     items: list[dict[str, Any]] = []
@@ -328,10 +359,14 @@ def link_vocabularies(
                 "links": [],
                 "best": None,
                 "sent": "",
+                "not_asked": False,
             }
             if not question:  # a name; a whole question sentence is not sent to the search
                 item["sent"] = query_for(name)
-                reply = client.search(release, item["sent"])
+                try:
+                    reply = client.search(release, item["sent"])
+                except NotAsked:  # no saved answer, and WHO may not be asked: nothing is known about this name
+                    item["not_asked"], reply = True, {}
                 item["best"] = best_result(reply)
                 for match in exact_matches(item["sent"], reply):
                     detail = {
@@ -373,6 +408,8 @@ def link_vocabularies(
         "items": items,
         "inserted": dict(stored),
         "api_calls": client.calls,
+        "requests_sent": client.sent,
+        "not_asked": sum(1 for item in items if item["not_asked"]),
         "table": {"links": total, "decided_without_reviewer": unsigned, "without_title_or_uri": incomplete},
         "proposals": proposed,
         "for_review": proposals.lines(proposed),
@@ -388,6 +425,8 @@ def summarise(result: dict[str, Any]) -> dict[str, Any]:
         icd = [link for link in item["links"] if link["system"] == ICD]
         if not item["sent"]:
             rows[(group, "not sent: a question sentence, not a name")] += 1
+        elif item.get("not_asked"):
+            rows[(group, "not asked: no saved answer, and WHO is asked only with --online")] += 1
         elif icd:
             rows[(group, "name found in ICD-11")] += 1
             chapters[(group, icd[0]["detail"]["chapter"])] += 1
@@ -566,3 +605,12 @@ def close_results(items: list[dict[str, Any]], release: str, chapters: dict[str,
             )
         )
     return rows
+
+
+# -- asking WHO only when told to (decision E98) --------------------------------------------------------
+class NotAsked(Exception):
+    """An answer that is not saved on disk, wanted from a client that may not ask WHO for it."""
+
+
+# How an answer "not found" is saved, so that it is an answer like any other and is not asked for again.
+_NOT_FOUND = "feeltriva_saved_answer_not_found"

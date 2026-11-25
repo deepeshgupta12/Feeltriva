@@ -57,6 +57,12 @@ def main() -> int:
         help="extract-claims: delete and make again the claims of statements that hold a claim the rules no longer "
         "give; a statement with a reviewer's decision is left",
     )
+    parser.add_argument(
+        "--online",
+        action="store_true",
+        help="link-vocabularies / import-identifiers: ask the WHO ICD API for what is not among the saved answers "
+        "(sends the text of a name or an ICD-11 entity number, nothing else). Without it nothing is sent",
+    )
     args = parser.parse_args()
     started = time.monotonic()
     try:
@@ -282,11 +288,13 @@ def main() -> int:
                 args.raw_dir,
                 loinc_entry=loinc,
                 progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True),
+                online=args.online,
             )
             summary = summarise_links(result)
             print(
                 f"ICD-11 release {result['release']}; {result['api_calls']} new API calls; links inserted {result['inserted']}"
             )
+            print(_WHO[args.online].format(**result), f"{result['not_asked']} names have no saved answer.")
             for (group, outcome), n in sorted(summary["rows"].items()):
                 print(f"  {group}: {outcome}: {n}")
             for (group, chapter), n in sorted(summary["chapters"].items(), key=lambda kv: (kv[0][0], -kv[1])):
@@ -364,7 +372,9 @@ def main() -> int:
             from .identifier_links import write_review as write_identifier_review
 
             result = import_identifiers(
-                args.raw_dir, progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True)
+                args.raw_dir,
+                progress=lambda message: print(f"... {message}", file=sys.stderr, flush=True),
+                online=args.online,
             )
             counted = result["counted"]
             print(
@@ -387,6 +397,7 @@ def main() -> int:
             for outcome, n in sorted(summary["agreement"].items()):
                 print(f"ICD-11 code reached through MONDO: {outcome}: {n}")
             print(f"ICD-11 release {result['icd_release'] or 'not asked'}; {result['who_calls']} new WHO calls")
+            print(_WHO[args.online].format(**result), f"{result['not_asked']} ICD-11 entities have no saved answer.")
             print(f"case labels: {result['case_labels']}")
             print(f"links inserted now: {result['inserted']}")
             for system, status, count, _incomplete, _unsigned in result["stored"]:
@@ -561,6 +572,13 @@ def main() -> int:
         print(f"ERROR {exc}", file=sys.stderr)
         return 2
 
+
+# What a look-up says about WHO (decision E98): by default it works from the saved answers and sends nothing.
+_WHO = {
+    False: "WHO was not asked (no --online): nothing was sent, and what has no saved answer was not looked up.",
+    True: "WHO was asked for what was not saved (--online): {requests_sent} requests sent, access tokens and "
+    "repeated attempts included.",
+}
 
 if __name__ == "__main__":
     raise SystemExit(main())

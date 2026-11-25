@@ -119,9 +119,9 @@ uv run python -m feeltriva_ingestion load-release    # trace archive 15 to its s
 uv run python -m feeltriva_ingestion derive-meanings # proposed kind and zero meaning per column, pending review (about 20 s)
 uv run python -m feeltriva_ingestion load-answers    # the answers behind archive 15's questions that are not yes/no, from the source release (first run about 80 min)
 uv run python -m feeltriva_ingestion load-conditions # what the source release lists per condition: symptoms, antecedents, severity, ICD-10; all pending (1 – 3 min)
-uv run python -m feeltriva_ingestion link-vocabularies # candidate ICD-11 and LOINC codes (first run about 40 min; later runs seconds)
+uv run python -m feeltriva_ingestion link-vocabularies # candidate ICD-11 and LOINC codes, from the saved answers; sends nothing (seconds). With --online it asks WHO for what is not saved (a first run about 40 min)
 uv run python -m feeltriva_ingestion link-ontologies   # candidate HPO and MONDO terms from two local files; nothing leaves this machine (about 15 s)
-uv run python -m feeltriva_ingestion import-identifiers # SNOMED CT and ICD-11 identifiers that MONDO marks equivalent (first run about 4 min; later runs seconds)
+uv run python -m feeltriva_ingestion import-identifiers # SNOMED CT and ICD-11 identifiers that MONDO marks equivalent, from the saved answers; sends nothing. With --online it asks WHO for what is not saved (a first run about 4 min)
 uv run python -m feeltriva_ingestion suggest-relations # possible synonyms and subtypes for review; nothing is merged (seconds)
 uv run python -m feeltriva_ingestion extract-claims    # every statement split into single claims with exact spans, pending review (seconds); add --remake after a change of the rules
 uv run python -m feeltriva_api.rule_drafts             # the draft urgency rules checked against the feature vocabulary and stored pending (nothing approved, nothing served)
@@ -129,7 +129,9 @@ uv run python -m feeltriva_api.response_text_sets      # the four response texts
 uv run python -m feeltriva_api.serving_bundle          # the serving bundle assembled from the current releases, written to data/derived/ (seconds)
 ```
 
-`link-vocabularies` needs a WHO ICD API key in `.env` (`ICD_API_CLIENT_ID`, `ICD_API_CLIENT_SECRET`; see `.env.example`) and
+Neither command contacts WHO unless it is run with `--online` (decision E98): by default both work from the answers saved in
+`data/derived/icd_cache/`, send nothing, and count what has no saved answer as not asked. With `--online` a command reports
+every request it sent. `link-vocabularies --online` needs a WHO ICD API key in `.env` (`ICD_API_CLIENT_ID`, `ICD_API_CLIENT_SECRET`; see `.env.example`) and
 the LOINC release (`Loinc_2.83.zip`) in `data/raw/`. It sends only term text (a column heading or a disease label) to the
 WHO API. `load-release` needs the DDXPlus release (`22687585.zip`, registered in `specs/supplementary_sources.json`) in `data/raw/`.
 `link-ontologies` needs `hp.json` (HPO) and `mondo.owl` (MONDO) in `data/raw/`; each is read only when its checksum and release

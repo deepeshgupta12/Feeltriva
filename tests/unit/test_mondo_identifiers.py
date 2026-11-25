@@ -88,7 +88,7 @@ def test_who_is_asked_for_the_official_title_and_where_the_entity_is_coded(tmp_p
             "900009": ("Synthetic grouping", None),
         }
     )
-    client = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0)
+    client = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0, online=True)
     same = resolve_icd(client, "2026-01", "900001")
     assert same == {
         "title": "Synthetic fever disease",

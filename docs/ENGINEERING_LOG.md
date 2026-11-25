@@ -36,6 +36,7 @@ command output, not estimated.
 | BUG-025 | M1.11, M1.13 / M2.5c3, M2.5d1 | The self-checks of `load-evidence` and `completeness` reported every row that was not `pending`, so both commands would fail as soon as a reviewer decided a row (the fault of BUG-021, left in two more commands). Shown by the test suite in M2.5c3 | Fixed in M2.5d1 |
 | BUG-026 | M1.10 / M2.5f | A test of the chunk loader searched the shared test database for words every run stores, with a limit of 50, and expected its own row among the results; once more than 50 runs had left their rows it failed depending on the order | Fixed in M2.5f: the test searches for its own run's word |
 | BUG-027 | M2.1 / M2.4a | Two notes recorded on one item within a second came back in either order on SQLite, and every note of one transaction carried the same time on PostgreSQL, because the database filled the time in | Fixed in M2.4a: a note's time is set by the code, to the microsecond |
+| BUG-028 | M2.16 / M2.4e | An answer "not found" from the WHO ICD API was neither saved nor counted. Every run of `import-identifiers` therefore asked WHO again for the same three ICD-11 entities (four requests, one entity being reached from two labels) and reported them as none; the request for an access token was not counted either. Found when the command was first run without permission to ask WHO and four entities had no saved answer | Fixed in M2.4e: "not found" is saved like any answer; every request sent is counted |
 
 ## Entries
 
@@ -4928,7 +4929,8 @@ link. All `pending`. No link was made: `terminology_links` holds 2,542 rows as b
 pending, 5 approved, 6 rejected). For 16 rows the link they would make exists already by another
 route; the screen says so. `link-vocabularies` made 0 calls to WHO (all answers were cached);
 `import-identifiers` made 20, each for one ICD-11 entity number, to fetch WHO's own title and code
-for the identifiers of the five labels with several. `link-ontologies` reads two local files.
+for the identifiers of the five labels with several. (Corrected in M2.4e: that run sent 25
+requests, not 20; see BUG-028.) `link-ontologies` reads two local files.
 
 **Two figures of the plan do not hold on today's data, reported as found.** (1) "The 19
 abbreviation matches first": none is left. They were settled in M2.15 through
@@ -5161,3 +5163,82 @@ because the owner's tests of these sub-steps need the real data; the design demo
 not running, and it uses the same port. Nothing runs on port 5174. The test service on port 8001
 ran only during the browser test and is stopped. This paragraph was added in a following
 documents-only commit, after which the index was refreshed again.
+
+### M2.4e — The look-ups ask WHO nothing unless told to
+
+**What it is for.** I reported after M2.4b that `import-identifiers` had sent 20 requests to WHO
+while loading rows for review. The owner: "This needs to be fixed." My reading (decision E98): a
+command must not contact an outside service unless the owner asked for it in that run.
+
+**Impact analysis before editing.** `IcdClient`: MEDIUM, 8 direct users (the two commands that
+make one, `resolve_icd`, and the test files). `resolve_icd`: LOW, one caller. Plan for each user:
+both commands make their client offline by default and take an `online` switch; every test that
+puts a stand-in in WHO's place says `online=True`. No HIGH or CRITICAL result.
+
+**Implemented.**
+
+- `IcdClient(..., online=False)`: an answer saved on disk is returned; one that is not raises
+  `NotAsked`. Nothing is sent, not even the request for an access token.
+- `link_vocabularies(..., online=False)` and `import_identifiers(..., online=False)`. A name
+  without a saved answer is counted as "not asked" and gets no link and no row for review; an
+  ICD-11 entity without one gets the outcome `who_was_not_asked` and nothing is stored for it.
+  With no saved answers at all, `link-vocabularies` stops with a plain message.
+- `--online` on the command line, for these two commands only. The report says which of the two
+  happened: "WHO was not asked (no --online): nothing was sent …" or "WHO was asked … N requests
+  sent, access tokens and repeated attempts included."
+- An answer "not found" is saved like any other and is not asked for again; `sent` counts every
+  request (BUG-028).
+
+**The count I reported was wrong.** The run of 2026-11-24 sent 25 requests, not 20: the 20
+counted, 4 more that WHO answered with "not found" (one entity WHO does not know; two entities
+its coding look-up does not place, one of them reached from two labels), and 1 for an access
+token. The program counted only answers it saved. Each carried one ICD-11 entity number, or, for
+the token, the access key. Every earlier run of this command since M2.16 sent those 4 as well.
+
+**Three answers restored from our own records, not asked for again.** The three "not found"
+answers were never saved, so the first run without `--online` reported four labels as "not
+asked". Their outcomes are on record: the stored links of `diabetes`, `influenza` and `flu` say
+WHO's coding look-up placed neither entity (`coded_in_mms_under` is null), and the log of M2.16
+records one entity WHO does not know, which is the one of `hepatitis b`. I wrote these three
+answers into the saved answers. A run without `--online` then gave, line for line, the outcomes
+of the run of 2026-11-24, with 0 requests.
+
+**Run on the real data, without `--online`.**
+
+| Command | Requests sent | Without a saved answer | Saved answers before / after | Outcome |
+|---|---:|---:|---|---|
+| `link-vocabularies` | 0 | 0 names | 2,379 / 2,379 | 0 new links, 431 rows for review as before, no difference |
+| `import-identifiers`, first run | 0 | 4 ICD-11 entities | 2,379 / 2,379 | the four labels "not asked"; nothing stored or changed for them |
+| `import-identifiers`, after the three answers were restored | 0 | 0 | 2,382 / 2,382 | every outcome as on 2026-11-24; 18 rows for review as before |
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 72 files |
+| `uv run pytest` (SQLite, archives included) | 278 passed, 79 skipped (before: 275, 78) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 356 passed, 1 skipped (before: 352, 1) |
+| `detect_changes` before commit | 11 files; risk "high" by the 14 flows through the two commands and the command line, among them the two paths to WHO (`Link_vocabularies → _fetch`, `Import_identifiers → _fetch`), which are the ones meant. Changed definitions confirmed by comparing each file with the last commit: `IcdClient` (`__init__`, `_headers`, `get`), `link_vocabularies`, `summarise` of `vocabulary.py`, `import_identifiers`, `several_identifiers`, `main`; added: `NotAsked`, `_NOT_FOUND`, `NOT_ASKED`, `_WHO`. The other symbols it lists (`check`, `write_review`, `release`, `summarise` of `identifier_links.py`) stand below inserted lines and are unchanged |
+
+New tests: a client that is not online answers from disk and calls a stand-in that fails if it is
+called for nothing else; the look-up makes its own client offline unless told otherwise; the
+look-up over a partly saved store sends nothing, counts the name it could not look up, gives it
+no row, stops plainly when nothing is saved, and asks for exactly the missing name when online;
+`import-identifiers` gives the same outcomes from saved answers and "not asked" from none; a
+"not found" is saved, given again without a request, and every request sent is counted.
+
+**Bugs.**
+
+- **BUG-028 — a "not found" answer was neither saved nor counted** (above). *Found* when the
+  command first ran without permission to ask WHO. *Resolution:* saved like any answer; a counter
+  of every request sent; tests.
+
+**Limits, stated plainly.**
+
+- What was sent cannot be taken back. It was ICD-11 entity numbers and, earlier, the text of our
+  disease labels and column headings; never a case row, a count or a question sentence.
+- I restored three saved answers by hand from our records. If the owner prefers them fetched,
+  one run with `--online` would send three requests; the outcome would be the same.
+- A name or entity that has no saved answer stays "not asked" until a run with `--online`.
+  Today there is none.
+- The other look-up, `link-ontologies`, reads two local files and never contacted anything.

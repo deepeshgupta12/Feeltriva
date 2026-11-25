@@ -14,6 +14,7 @@ import zipfile
 
 import pytest
 from feeltriva_api.models import Disease, DiseaseMapping, Feature, FeatureMapping, MappingRelease, Source
+from feeltriva_ingestion import vocabulary
 from feeltriva_ingestion.archives import ArchiveError, sha256_file
 from feeltriva_ingestion.load import RELEASE_ID, source_id
 from feeltriva_ingestion.vocabulary import (
@@ -22,6 +23,7 @@ from feeltriva_ingestion.vocabulary import (
     LOINC,
     IcdClient,
     IcdSettings,
+    NotAsked,
     best_result,
     check,
     close_results,
@@ -132,7 +134,7 @@ def test_only_an_entity_carrying_exactly_the_name_is_a_match():
 
 def test_the_client_asks_for_one_token_caches_answers_and_renews_an_expired_token(tmp_path):
     api = FakeApi({"cough": [entity("MD12", "Cough")]})
-    client = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0)
+    client = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0, online=True)
     assert client.release() == "2026-01" and client.chapters("2026-01")["21"].startswith("Symptoms, signs")
     first = client.search("2026-01", "cough")
     calls = client.calls
@@ -143,11 +145,11 @@ def test_the_client_asks_for_one_token_caches_answers_and_renews_an_expired_toke
     api.fail_once = True
     client.search("2026-01", "fever")
     assert api.tokens == 2  # a 401 makes it fetch a new token and try again
-    again = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0)
+    again = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0, online=True)
     again.search("2026-01", "cough")
     assert again.calls == 0  # a new run reuses the cache and asks the API nothing
     with pytest.raises(SystemExit, match="ICD_API_CLIENT_ID"):
-        IcdClient(IcdSettings(_env_file=None), tmp_path / "empty", api, pause=0).release()
+        IcdClient(IcdSettings(_env_file=None), tmp_path / "empty", api, pause=0, online=True).release()
 
 
 def test_a_dropped_connection_is_retried_and_a_dead_one_ends_with_a_plain_message(tmp_path):
@@ -160,7 +162,7 @@ def test_a_dropped_connection_is_retried_and_a_dead_one_ends_with_a_plain_messag
             raise urllib.error.URLError("The handshake operation timed out")
         return api(url, headers, body)
 
-    client = IcdClient(SETTINGS, tmp_path / "cache", flaky, pause=0, retry_wait=0)
+    client = IcdClient(SETTINGS, tmp_path / "cache", flaky, pause=0, retry_wait=0, online=True)
     assert client.search("2026-01", "cough")["destinationEntities"][0]["theCode"] == "MD12" and failures["left"] == 0
 
     def dead(url, headers, body):
@@ -169,7 +171,7 @@ def test_a_dropped_connection_is_retried_and_a_dead_one_ends_with_a_plain_messag
         raise TimeoutError("timed out")
 
     with pytest.raises(SystemExit, match="could not be reached after 5 attempts.*run the command again"):
-        IcdClient(SETTINGS, tmp_path / "other", dead, pause=0, retry_wait=0).search("2026-01", "fever")
+        IcdClient(SETTINGS, tmp_path / "other", dead, pause=0, retry_wait=0, online=True).search("2026-01", "fever")
     assert not list((tmp_path / "other").glob("*.json"))  # a failed call leaves nothing behind in the cache
 
 
@@ -283,7 +285,7 @@ def test_exact_name_matches_become_pending_links_and_nothing_else_does(tmp_path,
 
     def run():
         return link_vocabularies(
-            tmp_path, url, IcdClient(SETTINGS, tmp_path / "cache", api, pause=0), _loinc(tmp_path), [sid]
+            tmp_path, url, IcdClient(SETTINGS, tmp_path / "cache", api, pause=0, online=True), _loinc(tmp_path), [sid]
         )
 
     result = run()
@@ -472,7 +474,7 @@ def test_close_results_are_stored_for_review_never_as_links_and_a_decision_survi
     url = os.environ["TEST_MIGRATION_DATABASE_URL"]
 
     def run(table=replies):
-        client = IcdClient(SETTINGS, tmp_path / f"cache-{len(table)}", FakeApi(table), pause=0)
+        client = IcdClient(SETTINGS, tmp_path / f"cache-{len(table)}", FakeApi(table), pause=0, online=True)
         return link_vocabularies(tmp_path, url, client, None, [sid])
 
     def stored():
@@ -535,3 +537,108 @@ def test_close_results_are_stored_for_review_never_as_links_and_a_decision_survi
                 text("UPDATE link_proposals SET reviewer = 'dev-reviewer:test' WHERE disease_id LIKE :d"),
                 {"d": f"dis_{tag}_%"},
             )
+
+
+# ---- E98: WHO is asked only when a command is told to ------------------------------------------------
+def _never(url, headers, body):
+    raise AssertionError(f"WHO was asked although the client is not online: {url}")
+
+
+def test_a_client_that_is_not_online_answers_from_disk_and_asks_who_nothing(tmp_path):
+    api = FakeApi({"cough": [entity("MD12", "Cough")]})
+    online = IcdClient(SETTINGS, tmp_path / "cache", api, pause=0, online=True)
+    release = online.release()
+    online.chapters(release)
+    saved = online.search(release, "cough")
+    offline = IcdClient(SETTINGS, tmp_path / "cache", _never, pause=0)  # the default: not online
+    assert offline.online is False
+    assert offline.release() == release and offline.search(release, "cough") == saved
+    with pytest.raises(NotAsked, match="2026-01/search/fever"):
+        offline.search(release, "fever")
+    assert (offline.calls, offline.not_asked) == (0, 1)
+    # Not even a token is requested; with no saved answer at all, the release itself is not asked for.
+    with pytest.raises(NotAsked):
+        IcdClient(SETTINGS, tmp_path / "empty", _never, pause=0).release()
+    assert not (tmp_path / "empty").exists()
+
+
+def test_the_look_up_makes_its_own_client_offline_unless_it_is_told_to_go_online(monkeypatch):
+    made = []
+
+    class Recorder:
+        def __init__(self, settings, **options):
+            made.append(options)
+            raise SystemExit("client made")
+
+    monkeypatch.setattr(vocabulary, "IcdClient", Recorder)
+    for online in (False, True):
+        with pytest.raises(SystemExit, match="client made"):
+            link_vocabularies(database_url="postgresql://unused", online=online)
+    with pytest.raises(SystemExit, match="client made"):
+        link_vocabularies(database_url="postgresql://unused")  # nothing said: offline
+    assert made == [{"online": False}, {"online": True}, {"online": False}]
+
+
+@pytest.mark.postgres
+def test_the_look_up_sends_nothing_unless_online_and_counts_what_it_could_not_look_up(tmp_path, owner_db):
+    tag = uuid.uuid4().hex[:10]
+    sid = source_id(f"close-{tag}.zip", "data.csv")
+    names = {"saved": f"saved thing {tag}", "new": f"new thing {tag}"}
+    _named(owner_db, tag, sid, names)
+    replies = {
+        names["saved"]: [entity("XD10", f"Saved thing {tag}", "05")],
+        names["new"]: [entity("XD20", f"New thing {tag}", "05")],
+    }
+    url, cache = os.environ["TEST_MIGRATION_DATABASE_URL"], tmp_path / "cache"
+    # An earlier online run saved the release, its chapters and the answer for one of the two names.
+    earlier = IcdClient(SETTINGS, cache, FakeApi(replies), pause=0, online=True)
+    release = earlier.release()
+    earlier.chapters(release)
+    earlier.search(release, names["saved"])
+
+    offline = link_vocabularies(tmp_path, url, IcdClient(SETTINGS, cache, _never, pause=0), None, [sid])
+    assert check(offline) == [] and (offline["api_calls"], offline["not_asked"]) == (0, 1)
+    by = {item["name"]: item for item in offline["items"]}
+    assert [link["code"] for link in by[names["saved"]]["links"]] == ["XD10"]
+    # Nothing is known about the other name: no link, no best result, and no row for a reviewer either.
+    assert (by[names["new"]]["not_asked"], by[names["new"]]["links"], by[names["new"]]["best"]) == (True, [], None)
+    assert offline["proposals"]["given"] == 0
+    counted = summarise(offline)["rows"]
+    assert counted[("disease", "not asked: no saved answer, and WHO is asked only with --online")] == 1
+    assert counted[("disease", "name found in ICD-11")] == 1
+
+    # With no saved answer at all the command stops with a plain message, and still sends nothing.
+    with pytest.raises(SystemExit, match=r"Nothing was sent to\s+WHO.*--online"):
+        link_vocabularies(tmp_path, url, IcdClient(SETTINGS, tmp_path / "none", _never, pause=0), None, [sid])
+    # Told to go online, it asks for the one name that was missing, and for nothing else.
+    api = FakeApi(replies)
+    online = link_vocabularies(tmp_path, url, IcdClient(SETTINGS, cache, api, pause=0, online=True), None, [sid])
+    assert api.seen == [names["new"]] and (online["api_calls"], online["not_asked"]) == (1, 0)
+    assert check(online) == [] and online["inserted"] == {ICD: 1}
+
+
+def test_an_answer_not_found_is_saved_like_any_other_and_every_request_sent_is_counted(tmp_path):
+    seen = []
+
+    def who(url, headers, body):
+        seen.append(url)
+        if "connect/token" in url:
+            return {"access_token": "token-1", "token_type": "Bearer", "expires_in": 3600}
+        if url.endswith("/known"):
+            return {"title": "Known"}
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
+
+    client = IcdClient(SETTINGS, tmp_path / "cache", who, pause=0, online=True)
+    assert client.get("https://id.who.int/known", "known") == {"title": "Known"}
+    with pytest.raises(urllib.error.HTTPError) as first:
+        client.get("https://id.who.int/missing", "missing")
+    assert first.value.code == 404
+    # One token and two requests were sent, and all three are counted; "not found" counts as an answer received.
+    assert (len(seen), client.sent, client.calls) == (3, 3, 2)
+    # Asked again, the saved "not found" is given without a request, online or not.
+    for again in (client, IcdClient(SETTINGS, tmp_path / "cache", _never, pause=0)):
+        with pytest.raises(urllib.error.HTTPError) as saved:
+            again.get("https://id.who.int/missing", "missing")
+        assert saved.value.code == 404 and "saved answer" in str(saved.value)
+        assert again.get("https://id.who.int/known", "known") == {"title": "Known"}
+    assert (len(seen), client.sent) == (3, 3)

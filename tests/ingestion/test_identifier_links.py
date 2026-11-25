@@ -15,6 +15,7 @@ from feeltriva_ingestion.identifier_links import (
     DIFFERENT,
     ICD11,
     METHOD,
+    NOT_ASKED,
     REVIEW_FILE,
     SAME,
     SAME_CATEGORY,
@@ -129,7 +130,9 @@ def test_identifiers_mondo_marks_equivalent_become_pending_links_one_row_per_lab
     url = os.environ["TEST_MIGRATION_DATABASE_URL"]
 
     def run():
-        return import_identifiers(tmp_path, url, IcdClient(SETTINGS, tmp_path / "cache", api, pause=0), entries, [sid])
+        return import_identifiers(
+            tmp_path, url, IcdClient(SETTINGS, tmp_path / "cache", api, pause=0, online=True), entries, [sid]
+        )
 
     result = run()
     assert check(result) == []
@@ -188,6 +191,31 @@ def test_identifiers_mondo_marks_equivalent_become_pending_links_one_row_per_lab
     assert {(row[7], row[8], row[9]) for row in review} == {("pending", "MONDO:9000003", '["MONDO:equivalentTo"]')}
     assert "MONDO marks 2 SNOMED CT identifiers as equivalent" in review[0][10] and links_of_cut == 0
     assert (result["proposals"]["given"], result["proposals"]["inserted"]) == (2, 2)
+
+    # E98: WHO is asked only when told to. From the answers the run above saved, a run that may not ask gives
+    # the same outcomes and sends nothing. From no saved answers, the four ICD-11 entities are "not asked":
+    # nothing is sent, no link is made for them, and that is not a difference.
+    def never(url, headers, body):
+        raise AssertionError(f"WHO was asked although the client is not online: {url}")
+
+    def outcomes_of(found):
+        return {
+            item["name"].split()[0]: (item["outcomes"][SNOMED]["outcome"], item["outcomes"][ICD11]["outcome"])
+            for item in found["items"]
+        }
+
+    offline = import_identifiers(tmp_path, url, IcdClient(SETTINGS, tmp_path / "cache", never, pause=0), entries, [sid])
+    assert check(offline) == [] and (offline["who_calls"], offline["not_asked"]) == (0, 0)
+    assert outcomes_of(offline) == outcomes and offline["inserted"] == {SNOMED: 0, ICD: 0, ICD_FOUNDATION: 0}
+    bare = import_identifiers(tmp_path, url, IcdClient(SETTINGS, tmp_path / "none", never, pause=0), entries, [sid])
+    assert check(bare) == [] and (bare["who_calls"], bare["not_asked"], bare["icd_release"]) == (0, 4, "")
+    assert outcomes_of(bare) == {
+        key: (snomed, NOT_ASKED if icd in (LINKED, LINKED_FOUNDATION) else icd)
+        for key, (snomed, icd) in outcomes.items()
+    }
+    assert all(item["outcomes"][ICD11]["stored"] is None for item in bare["items"])
+    assert summarise(bare)["rows"][("disease labels", ICD11, "who was not asked")] == 4
+    assert not (tmp_path / "none").exists()
 
     with owner_db.transaction(None) as tx:
         found = tx.execute(
@@ -373,11 +401,21 @@ def test_an_entity_who_does_not_know_gives_no_link(tmp_path, owner_db):
             {"l": f"tl_{tag}", "d": f"dis_{tag}"},
         )
     entries = [entry(write_mondo(tmp_path / "mondo.owl"), "mondo_release")]
-    client = IcdClient(SETTINGS, tmp_path / "cache", FakeWho({}), pause=0)
+    client = IcdClient(SETTINGS, tmp_path / "cache", FakeWho({}), pause=0, online=True)
     result = import_identifiers(tmp_path, os.environ["TEST_MIGRATION_DATABASE_URL"], client, entries, [sid])
     assert check(result) == [] and result["inserted"] == {SNOMED: 1, ICD: 0, ICD_FOUNDATION: 0}
     record = result["items"][0]["outcomes"][ICD11]
     assert (record["outcome"], record["stored"], record["who"]) == (UNKNOWN_TO_WHO, None, None)
+    # E98: WHO's "not found" was saved. A later run that may not ask WHO gives the same outcome and sends nothing.
+    assert (result["requests_sent"], result["who_calls"], result["not_asked"]) == (3, 2, 0)  # token, release, entity
+
+    def never(url, headers, body):
+        raise AssertionError(f"WHO was asked although the client is not online: {url}")
+
+    offline = IcdClient(SETTINGS, tmp_path / "cache", never, pause=0)
+    again = import_identifiers(tmp_path, os.environ["TEST_MIGRATION_DATABASE_URL"], offline, entries, [sid])
+    assert check(again) == [] and (again["requests_sent"], again["not_asked"]) == (0, 0)
+    assert again["items"][0]["outcomes"][ICD11]["outcome"] == UNKNOWN_TO_WHO
 
 
 @pytest.mark.archives
