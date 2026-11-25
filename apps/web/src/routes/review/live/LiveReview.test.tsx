@@ -201,6 +201,30 @@ function fakeApi(reviewer: string | null = 'tester') {
     };
     return Promise.resolve(result);
   });
+  const decideMany = vi.fn((targetType: string, targetIds: readonly string[], _note: string, status: ReviewState) => {
+    if (targetType === 'terminology_link' && status === 'approved') {
+      return Promise.reject(
+        new ReviewApiError(
+          409,
+          'general_term_is_default',
+          'Nothing was changed. The row tl_1 cannot take this decision: the general term is the default.',
+        ),
+      );
+    }
+    for (const list of Object.values(rows)) {
+      for (const row of list) {
+        if ([row.mapping_id, row.link_id, row.proposal_id].some((id) => targetIds.includes(String(id)))) {
+          row.review_status = status;
+        }
+      }
+    }
+    return Promise.resolve({
+      target_type: targetType,
+      review_status: status,
+      decided: targetIds.length,
+      reviewer: `dev-reviewer:${reviewer}`,
+    });
+  });
   const api: LiveReviewApi = {
     reviewer,
     get: () => Promise.resolve({ sources: 14, disease_candidates: 960, statements: { pending: 2952 } }),
@@ -215,9 +239,10 @@ function fakeApi(reviewer: string | null = 'tester') {
     },
     notes: () => Promise.resolve(structuredClone(notes)),
     decide,
+    decideMany,
     setApplicability: vi.fn(() => Promise.resolve({})),
   };
-  return { api, decide, requests };
+  return { api, decide, decideMany, requests };
 }
 
 function renderLive(route: string, api: LiveReviewApi) {
@@ -390,6 +415,46 @@ describe('the review workspace against the review service', () => {
       within(drawer).getByText('The rule file this rule set was stored from is not on this installation.'),
     ).toBeInTheDocument();
     expect(within(drawer).getByText('Another sample text (invented).')).toBeInTheDocument();
+  });
+
+  it('decides all rows shown at once after a note and a second click, and leaves out rows that take no decision', async () => {
+    const { api, decideMany } = fakeApi();
+    const user = renderLive('/review/suggestions', api);
+
+    const bulk = (await screen.findByRole('heading', { name: 'Decide all the rows shown at once' })).closest('section');
+    expect(bulk).not.toBeNull();
+    const panel = within(bulk as HTMLElement);
+    // Of the two rows shown, one has a suggestion; the other takes notes only and is not sent.
+    await user.click(panel.getByRole('button', { name: 'Confirm match for the 1 row shown' }));
+    expect(panel.getByRole('alert')).toHaveTextContent('Write a note first.');
+    expect(decideMany).not.toHaveBeenCalled();
+    await user.type(panel.getByLabelText('Note for all these rows (required)'), 'Checked as a group.');
+    await user.click(panel.getByRole('button', { name: 'Confirm match for the 1 row shown' }));
+    // Nothing is sent before the second click.
+    expect(
+      panel.getByText(/Record “Approved” for the 1 row shown\? This is saved on the real data\./),
+    ).toBeInTheDocument();
+    expect(decideMany).not.toHaveBeenCalled();
+    await user.click(panel.getByRole('button', { name: 'Yes, record it' }));
+    expect(decideMany).toHaveBeenCalledWith('link_proposal', ['lp_close'], 'Checked as a group.', 'approved');
+    expect(await panel.findByText('Recorded: Approved for 1 row, under tester.')).toBeInTheDocument();
+  });
+
+  it('shows which row the service refused when it changes nothing for a whole page', async () => {
+    const { api } = fakeApi();
+    const user = renderLive('/review/links', api);
+
+    const bulk = (await screen.findByRole('heading', { name: 'Decide all the rows shown at once' })).closest('section');
+    const panel = within(bulk as HTMLElement);
+    await user.type(panel.getByLabelText('Note for all these rows (required)'), 'All exact names.');
+    await user.click(panel.getByRole('button', { name: 'Approve the 1 row shown' }));
+    await user.click(panel.getByRole('button', { name: 'Yes, record it' }));
+    expect(await panel.findByRole('alert')).toHaveTextContent(
+      'Nothing was changed. The row tl_1 cannot take this decision: the general term is the default.',
+    );
+    // The list offers more rows on a page, up to the most the service decides at once.
+    expect(screen.getByLabelText('Rows on a page')).toHaveValue('25');
+    expect(within(screen.getByLabelText('Rows on a page')).getAllByRole('option')).toHaveLength(3);
   });
 
   it('asks the service for nothing when no reviewer sign-in is configured', async () => {

@@ -5396,3 +5396,62 @@ was restarted after M2.4f. The web app on port 5173 runs in live review mode (`p
 it was changed to the design demo for `pnpm smoke` and back. Nothing runs on port 5174. The test
 service on port 8001 ran only during the browser test and is stopped. This paragraph was added in
 a following documents-only commit, after which the index was refreshed again.
+
+### M2.4j — Deciding many rows at once
+
+**What it is for.** About 52,800 rows waited for a decision and each was opened and decided on its
+own. The owner on 2026-11-25: "Implement the above now", for the four sub-steps listed, this one
+among them.
+
+**Impact analysis before editing.** `ReviewService.record_review`: LOW, 2 direct (the decision
+route in `main.py`; tests reach it over HTTP). `LiveListPage`: no traced caller; used by the list
+screens. The decision logic had to be shared, so `record_review` now calls a new function
+`decide_in` that holds what it did inside its transaction.
+
+**Implemented** (decision E100).
+
+- `review.py`: `decide_in(tx, principal, target_type, target_id, note, status)`: the checks, the
+  target's own rule, the status, the note and the audit record. `record_review` opens the
+  transaction and calls it; nothing else of it changed.
+- `review_bulk.py`: `decide_many` (all rows in one transaction; a refusal names the row and
+  changes nothing) and `decide_each` (each row in its own transaction; refused rows are listed).
+  `POST /internal/v1/review/decisions/bulk` uses the first.
+- Web: `BulkDecision.tsx` under every list of `LiveListPage`: a note, three buttons that say how
+  many rows they are for, a second click ("Yes, record it"), the service's refusal shown in its
+  own words. The list offers 25, 100 or 200 rows on a page. Rows that take notes only are not
+  sent.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 74 files |
+| `uv run pytest` (SQLite, archives included) | 283 passed, 79 skipped (before: 279, 79) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 361 passed, 1 skipped (before: 357, 1) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 137 passed (9 files; before: 135); built |
+| `pnpm e2e:review` against the test database | 23 passed, 0 failed (two new checks) |
+| `detect_changes` before commit | 9 files and three new ones; risk "high" by the flows through `create_app` (one route added) and the decision route. `KnowledgeService`, `get_condition_information`, `list_terminology_links` and `review_link_proposals` are listed because they stand below changed lines; the comparison with the last commit shows them unchanged |
+
+New tests: `tests/api/test_review_bulk.py` (4: every row decided as a single decision is, with its
+own note and audit record, and undone together; one refused row changes nothing, not even the rows
+before it, and the answer names it without a code; what is not a bulk decision is refused; each
+row on its own decides what the rules allow and lists what they refuse), two component tests, and
+step 5 of the browser flow (nothing recorded before the second click; both rows approved, each
+with the note).
+
+**Bugs and slips.**
+
+- While moving the decision logic I replaced text up to a marker that stood further down than I
+  thought and removed the class `KnowledgeService` with it. The next test run failed on the
+  import; the class was restored from the last commit, and a comparison of every definition of the
+  file with the last commit shows one changed (`record_review`) and one added (`decide_in`).
+- The bulk panel lost its message when the list was read again after a decision, because it stood
+  inside the part of the page that is rebuilt. Seen in the component test; the panel now stays on
+  the page.
+
+**Limits, stated plainly.**
+
+- The screen of texts shows sentences and list items nested under their text and has no bulk
+  panel.
+- A bulk decision is not a review of each row. The record says who decided and with which note;
+  it cannot say how closely anyone looked.

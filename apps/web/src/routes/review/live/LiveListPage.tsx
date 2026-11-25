@@ -16,7 +16,11 @@ import { useServices } from '@/state/services';
 
 import { ReviewLoadError, ReviewLoading, ReviewPageHeader } from '../ReviewPageHeader';
 
+import { BulkDecision } from './BulkDecision';
 import { DecisionDrawer, StateBadge, type ReviewTarget } from './DecisionDrawer';
+
+/** How many rows a page can hold. The largest is the most the service decides at once. */
+const PAGE_SIZES = [25, 100, 200] as const;
 
 export interface ListScreen {
   title: string;
@@ -47,7 +51,8 @@ export interface ListScreen {
 export function LiveListPage({ screen }: { screen: ListScreen }) {
   const id = useId();
   const { liveReview } = useServices();
-  const pageSize = screen.pageSize ?? 25;
+  const [pageSize, setPageSize] = useState<number>(screen.pageSize ?? 25);
+  const [chosenSize, setChosenSize] = useState<number>(screen.pageSize ?? 25);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ReviewState | ''>('');
   const [chosen, setChosen] = useState<Record<string, string>>({});
@@ -63,6 +68,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
   const apply = (event: FormEvent) => {
     event.preventDefault();
     setOffset(0);
+    setPageSize(chosenSize);
     setApplied({ q: query.trim(), status, ...chosen });
   };
 
@@ -142,6 +148,25 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
             </select>
           </div>
         ))}
+        <div className="min-w-[8rem]">
+          <label htmlFor={`${id}-size`} className="mb-1 block text-sm font-medium text-ink-secondary">
+            Rows on a page
+          </label>
+          <select
+            id={`${id}-size`}
+            value={chosenSize}
+            onChange={(event) => setChosenSize(Number(event.target.value))}
+            className="field-control"
+          >
+            {[...new Set([screen.pageSize ?? 25, ...PAGE_SIZES])]
+              .sort((a, b) => a - b)
+              .map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+          </select>
+        </div>
         <Button type="submit" size="sm" variant="secondary">
           Show results
         </Button>
@@ -224,6 +249,18 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
           </div>
         </>
       ) : null}
+
+      {/* Kept on the page while the list is read again, so that what it reports after a decision stays visible. */}
+      {state.status === 'failed' ? null : (
+        <BulkDecision
+          key={screen.path}
+          api={liveReview}
+          targetType={screen.targetType}
+          ids={items.filter((item) => !screen.notesOnly?.(item)).map((item) => field(item, screen.idField))}
+          labels={screen.decisionLabels}
+          onDone={reload}
+        />
+      )}
 
       <DecisionDrawer
         api={liveReview}

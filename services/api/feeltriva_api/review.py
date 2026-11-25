@@ -263,57 +263,8 @@ class ReviewService:
         self, principal: Principal, *, target_type: str, target_id: str, note: str, status: str | None = None
     ) -> dict[str, Any]:
         principal.require_role("reviewer")
-        if target_type not in _TARGETS:
-            raise ApiError(422, "unknown_review_target", "Unknown review target type.")
-        if status is not None and status not in REVIEW_STATES:
-            raise ApiError(422, "invalid_review_status", "Unknown review status.")
-        if not note.strip() or len(note) > 4000:
-            raise ApiError(422, "invalid_note", "A reviewer note of 1 to 4000 characters is required.")
-        model, key = _TARGETS[target_type]
         with self._db.transaction(principal.subject, role="reviewer") as tx:
-            target = tx.get(model, target_id)
-            if target is None:
-                raise ApiError(404, "review_target_not_found", "Review target not found.")
-            previous = target.status
-            if status is not None:
-                guard = _GUARDS.get(target_type)
-                if guard is not None:  # what a decision on this kind of target requires or entails
-                    guard(tx, target, status, principal)
-                target.status = status
-                if isinstance(target, Statement):
-                    target.reviewed_by, target.reviewed_at = principal.subject, datetime.now(UTC)
-                elif isinstance(target, DiseaseMapping | RelationSuggestion | TerminologyLink):
-                    target.reviewer = principal.subject
-            entry = ReviewNote(
-                note_id=uuid.uuid4(),
-                target_type=target_type,
-                target_id=target_id,
-                reviewer=principal.subject,
-                note=note.strip(),
-                status_change=status,
-            )
-            tx.add(entry)
-            tx.add(
-                AuditEvent(
-                    event_id=uuid.uuid4(),
-                    actor_subject=principal.subject,
-                    event_type="review_recorded",
-                    redacted_metadata={
-                        "target_type": target_type,
-                        "target_id": target_id,
-                        "from": previous,
-                        "to": status or previous,
-                    },
-                )
-            )
-            return {
-                "target_type": target_type,
-                "target_id": target_id,
-                "previous_status": previous,
-                "review_status": target.status,
-                "note_id": str(entry.note_id),
-                "reviewer": principal.subject,
-            }
+            return decide_in(tx, principal, target_type, target_id, note, status)
 
 
 class KnowledgeService:
@@ -374,6 +325,62 @@ class KnowledgeService:
 
 
 # Registered here, at the end of the module, so that the decision endpoint also serves suggestions.
+def decide_in(
+    tx: Any, principal: Principal, target_type: str, target_id: str, note: str, status: str | None
+) -> dict[str, Any]:
+    """One note or decision inside a reviewer's transaction: what the target's own rule requires or entails, the
+    status, the note and the audit record. Shared by the single decision and by many rows at once (M2.4j)."""
+    if target_type not in _TARGETS:
+        raise ApiError(422, "unknown_review_target", "Unknown review target type.")
+    if status is not None and status not in REVIEW_STATES:
+        raise ApiError(422, "invalid_review_status", "Unknown review status.")
+    if not note.strip() or len(note) > 4000:
+        raise ApiError(422, "invalid_note", "A reviewer note of 1 to 4000 characters is required.")
+    target = tx.get(_TARGETS[target_type][0], target_id)
+    if target is None:
+        raise ApiError(404, "review_target_not_found", "Review target not found.")
+    previous = target.status
+    if status is not None:
+        guard = _GUARDS.get(target_type)
+        if guard is not None:  # what a decision on this kind of target requires or entails
+            guard(tx, target, status, principal)
+        target.status = status
+        if isinstance(target, Statement):
+            target.reviewed_by, target.reviewed_at = principal.subject, datetime.now(UTC)
+        elif isinstance(target, DiseaseMapping | RelationSuggestion | TerminologyLink):
+            target.reviewer = principal.subject
+    entry = ReviewNote(
+        note_id=uuid.uuid4(),
+        target_type=target_type,
+        target_id=target_id,
+        reviewer=principal.subject,
+        note=note.strip(),
+        status_change=status,
+    )
+    tx.add(entry)
+    tx.add(
+        AuditEvent(
+            event_id=uuid.uuid4(),
+            actor_subject=principal.subject,
+            event_type="review_recorded",
+            redacted_metadata={
+                "target_type": target_type,
+                "target_id": target_id,
+                "from": previous,
+                "to": status or previous,
+            },
+        )
+    )
+    return {
+        "target_type": target_type,
+        "target_id": target_id,
+        "previous_status": previous,
+        "review_status": target.status,
+        "note_id": str(entry.note_id),
+        "reviewer": principal.subject,
+    }
+
+
 _TARGETS["relation_suggestion"] = (RelationSuggestion, "suggestion_id")
 
 

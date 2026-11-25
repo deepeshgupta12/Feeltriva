@@ -18,6 +18,7 @@ from . import (
     published_mappings,
     releases,
     response_text_sets,
+    review_bulk,
     review_claims,
     review_proposals,
     serving_bundle,
@@ -494,6 +495,19 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     def review_notes(target_type: str, target_id: str, who: Who) -> JSONResponse:
         return JSONResponse(list_notes(container.db, who, target_type=target_type, target_id=target_id))
 
+    @app.post("/internal/v1/review/decisions/bulk")
+    def review_decisions_bulk(body: BulkDecision, who: Who) -> JSONResponse:
+        return JSONResponse(
+            review_bulk.decide_many(
+                container.db,
+                who,
+                target_type=body.target_type,
+                target_ids=body.target_ids,
+                note=body.note,
+                status=body.status,
+            )
+        )
+
     @app.get("/internal/v1/review/link-proposals")
     def review_link_proposals(
         who: Who,
@@ -548,3 +562,11 @@ class ClaimApplicability(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str | None = Field(default=None, max_length=500)
     note: str = Field(min_length=1, max_length=4000)
+
+
+class BulkDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_type: str
+    target_ids: list[str] = Field(min_length=1, max_length=200)
+    note: str = Field(min_length=1, max_length=4000)
+    status: str

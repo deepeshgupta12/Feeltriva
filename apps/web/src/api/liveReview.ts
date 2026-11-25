@@ -44,6 +44,14 @@ export interface DecisionResult {
   reviewer: string;
 }
 
+/** What the service answers when many rows were decided at once: all of them, or none. */
+export interface BulkResult {
+  target_type: string;
+  review_status: string;
+  decided: number;
+  reviewer: string;
+}
+
 export type ReviewParams = Record<string, string | number | boolean | null | undefined>;
 
 /** An answer of the API that is not a success: its own code and message, to show to the reviewer. */
@@ -67,6 +75,8 @@ export interface LiveReviewApi {
   notes(targetType: string, targetId: string): Promise<ReviewNoteRecord[]>;
   /** Records a note; with `status`, a decision. The API requires the note in both cases. */
   decide(targetType: string, targetId: string, note: string, status?: ReviewState): Promise<DecisionResult>;
+  /** One decision with one note for many rows. The service decides all of them or, if it refuses one, none. */
+  decideMany(targetType: string, targetIds: readonly string[], note: string, status: ReviewState): Promise<BulkResult>;
   setApplicability(claimId: string, text: string | null, note: string): Promise<Record<string, unknown>>;
 }
 
@@ -111,6 +121,16 @@ export class HttpLiveReviewApi implements LiveReviewApi {
       body.status = status;
     }
     return (await this.request('POST', '/decisions', {}, body)) as unknown as DecisionResult;
+  }
+
+  async decideMany(
+    targetType: string,
+    targetIds: readonly string[],
+    note: string,
+    status: ReviewState,
+  ): Promise<BulkResult> {
+    const body = { target_type: targetType, target_ids: [...targetIds], note, status };
+    return (await this.request('POST', '/decisions/bulk', {}, body)) as unknown as BulkResult;
   }
 
   setApplicability(claimId: string, text: string | null, note: string): Promise<Record<string, unknown>> {

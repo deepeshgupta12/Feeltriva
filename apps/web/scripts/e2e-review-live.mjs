@@ -286,6 +286,38 @@ try {
       (await drawer().getByRole('button', { name: 'Save note' }).isVisible()),
   );
 
+  // ---- 5. Many rows at once: one note, a second click, and the service decides every row (M2.4j) ----
+  await page.keyboard.press('Escape');
+  await page.goto(`${BASE}/review/data`);
+  await page.getByRole('heading', { name: 'Repeated columns in the data files' }).waitFor();
+  await search(`itching ${TAG}`);
+  await page.getByText('Showing 1 to 2 of 2').waitFor();
+  const bulk = page.locator('section', {
+    has: page.getByRole('heading', { name: 'Decide all the rows shown at once' }),
+  });
+  await bulk.getByLabel('Note for all these rows (required)').fill(`Both columns are kept as they came (${TAG}).`);
+  await bulk.getByRole('button', { name: 'Approve all 2 rows shown' }).click();
+  const untouched = await service(`/feature-mappings?q=itching ${TAG}&conflicts_only=true`);
+  check(
+    'nothing is recorded before the second click',
+    untouched.items.every((item) => item.review_status === 'pending'),
+    JSON.stringify(untouched.items.map((item) => item.review_status)),
+  );
+  await bulk.getByRole('button', { name: 'Yes, record it' }).click();
+  await bulk.getByText('Recorded: Approved for 2 rows, under e2e.').waitFor();
+  await shot('5-many-rows-at-once');
+  const together = await service(`/feature-mappings?q=itching ${TAG}&conflicts_only=true`);
+  const eachNote = await service(`/notes?target_type=feature_mapping&target_id=e2e_fm_${TAG}_9`);
+  check(
+    'both rows are approved, and each carries the note under the reviewer',
+    together.items.length === 2 &&
+      together.items.every((item) => item.review_status === 'approved') &&
+      eachNote.items.length === 1 &&
+      eachNote.items[0].reviewer === REVIEWER &&
+      eachNote.items[0].status_change === 'approved',
+    JSON.stringify([together.items.map((item) => item.review_status), eachNote.items]),
+  );
+
   check(
     'every request to the service carried the reviewer token and no other',
     tokens.size === 1 && tokens.has(`Bearer ${REVIEWER}`),
