@@ -4981,10 +4981,77 @@ so a reviewer's transaction now can; a user's still cannot. Both tests now asser
 
 **Limits, stated plainly.**
 
-- ICD-11 results below 0.9 (235 names) and names with no ICD-11 result (679, the question
-  sentences among them) are not loaded: the plan names the close results only.
+- ICD-11 results below 0.9 (239 names) and names with no ICD-11 result at all (457) are not
+  loaded: the plan names the close results only. The 223 question sentences were never sent to
+  the ICD-11 search and have no row for ICD-11 either.
 - The rows of a kind cannot be decided together; each is opened and decided on its own.
 - A reviewer who is not a clinician can confirm a match. The decision is recorded with the name;
   it is not a clinical judgement, and nothing confirmed here is shown to anyone (E63).
 - The titles of SNOMED CT rows are MONDO's names, because the SNOMED CT release is not held.
 - The review files in `data/derived/review/` are still written, as before; nothing reads them.
+
+### M2.4c — The urgency rules screen in words
+
+**What it is for.** The screen of M2.4a showed a rule's level, its text and its condition as
+stored (a tree of feature identifiers) and pointed to the review document for the rest. A
+reviewer should read on the screen what the document says.
+
+**Impact analysis before editing** (all LOW). `list_rules`: one caller, the rules route in
+`main.py`; tests reach it over HTTP. `review_document` is not changed: the new `rules_in_words`
+stands beside it and calls the same helpers (`_when`, `_quoted`, `_names`, `_ordered`).
+`LiveRulesPage`: no traced caller; it is used by the route table.
+
+**Implemented** (decision E96).
+
+- `feeltriva_clinical/urgency_documents.py`: `rules_in_words(draft)` gives, per rule, its number
+  and title, the level and what the level means, the condition line by line with the depth of
+  each line and whether it heads a group, the text shown, the reason for the level, the two cases
+  it was checked with, and the basis (publisher, page, address, date reviewed, quotes).
+- `feeltriva_api/review_rules.py`: each rule of `GET /internal/v1/review/rules` carries `in_words`
+  and `in_words_unavailable`; each rule set carries `in_words_unavailable`. Words are given only
+  when the rule file on the installation is the one the rule set was stored from (same
+  fingerprint) and the stored condition and text equal the file's.
+- Web: `routes/review/live/LiveRulesPage.tsx`. The list shows number and title, level, the text
+  shown and who decided. Opening a rule shows: level and its meaning; when the rule applies (the
+  nested condition); what the person is told; why it has this level; the two examples; what it is
+  based on, quoted word for word, with a link to each page; its place in the order of checking.
+- `scripts/e2e-rules-in-words.mjs` (`pnpm e2e:rules`): reads the review document, opens every rule
+  on the screen and compares. It records nothing and so runs against the real rule set.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 72 files |
+| `uv run pytest` (SQLite, archives included) | 275 passed, 78 skipped (before: 273, 78) |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 352 passed, 1 skipped (before: 350, 1) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 132 passed (8 files); built |
+| `pnpm e2e:rules` against the real rule set `urgency-draft` (service on 8000, live review mode on 5173) | 4 passed, 0 failed: all 20 rules are shown in the document's words; the browser sent no request that changes data |
+| `pnpm e2e:review` against the test database | 20 passed, 0 failed |
+| `detect_changes` before commit | 12 files, risk medium. The one changed definition of the service is `list_rules`, with the four flows of its route; `_in_words`, `_rule_words` and `rules_in_words` are new. `git status` shows the same 12 files plus the two new ones (`LiveRulesPage.tsx`, `e2e-rules-in-words.mjs`); `docs/HANDOFF_README.md` and `apps/web/README.md` are listed again though unchanged (the changed lines of `README.md` matched to the other files of that name) |
+
+New tests: `test_every_rule_in_words_says_what_the_review_document_says` (all 20 rules: the
+condition line for line in the same order, the text shown, the reason, both cases, every quote and
+one line per source); `test_a_rule_is_shown_in_the_same_words_as_the_review_document` (through the
+route: the words of a rule are found in the document's part about that rule; a stored rule whose
+text is not the file's gets no words and the reason; when the file's fingerprint differs no rule
+gets words); a component test of the screen.
+
+**Bugs and slips.**
+
+- An existing test (`test_a_bundle_is_approved_only_when…`) failed with a server error: it replaces
+  the rule file by a stand-in that has only telephone numbers, and the list now also reads rules
+  from the file. The stand-in was given the fields a rule file has. No product bug: the real file
+  is checked when it is loaded.
+- One count in my new unit test was wrong (it counted a line of the condition as a quote).
+- The first screenshot of the check was taken while the drawer was still sliding in; the check
+  now waits before the picture.
+
+**Limits, stated plainly.**
+
+- The words exist only for a rule set stored from the rule file that is on the installation.
+  The fixture rule set (`fixture-rules`) has none and says so.
+- The condition is long for some rules (rule 1 names 24 items in one group). It is shown whole,
+  as the document shows it.
+- The browser check needs the web app in live review mode on port 5173; it is run by hand, like
+  the other browser tests, and is not part of CI.

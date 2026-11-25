@@ -11,7 +11,13 @@ from pathlib import Path
 import pytest
 from feeltriva_clinical import BundleError, Facts, evaluate, load_bundle, load_fixture_bundle, validate_bundle
 from feeltriva_clinical.bundle import EvidenceItem, Feature, ReleaseBundle
-from feeltriva_clinical.urgency_documents import FINAL_FILE, REVIEW_FILE, final_document, review_document
+from feeltriva_clinical.urgency_documents import (
+    FINAL_FILE,
+    REVIEW_FILE,
+    final_document,
+    review_document,
+    rules_in_words,
+)
 from feeltriva_clinical.urgency_draft import (
     DRAFT_PATH,
     DraftError,
@@ -216,3 +222,32 @@ def test_a_text_cannot_name_a_telephone_number_the_draft_does_not_list():
     ):
         with pytest.raises(DraftError, match=message):
             check_draft(_changed(change))
+
+
+def test_every_rule_in_words_says_what_the_review_document_says():
+    """M2.4c: the review screen shows these words. Each is found in the document, in the part about its rule."""
+    draft = load_draft()
+    document = review_document(draft)
+    words = rules_in_words(draft)
+    assert set(words) == {rule.rule_id for rule in draft.rules}
+    by_number = sorted(words.values(), key=lambda rule: rule["number"])
+    assert [rule["number"] for rule in by_number] == list(range(1, len(draft.rules) + 1))
+    parts = document.split("\n### Rule ")[1:]
+    assert len(parts) == len(by_number)
+    for rule, part in zip(by_number, parts, strict=True):
+        section = part.split("\n## ", 1)[0]
+        assert section.startswith(f"{rule['number']}. {rule['title']}\n")
+        assert f"| **{rule['level']}** |" in section and f"| {rule['number']} of {rule['of']} |" in section
+        listed = section.split("**Fires when**")[1].split("**The person is shown**")[0].strip("\n").split("\n")
+        again = [
+            f"{'  ' * line['depth']}- " + (f"**{line['text']}**" if line["heads_a_group"] else line["text"])
+            for line in rule["fires_when"]
+        ]
+        assert again == listed  # line for line, in the same order
+        assert f"> {rule['shown']}\n" in section and f"**Why this level.** {rule['why_this_level']}\n" in section
+        assert f"- Fires: {rule['checked_with']['fires']}.\n" in section
+        assert f"- Does not fire: {rule['checked_with']['does_not_fire']}.\n" in section
+        quotes = [quote for source in rule["basis"] for quote in source["quotes"]]
+        basis = section.split("**Basis, quoted word for word**")[1]
+        assert quotes and basis.count("  - “") == len(quotes) and all(f"  - “{quote}”" in basis for quote in quotes)
+        assert basis.count("\n- ") == len(rule["basis"])  # one line per source, each with its quotes under it

@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from feeltriva_clinical.urgency_documents import rules_in_words
 from feeltriva_clinical.urgency_draft import UrgencyDraft, draft_digest, load_draft
 from sqlalchemy import func, select
 
@@ -154,6 +155,7 @@ def list_rules(
                 .order_by(ReviewNote.created_at)
             ).all()
             last = {note.target_id: note for note in notes}
+        words = {bundle.bundle_id: _in_words(bundle) for bundle in bundles}
         return {
             "bundles": [
                 {
@@ -164,6 +166,8 @@ def list_rules(
                     "approved_at": bundle.approved_at.isoformat() if bundle.approved_at else None,
                     "fingerprint": _fingerprint(bundle),
                     "rules_by_status": tally.get(bundle.bundle_id, {}),
+                    # Why the rules of this bundle cannot be shown in words; None when they can.
+                    "in_words_unavailable": words[bundle.bundle_id][1],
                 }
                 for bundle in bundles
             ],
@@ -182,7 +186,47 @@ def list_rules(
                     "review_status": rule.status,
                     "decided_by": last[rule.rule_id].reviewer if rule.rule_id in last else None,
                     "decision_note": last[rule.rule_id].note if rule.rule_id in last else None,
+                    **_rule_words(rule, *words.get(rule.bundle_id, ({}, None))),
                 }
                 for rule in rules
             ],
         }
+
+
+# ---- The rules in words (M2.4c) ------------------------------------------------------------------------------
+#
+# A rule is stored as a condition over feature identifiers and a text. Its title, the reason for its level, the two
+# cases it was checked with and the quoted basis are in the rule file the bundle was stored from. The words a
+# reviewer is shown are those of the review document, and only when they are certain to describe the stored rule:
+# the rule file on this installation is the one the bundle was stored from (same fingerprint), and the stored
+# condition and text equal the file's. Otherwise the screen shows the stored rule and says why there are no words.
+def _in_words(bundle: RuleBundle) -> tuple[dict[str, tuple[dict[str, Any], dict[str, Any]]], str | None]:
+    """Per rule of the bundle: its words and the condition those words were written from; or why there are none."""
+    if not bundle.manifest_uri.startswith(_DRAFT):
+        return {}, "This rule set was not stored from a rule file, so there is no text in words for its rules."
+    held = _rule_file(bundle.bundle_id)
+    if held is None:
+        return {}, "The rule file this rule set was stored from is not on this installation."
+    draft, digest = held
+    if _fingerprint(bundle) != digest:
+        return (
+            {},
+            "The rule file has changed since this rule set was stored, so its words may not describe the stored "
+            "rules. Store the rule file again.",
+        )
+    words = rules_in_words(draft)
+    return {rule.rule_id: (words[rule.rule_id], rule.condition_ast) for rule in draft.rules}, None
+
+
+def _rule_words(
+    rule: ClinicalRule, written: dict[str, tuple[dict[str, Any], dict[str, Any]]], reason: str | None
+) -> dict[str, Any]:
+    """`in_words` for one stored rule, or None with the reason in `in_words_unavailable`."""
+    if reason is None and rule.rule_id not in written:
+        reason = "The rule file this rule set was stored from does not hold this rule."
+    if reason is None:
+        words, condition = written[rule.rule_id]
+        if rule.condition_ast == condition and (rule.action or {}).get("text") == words["shown"]:
+            return {"in_words": words, "in_words_unavailable": None}
+        reason = "The stored rule differs from the rule in the rule file, so the file's words are not shown for it."
+    return {"in_words": None, "in_words_unavailable": reason}

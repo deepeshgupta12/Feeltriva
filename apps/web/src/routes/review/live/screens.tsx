@@ -154,42 +154,10 @@ const VOCABULARY_LINKS: ListScreen = {
   },
 };
 
-const RULES: ListScreen = {
-  title: 'Urgency rules',
-  intro: (
-    <p>
-      The rules of the stored rule set with their review status. The full text for review, with each rule&rsquo;s reason
-      and quoted basis, is in <code>docs/review/urgency_rules_final.md</code>. Once the rule set is approved its rules
-      are not decided again until that approval is withdrawn.
-    </p>
-  ),
-  path: '/rules',
-  targetType: 'clinical_rule',
-  idField: 'rule_id',
-  caption: 'Rules of the stored rule set',
-  pageSize: 50,
-  titleOf: (item) => field(item, 'rule_id'),
-  columns: [
-    { heading: 'Rule', cell: (item) => field(item, 'rule_id') },
-    { heading: 'Level', cell: (item) => field(part(item, 'action'), 'urgency') },
-    { heading: 'Text shown', cell: (item) => field(part(item, 'action'), 'text') },
-    { heading: 'Decided by', cell: (item) => field(item, 'decided_by') || 'Nobody yet' },
-  ],
-  details: (item) => [
-    { label: 'Rule set', value: field(item, 'bundle_id') },
-    { label: 'Level', value: field(part(item, 'action'), 'urgency') },
-    { label: 'Text shown to the person', value: field(part(item, 'action'), 'text') },
-    { label: 'Order', value: field(item, 'priority') },
-    { label: 'Condition', value: code(field(item, 'condition_ast')) },
-    { label: 'Last decision note', value: field(item, 'decision_note') || 'None' },
-  ],
-};
-
 export const LiveDiseaseMappingsPage = () => <LiveListPage screen={DISEASE_MAPPINGS} />;
 export const LiveFeatureMappingsPage = () => <LiveListPage screen={featureMappings(false)} />;
 export const LiveDataQualityPage = () => <LiveListPage screen={featureMappings(true)} />;
 export const LiveVocabularyLinksPage = () => <LiveListPage screen={VOCABULARY_LINKS} />;
-export const LiveRulesPage = () => <LiveListPage screen={RULES} />;
 
 // ---- Names that were not matched automatically, and the entries suggested for them (M2.4b) ----------------
 

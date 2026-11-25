@@ -343,3 +343,53 @@ def final_document(draft: UrgencyDraft, digest: str) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+# -- the rules in words, for the review screen (M2.4c) ------------------------------------------------
+def _line(line: str) -> dict[str, Any]:
+    """One line of a condition as `_when` lists it: how deep it stands, its words, and whether it heads a group."""
+    text = line.lstrip(" ")
+    words = text.removeprefix("- ")
+    heads = words.startswith("**") and words.endswith("**")
+    return {"depth": (len(line) - len(text)) // 2, "text": words.strip("*") if heads else words, "heads_a_group": heads}
+
+
+def rules_in_words(draft: UrgencyDraft) -> dict[str, dict[str, Any]]:
+    """Each rule of the draft in the words of the review document, by its identifier.
+
+    The review screen shows these. They are written by the same functions as the document, and a test compares
+    the two, so that what a reviewer reads on the screen is what the document says."""
+    names = _names(draft)
+    sources = {source.evidence_id: source for source in draft.sources}
+    rules = _ordered(draft)
+    words: dict[str, dict[str, Any]] = {}
+    for number, rule in enumerate(rules, 1):
+        fires = next(case for case in rule.tests if case.fires)
+        quiet = next(case for case in rule.tests if not case.fires)
+        level = rule.action.urgency or ""
+        words[rule.rule_id] = {
+            "number": number,
+            "of": len(rules),
+            "title": rule.title,
+            "level": _LEVELS[level],
+            "level_meaning": _MEANING[level],
+            "fires_when": [_line(line) for line in _when(rule.condition_ast, names)],
+            "shown": rule.action.text,
+            "why_this_level": rule.why_this_level,
+            "checked_with": {
+                "fires": f"recorded as present {_quoted(fires.present, names)}",
+                "does_not_fire": f"recorded as present {_quoted(quiet.present, names)}"
+                + (f"; recorded as absent {_quoted(quiet.absent, names)}" if quiet.absent else ""),
+            },
+            "basis": [
+                {
+                    "publisher": source.publisher,
+                    "title": source.source_title,
+                    "url": source.source_url,
+                    "page_reviewed": source.page_reviewed,
+                    "quotes": list(source.quotes),
+                }
+                for source in (sources[evidence_id] for evidence_id in rule.evidence_ids)
+            ],
+        }
+    return words

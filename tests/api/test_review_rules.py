@@ -59,7 +59,10 @@ def bundle(owner_db) -> str:
 
 def _file(tag: str, confirmed: str, fingerprint: str | None = None):
     """A stand-in for the rule file on disk: its fingerprint and one telephone number."""
-    draft = SimpleNamespace(numbers=[SimpleNamespace(number="555", confirmed_by_owner=confirmed)])
+    # It holds no rule, feature or source: the list then has no words for the invented rules (M2.4c).
+    draft = SimpleNamespace(
+        numbers=[SimpleNamespace(number="555", confirmed_by_owner=confirmed)], rules=[], features=[], sources=[]
+    )
     return lambda bundle_id: (draft, fingerprint or f"fp-{tag}") if bundle_id == f"draft-{tag}" else None
 
 
@@ -77,8 +80,10 @@ def test_rules_are_listed_for_reviewers_only_with_their_bundle(client, api: Api,
             "approved_at": None,
             "fingerprint": f"fp-{bundle}",
             "rules_by_status": {"pending": 2},
+            "in_words_unavailable": "The rule file this rule set was stored from is not on this installation.",
         }
     ]
+    assert [item["in_words"] for item in body["items"]] == [None, None]
     assert body["total"] == 2
     assert [
         (item["rule_id"], item["action"]["urgency"], item["review_status"], item["decided_by"])
@@ -201,3 +206,102 @@ def test_the_database_lets_only_a_reviewers_transaction_decide_and_only_the_stat
             tx.execute(text(statement), {"r": rule})
     with pytest.raises(DBAPIError), db.transaction("rev", role="reviewer") as tx:
         tx.execute(text("UPDATE rule_bundles SET manifest_uri = 'x' WHERE bundle_id = :b"), {"b": f"draft-{bundle}"})
+
+
+# ---- the rules in words (M2.4c) ------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stored_from_the_rule_file(owner_db, monkeypatch):
+    """The real rule file, stored under an invented bundle ID with its real fingerprint, and one of its rules altered."""
+    from feeltriva_clinical.urgency_draft import draft_digest, load_draft
+
+    tag = uuid.uuid4().hex[:10]
+    draft, digest = load_draft(), draft_digest()
+    bundle_id = f"words-{tag}"
+    rules = sorted(draft.rules, key=lambda rule: rule.priority)[:3]
+    with owner_db.transaction(None, role="migration") as tx:
+        tx.add(
+            RuleBundle(
+                bundle_id=bundle_id,
+                version=f"{bundle_id}-1",
+                status="pending",
+                manifest_uri=f"draft://{bundle_id}/{bundle_id}-1#sha256={digest}",
+            )
+        )
+        tx.flush()
+        for number, rule in enumerate(rules):
+            action = rule.action.model_dump()
+            if number == 2:  # a stored rule whose text is not the file's: its words must not be shown
+                action["text"] = "A text that is not the one in the rule file (invented)."
+            tx.add(
+                ClinicalRule(
+                    rule_id=f"{tag}.{rule.rule_id}",
+                    bundle_id=bundle_id,
+                    rule_type="urgency",
+                    applicability={},
+                    condition_ast=rule.condition_ast,
+                    action=action,
+                    evidence_ids=rule.evidence_ids,
+                    priority=rule.priority,
+                    status="pending",
+                )
+            )
+    # The rule file belongs to this invented bundle, with the rule identifiers the bundle was stored under.
+    renamed = draft.model_copy(
+        update={
+            "draft_id": bundle_id,
+            "rules": [rule.model_copy(update={"rule_id": f"{tag}.{rule.rule_id}"}) for rule in draft.rules],
+        }
+    )
+    state = {"digest": digest}
+    monkeypatch.setattr(
+        review_rules, "_rule_file", lambda wanted: (renamed, state["digest"]) if wanted == bundle_id else None
+    )
+    return SimpleNamespace(tag=tag, bundle_id=bundle_id, draft=draft, rules=rules, state=state)
+
+
+def test_a_rule_is_shown_in_the_same_words_as_the_review_document(client, reviewer: Api, stored_from_the_rule_file):
+    from pathlib import Path
+
+    from feeltriva_clinical.urgency_documents import REVIEW_FILE
+
+    stored = stored_from_the_rule_file
+    document = (Path(__file__).resolve().parents[2] / "docs" / "review" / REVIEW_FILE).read_text(encoding="utf-8")
+    body = client.get(PATH, params={"bundle_id": stored.bundle_id}, headers=reviewer.headers(None)).json()
+    assert body["bundles"][0]["in_words_unavailable"] is None and body["total"] == 3
+    first, second, altered = body["items"]
+    rule = stored.rules[0]
+    words = first["in_words"]
+    assert (words["number"], words["of"], words["title"]) == (1, len(stored.draft.rules), rule.title)
+    # The part of the document about this rule: from its heading to the next rule's heading.
+    section = document.split(f"### Rule 1. {rule.title}", 1)[1].split("### Rule 2.", 1)[0]
+    assert f"| **{words['level']}** | `{rule.rule_id}` | 1 of {words['of']} |" in section
+    for line in words["fires_when"]:  # every line of the condition, at the depth the document lists it
+        marked = f"**{line['text']}**" if line["heads_a_group"] else line["text"]
+        assert f"{'  ' * line['depth']}- {marked}\n" in section
+    assert len(words["fires_when"]) == section.split("**Fires when**")[1].split("**The person is shown**")[0].count(
+        "- "
+    )
+    assert f"> {words['shown']}\n" in section and words["shown"] == first["action"]["text"]
+    assert f"**Why this level.** {words['why_this_level']}\n" in section
+    assert f"- Fires: {words['checked_with']['fires']}.\n" in section
+    assert f"- Does not fire: {words['checked_with']['does_not_fire']}.\n" in section
+    assert words["basis"] and len(words["basis"]) == len(rule.evidence_ids)
+    for source in words["basis"]:
+        reviewed = f", page last reviewed {source['page_reviewed']}" if source["page_reviewed"] else ""
+        assert f"- {source['publisher']}, [{source['title']}]({source['url']}){reviewed}:\n" in section
+        assert all(f"  - “{quote}”\n" in section for quote in source["quotes"])
+    assert f"| {words['level']} | {words['level_meaning']} |" in document
+    assert second["in_words"]["number"] == 2 and second["in_words"]["title"] == stored.rules[1].title
+    # A stored rule whose text is not the file's is shown as stored, without words that would describe another text.
+    assert altered["in_words"] is None and altered["action"]["text"].startswith("A text that is not")
+    assert "differs from the rule in the rule file" in altered["in_words_unavailable"]
+    assert first["in_words_unavailable"] is None
+
+    # When the rule file has changed since the bundle was stored, no rule of it is put into words, and the reason is given.
+    stored.state["digest"] = "another-fingerprint"
+    changed = client.get(PATH, params={"bundle_id": stored.bundle_id}, headers=reviewer.headers(None)).json()
+    assert "has changed since this rule set was stored" in changed["bundles"][0]["in_words_unavailable"]
+    assert [item["in_words"] for item in changed["items"]] == [None, None, None]
+    assert {item["in_words_unavailable"] for item in changed["items"]} == {changed["bundles"][0]["in_words_unavailable"]}

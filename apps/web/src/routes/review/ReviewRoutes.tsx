@@ -5,12 +5,12 @@ import { useServices } from '@/state/services';
 import { LiveClaimsPage } from './live/LiveClaimsPage';
 import { LiveOverviewPage } from './live/LiveOverviewPage';
 import { LiveReleasesPage } from './live/LiveReleasesPage';
+import { LiveRulesPage } from './live/LiveRulesPage';
 import {
   LiveDataQualityPage,
   LiveDiseaseMappingsPage,
   LiveFeatureMappingsPage,
   LiveLinkProposalsPage,
-  LiveRulesPage,
   LiveVocabularyLinksPage,
 } from './live/screens';
 import { ReviewEvaluationPage } from './ReviewEvaluationPage';

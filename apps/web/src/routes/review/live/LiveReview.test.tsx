@@ -78,6 +78,58 @@ function fakeApi(reviewer: string | null = 'tester') {
         link: null,
       },
     ],
+    '/rules': [
+      {
+        rule_id: 'urg.sample.hat',
+        bundle_id: 'sample-rules',
+        priority: 10,
+        condition_ast: { op: 'present', feature: 'feat_hat' },
+        action: { type: 'escalate', urgency: 'emergency', text: 'Sample text shown to the person (invented).' },
+        review_status: 'pending',
+        decided_by: null,
+        decision_note: null,
+        in_words_unavailable: null,
+        in_words: {
+          number: 1,
+          of: 2,
+          title: 'A pretend hat with a scarf',
+          level: 'Emergency',
+          level_meaning: 'The published advice is an ambulance or an emergency department now.',
+          fires_when: [
+            { depth: 0, text: 'all of these together:', heads_a_group: true },
+            { depth: 1, text: '“a pretend hat”', heads_a_group: false },
+            { depth: 1, text: 'any one of: “a scarf”; “a coat”', heads_a_group: false },
+          ],
+          shown: 'Sample text shown to the person (invented).',
+          why_this_level: 'The invented advice names exactly this combination.',
+          checked_with: {
+            fires: 'recorded as present “a pretend hat”; “a scarf”',
+            does_not_fire: 'recorded as present “a pretend hat”; recorded as absent “a scarf”; “a coat”',
+          },
+          basis: [
+            {
+              publisher: 'Sample Publisher',
+              title: 'Hats and scarves',
+              url: 'https://example.invalid/hats',
+              page_reviewed: '01 January 2026',
+              quotes: ['Wear a hat when it is cold.'],
+            },
+          ],
+        },
+      },
+      {
+        rule_id: 'urg.sample.coat',
+        bundle_id: 'sample-rules',
+        priority: 20,
+        condition_ast: { op: 'present', feature: 'feat_coat' },
+        action: { type: 'escalate', urgency: 'urgent', text: 'Another sample text (invented).' },
+        review_status: 'pending',
+        decided_by: null,
+        decision_note: null,
+        in_words: null,
+        in_words_unavailable: 'The rule file this rule set was stored from is not on this installation.',
+      },
+    ],
     '/claims': [
       {
         statement_id: 'st_1',
@@ -291,6 +343,48 @@ describe('the review workspace against the review service', () => {
     expect(within(drawer).queryByRole('button', { name: 'Confirm match' })).not.toBeInTheDocument();
     expect(within(drawer).queryByRole('button', { name: 'Reject match' })).not.toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: 'Save note' })).toBeInTheDocument();
+  });
+
+  it('shows an urgency rule in words: when it applies, what the person is told, why, and its quoted basis', async () => {
+    const { api } = fakeApi();
+    const user = renderLive('/review/rules', api);
+
+    expect(await screen.findByRole('heading', { name: 'Urgency rules' })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Review 1. A pretend hat with a scarf' }));
+    let drawer = await screen.findByRole('dialog');
+    expect(
+      within(drawer).getByText('Emergency. The published advice is an ambulance or an emergency department now.'),
+    ).toBeInTheDocument();
+    // The condition, line for line as the service gives it; a line that heads a group is set apart.
+    expect(within(drawer).getByText('all of these together:')).toHaveClass('font-semibold');
+    expect(within(drawer).getByText('“a pretend hat”')).toHaveClass('ml-5');
+    expect(within(drawer).getByText('any one of: “a scarf”; “a coat”')).toBeInTheDocument();
+    expect(within(drawer).getByText('Sample text shown to the person (invented).')).toBeInTheDocument();
+    expect(within(drawer).getByText('The invented advice names exactly this combination.')).toBeInTheDocument();
+    expect(
+      within(drawer).getByText('The rule applies: recorded as present “a pretend hat”; “a scarf”.'),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByText(
+        'The rule does not apply: recorded as present “a pretend hat”; recorded as absent “a scarf”; “a coat”.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'Hats and scarves' })).toHaveAttribute(
+      'href',
+      'https://example.invalid/hats',
+    );
+    expect(within(drawer).getByText(/Sample Publisher,.*page last reviewed 01 January 2026:/)).toBeInTheDocument();
+    expect(within(drawer).getByText('“Wear a hat when it is cold.”')).toBeInTheDocument();
+    expect(within(drawer).getByText('1 of 2')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    // A rule the service cannot put into words is shown as stored, with the reason.
+    await user.click(await screen.findByRole('button', { name: 'Review urg.sample.coat' }));
+    drawer = await screen.findByRole('dialog');
+    expect(
+      within(drawer).getByText('The rule file this rule set was stored from is not on this installation.'),
+    ).toBeInTheDocument();
+    expect(within(drawer).getByText('Another sample text (invented).')).toBeInTheDocument();
   });
 
   it('asks the service for nothing when no reviewer sign-in is configured', async () => {
