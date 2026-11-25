@@ -2,11 +2,14 @@ import { FlaskConical, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { useDemo } from '@/state/demo';
+import { useServices } from '@/state/services';
 
 import { DemoToolbar } from './DemoToolbar';
 
 export const DEMO_BANNER_TEXT = 'Design demo · Sample scenarios · Not a medical assessment.';
 export const DEMO_EXPORT_LABEL = 'Design demo · Sample information';
+/** In live mode nothing shown is a sample scenario: the app talks to the service on this computer. */
+export const LIVE_BANNER_TEXT = 'Test version · Connected to the service on this computer · Not a medical assessment.';
 
 /**
  * Persistent demo notice shown on every screen. It also hosts the entry point to the
@@ -18,6 +21,7 @@ export const DEMO_EXPORT_LABEL = 'Design demo · Sample information';
  */
 export function DemoBanner() {
   const { toolsEnabled } = useDemo();
+  const { config } = useServices();
   const [toolsOpen, setToolsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -51,7 +55,7 @@ export function DemoBanner() {
       <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-1 sm:px-6">
         <p className="flex items-start gap-2 py-1.5 text-sm font-medium">
           <FlaskConical aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <span>{DEMO_BANNER_TEXT}</span>
+          <span>{config.serviceMode === 'http' ? LIVE_BANNER_TEXT : DEMO_BANNER_TEXT}</span>
         </p>
         {toolsEnabled ? (
           <button

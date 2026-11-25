@@ -5055,3 +5055,97 @@ gets words); a component test of the screen.
   as the document shows it.
 - The browser check needs the web app in live review mode on port 5173; it is run by hand, like
   the other browser tests, and is not part of CI.
+
+### M2.4d — The review workspace in plain words
+
+**What it is for.** The owner's instruction of 2026-11-24, given during this round: "ease out the
+terminologies used in the complete review panel, a layman should also understand what the
+terminologies, descriptions mean (apart from the data)". The reviewer is neither a programmer nor
+a clinician. Decision E97 holds the word list.
+
+**Impact analysis before editing** (all LOW). The pieces changed are screen components and text
+constants; the graph traces no callers for them. Their real users, found by search: the live
+screens, `LiveReview.test.tsx`, and the two browser scripts, all updated. One text of the service
+changed: the two explanations in `MARKS` (`review_claims.py`), returned by `list_claims` (LOW).
+
+**Implemented.** Only words changed, and one notice; no stored name, route, table or review
+target was renamed, and the data is shown as stored.
+
+| Was | Is now |
+|---|---|
+| Disease mappings | Condition names |
+| Feature mappings | Symptom and question names |
+| Data quality: repeated column headings | Repeated columns in the data files |
+| Vocabulary links | Matches to medical reference lists |
+| Statements and claims | Texts about conditions |
+| Releases; rule, mapping and knowledge releases | Published versions; published sets of urgency rules, lists of names, texts and facts |
+| Serving bundle … can be assembled | What the service would run on … everything it needs is there |
+| Pending review / Retired | Waiting for a decision / No longer used |
+| Set back to pending | Undo the decision |
+| Review status; All statuses; Apply | Decision so far; Any; Show results |
+| Live review data | Real stored data |
+| Decisions are recorded under … | Your decisions are saved under the name … |
+| Original label; Proposed label; Mapping method | Name in the data file; Name it is grouped under; How it was grouped |
+| Original heading; What a zero means; Conflicts | Heading in the data file; What a 0 in this column means; Repeated columns |
+| Our term; Vocabulary; Term in the vocabulary; Taken through | Our name; Reference list; Entry in the list; Found by way of |
+| Mark to check; Wording cues; Proposed feature; Applicability | Things to check; Words in it that change the meaning; Symptom recognised; For whom or when this holds |
+| Queue; sources; disease labels | List; data sources; condition names |
+
+- System codes that the screens showed raw are put into words by one list,
+  `routes/review/live/words.ts`: how a match was found (`exact_title` → "The entry's title is
+  exactly our name", `mondo_equivalent` → "The MONDO list says this code stands for the same
+  condition", and seven more), how a name was grouped, what a 0 means (`no_per_source` → "The
+  source's own description says a 0 means 'no'"), the kind of a text, the things to check and the
+  wording cues. A code the list does not know is shown as it is, with spaces: nothing is hidden.
+- The notice at the top said "Design demo · Sample scenarios" above the live workspace, which
+  shows real stored data. In live mode it now reads "Test version · Connected to the service on
+  this computer · Not a medical assessment." `pnpm dev:review` no longer shows the "Demo tools"
+  button, whose sample scenarios have no meaning there.
+- The decision panel: "For reviewers only. Nothing here reaches a patient until it is approved
+  and then published."; a recorded decision in the list of notes is named by its words, not its
+  code.
+- Published versions: what each kind holds is named for that kind (the 19 of a set of rules are
+  "published pages they quote", not "evidence"), and the date is shown as a date.
+- Suggested matches: the code is shown under the suggested entry, because two suggestions for
+  one name can carry the same title (two SNOMED CT codes under MONDO's one name).
+- The service's two explanations of what to check on a sentence or list item no longer use the
+  word "preposition".
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 72 files |
+| `uv run pytest` (SQLite, archives included) | 275 passed, 78 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 352 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 135 passed (9 files; before: 132, 8); built |
+| `pnpm e2e:review` against the test database | 21 passed, 0 failed (one new check: the notice in live mode) |
+| `pnpm e2e:rules` against the real rule set | 4 passed, 0 failed |
+| Every section of the live workspace opened on the real data, read-only, and its text read through | 9 sections and the decision panel; the browser sent no request that changes data |
+| `detect_changes` before commit | 19 files, risk medium; one flow (`LiveReleasesPage`). The changed symbols are the screens and components whose words changed, `REVIEW_STATE_LABELS`, `DemoBanner` and the service's `MARKS`; `apps/web/README.md` is listed again though `git status` shows it unchanged |
+
+New tests: `words.test.ts` (every code the main database holds today has words; an unknown code
+is shown as it is; the four decision states), and the notice in live mode (component test and
+browser check).
+
+**A requirement without a sub-step, found and reported.** Updating `docs/TRACEABILITY.md` showed
+that the web page of a condition still reads sample fixtures in every mode, although the service
+has answered `GET /v1/conditions/{disease_id}` from reviewed content since M2.2. The table
+assigned it to M2.4, none of whose parts carries it. Added to the plan as M2.9a; not started.
+Three rows of the traceability table that still said "screens on fixtures" and "no publishing, no
+rollback" were brought up to date.
+
+**Limits, stated plainly.**
+
+- **The review screens of the design demo (`pnpm dev`, sample data) keep their earlier wording.**
+  They are a second set of screens on sample fixtures, checked text by text by `pnpm smoke`. The
+  live workspace is the one that shows the real data.
+- Messages with which the service refuses a decision were read and left as they are; they name
+  titles and our own IDs and use "candidate" and "general term".
+- File names, column headings and names from the data files are data and are shown as stored
+  (`E_0_have_you_recently_had_a`, `unified_820_…csv`), as are system names such as
+  `feat_44058802466339a2`, which are labelled "name in the system".
+- "MONDO", "ICD-11", "HPO", "SNOMED CT" and "LOINC" are the names of the reference lists and are
+  kept; the page explains once that they are standard medical reference lists.
+- Whether the wording is plain enough is the owner's judgement; I have read every screen through
+  but have not had a person outside the project read them.

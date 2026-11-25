@@ -1,22 +1,51 @@
 import { field, part, type ReviewItem } from '@/api/liveReview';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/useAsync';
 import { useServices } from '@/state/services';
 
 import { ReviewLoadError, ReviewLoading, ReviewPageHeader } from '../ReviewPageHeader';
 
-const KINDS: ReadonlyArray<{ path: string; title: string; holds: readonly string[] }> = [
-  { path: '/releases', title: 'Rule releases', holds: ['rules', 'questions', 'evidence', 'features'] },
+/** The kinds of published version, with what each holds: the service's name of a count and the words for it. */
+const KINDS: ReadonlyArray<{ path: string; title: string; holds: ReadonlyArray<readonly [string, string]> }> = [
+  {
+    path: '/releases',
+    title: 'Published sets of urgency rules',
+    holds: [
+      ['rules', 'urgency rules'],
+      ['questions', 'follow-up questions'],
+      ['evidence', 'published pages they quote'],
+      ['features', 'symptoms and other items they use'],
+    ],
+  },
   {
     path: '/mapping-releases',
-    title: 'Mapping releases',
-    holds: ['features', 'diseases', 'disease_mappings', 'feature_mappings'],
+    title: 'Published lists of names',
+    holds: [
+      ['features', 'symptoms and other items'],
+      ['diseases', 'conditions'],
+      ['disease_mappings', 'condition names from data files'],
+      ['feature_mappings', 'columns of data files'],
+    ],
   },
-  { path: '/knowledge-releases', title: 'Knowledge releases', holds: ['statements', 'evidence', 'sources'] },
+  {
+    path: '/knowledge-releases',
+    title: 'Published texts and facts',
+    holds: [
+      ['statements', 'texts about conditions'],
+      ['evidence', 'facts linking a condition and a symptom'],
+      ['sources', 'data sources'],
+    ],
+  },
 ];
 
-function holdsText(release: ReviewItem, names: readonly string[]): string {
-  return names.map((name) => `${field(release, name) || '0'} ${name.replace(/_/g, ' ')}`).join(' · ');
+function holdsText(release: ReviewItem, holds: ReadonlyArray<readonly [string, string]>): string {
+  return holds.map(([name, words]) => `${field(release, name) || '0'} ${words}`).join(' · ');
+}
+
+function when(release: ReviewItem): string {
+  const at = new Date(field(release, 'published_at'));
+  return Number.isNaN(at.getTime()) ? field(release, 'published_at') : formatDateTime(at);
 }
 
 /**
@@ -32,13 +61,14 @@ export function LiveReleasesPage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Releases" badge={<StatusBadge tone="info">Live review data</StatusBadge>}>
+      <ReviewPageHeader title="Published versions" badge={<StatusBadge tone="info">Real stored data</StatusBadge>}>
         <p>
-          What has been published, and whether the serving bundle can be assembled from it. A published release cannot
-          be edited or deleted. Nothing here is served while clinical mode is off.
+          What has been published so far, and whether the service has everything it would need to run on it. A published
+          version can never be changed or deleted; a correction is a new version. Nothing here is shown to patients
+          while the live medical mode is switched off.
         </p>
       </ReviewPageHeader>
-      {state.status === 'loading' ? <ReviewLoading label="Loading releases…" /> : null}
+      {state.status === 'loading' ? <ReviewLoading label="Loading published versions…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
         <div className="space-y-6">
@@ -51,33 +81,34 @@ export function LiveReleasesPage() {
                     <li key={field(release, 'release_id')} className="rounded-control border border-line p-3">
                       <p className="font-semibold text-ink">
                         {field(release, 'release_id')}{' '}
-                        {release.is_current ? <StatusBadge tone="info">Current</StatusBadge> : null}
+                        {release.is_current ? <StatusBadge tone="info">In use now</StatusBadge> : null}
                       </p>
                       <p className="text-ink-secondary">{holdsText(release, kind.holds)}</p>
                       <p className="text-sm text-ink-secondary">
-                        Published by {field(release, 'published_by')} · {field(release, 'published_at')}
+                        Published by {field(release, 'published_by')} · {when(release)}
                       </p>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-1 text-ink-secondary">None published.</p>
+                <p className="mt-1 text-ink-secondary">Nothing published yet.</p>
               )}
             </section>
           ))}
-          <section aria-label="Serving bundle">
-            <h2 className="font-display text-lg font-bold text-ink">Serving bundle</h2>
+          <section aria-label="What the service would run on">
+            <h2 className="font-display text-lg font-bold text-ink">What the service would run on</h2>
             {state.data.bundle.assembled ? (
               <p className="mt-1 text-ink">
-                Can be assembled from the current releases: {field(state.data.bundle, 'rules')} rules,{' '}
-                {field(state.data.bundle, 'features')} features, {field(state.data.bundle, 'response_texts')} response
-                texts, {field(state.data.bundle, 'candidates')} candidates. Built from rule release{' '}
-                {field(part(part(state.data.bundle, 'built_from'), 'rule_release'), 'release_id')} and mapping release{' '}
+                Everything it needs is there: {field(state.data.bundle, 'rules')} urgency rules,{' '}
+                {field(state.data.bundle, 'features')} symptoms and other items,{' '}
+                {field(state.data.bundle, 'response_texts')} standard replies and{' '}
+                {field(state.data.bundle, 'candidates')} possible conditions. It is put together from the set of rules{' '}
+                {field(part(part(state.data.bundle, 'built_from'), 'rule_release'), 'release_id')} and the list of names{' '}
                 {field(part(part(state.data.bundle, 'built_from'), 'mapping_release'), 'release_id')}.
               </p>
             ) : (
               <div className="mt-1 text-ink">
-                <p>Cannot be assembled yet. Missing:</p>
+                <p>Not everything it needs is there yet. Missing:</p>
                 <ul className="list-disc pl-5">
                   {(Array.isArray(state.data.bundle.problems) ? (state.data.bundle.problems as string[]) : []).map(
                     (problem) => (

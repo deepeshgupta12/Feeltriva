@@ -13,10 +13,10 @@ export type ReviewState = 'pending' | 'approved' | 'rejected' | 'retired';
 export const REVIEW_STATES: readonly ReviewState[] = ['pending', 'approved', 'rejected', 'retired'];
 
 export const REVIEW_STATE_LABELS: Record<ReviewState, string> = {
-  pending: 'Pending review',
+  pending: 'Waiting for a decision',
   approved: 'Approved',
   rejected: 'Rejected',
-  retired: 'Retired',
+  retired: 'No longer used',
 };
 
 /** What a review list answers with. Lists differ in their extra fields, so items stay loosely typed. */

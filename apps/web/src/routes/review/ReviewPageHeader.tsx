@@ -36,7 +36,7 @@ export function ReviewLoading({ label }: { label: string }) {
 export function ReviewLoadError({ onRetry }: { onRetry: () => void }) {
   return (
     <div role="alert" className="rounded-control border border-attention/30 bg-attention-soft p-4 text-attention">
-      <p className="font-semibold">This review data couldn’t be loaded.</p>
+      <p className="font-semibold">This information couldn’t be loaded. The service may not be running.</p>
       <button type="button" onClick={onRetry} className="mt-1 min-h-11 font-semibold underline underline-offset-4">
         Try again
       </button>

@@ -41,7 +41,7 @@ interface DecisionDrawerProps {
 const DECISIONS: ReadonlyArray<{ status: ReviewState; label: string }> = [
   { status: 'approved', label: 'Approve' },
   { status: 'rejected', label: 'Reject' },
-  { status: 'pending', label: 'Set back to pending' },
+  { status: 'pending', label: 'Undo the decision' },
 ];
 
 export function StateBadge({ status }: { status: string }) {
@@ -107,14 +107,14 @@ export function DecisionDrawer({ api, target, onClose, onChanged, children }: De
         }
       }}
       title={target ? target.title : 'Details'}
-      description="Internal review · not clinically approved until a reviewer approves it and a release holds it"
+      description="For reviewers only. Nothing here reaches a patient until it is approved and then published."
       side="right"
     >
       {target ? (
         <div className="space-y-5 text-[0.9375rem]">
           <dl className="space-y-3">
             <div>
-              <dt className="text-sm font-semibold text-ink-secondary">Review status</dt>
+              <dt className="text-sm font-semibold text-ink-secondary">Decision so far</dt>
               <dd className="mt-1">
                 <StateBadge status={target.status} />
               </dd>
@@ -131,7 +131,7 @@ export function DecisionDrawer({ api, target, onClose, onChanged, children }: De
 
           <section aria-labelledby={`${id}-notes`}>
             <h3 id={`${id}-notes`} className="font-display text-base font-bold text-ink">
-              Notes and decisions
+              Notes and decisions so far
             </h3>
             {notes.status === 'loading' ? <p className="mt-1 text-ink-secondary">Loading notes…</p> : null}
             {notes.status === 'failed' ? (
@@ -148,7 +148,9 @@ export function DecisionDrawer({ api, target, onClose, onChanged, children }: De
                   <li key={item.note_id} className="rounded-control border border-line bg-page p-3">
                     <p className="whitespace-pre-wrap text-ink">{item.note}</p>
                     <p className="mt-1 text-sm text-ink-secondary">
-                      {item.status_change ? `Decision: ${item.status_change} · ` : 'Note · '}
+                      {item.status_change
+                        ? `Decision: ${isReviewState(item.status_change) ? REVIEW_STATE_LABELS[item.status_change] : item.status_change} · `
+                        : 'Note · '}
                       {item.reviewer}
                       {item.at ? ` · ${formatDateTime(new Date(item.at))}` : ''}
                     </p>
@@ -160,11 +162,11 @@ export function DecisionDrawer({ api, target, onClose, onChanged, children }: De
 
           <section aria-labelledby={`${id}-record`}>
             <h3 id={`${id}-record`} className="font-display text-base font-bold text-ink">
-              Record a note or a decision
+              Write a note or make a decision
             </h3>
             <p className="mt-1 text-ink-secondary">
-              Recorded by the service under <strong>{api.reviewer}</strong>. Approving here serves nothing: content is
-              shown to a person only when a published release holds it.
+              Saved under the name <strong>{api.reviewer}</strong>. Approving something here does not show it to anyone:
+              it reaches a patient only after it has also been published.
             </p>
             <label htmlFor={`${id}-note`} className="mb-1 mt-2 block font-medium text-ink">
               Note (required)

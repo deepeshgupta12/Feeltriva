@@ -85,7 +85,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
 
   return (
     <div>
-      <ReviewPageHeader title={screen.title} badge={<StatusBadge tone="info">Live review data</StatusBadge>}>
+      <ReviewPageHeader title={screen.title} badge={<StatusBadge tone="info">Real stored data</StatusBadge>}>
         {screen.intro}
       </ReviewPageHeader>
 
@@ -106,7 +106,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
         ) : null}
         <div className="min-w-[11rem]">
           <label htmlFor={`${id}-status`} className="mb-1 block text-sm font-medium text-ink-secondary">
-            Review status
+            Decision so far
           </label>
           <select
             id={`${id}-status`}
@@ -114,7 +114,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
             onChange={(event) => setStatus(event.target.value as ReviewState | '')}
             className="field-control"
           >
-            <option value="">All statuses</option>
+            <option value="">Any</option>
             {REVIEW_STATES.map((value) => (
               <option key={value} value={value}>
                 {REVIEW_STATE_LABELS[value]}
@@ -143,7 +143,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
           </div>
         ))}
         <Button type="submit" size="sm" variant="secondary">
-          Apply
+          Show results
         </Button>
       </form>
 
@@ -153,7 +153,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
         <>
           <p role="status" className="mt-3 text-sm text-ink-secondary">
             {total === 0
-              ? 'No rows match.'
+              ? 'Nothing matches.'
               : `Showing ${offset + 1} to ${offset + items.length} of ${total.toLocaleString('en-IN')}`}
           </p>
           <ScrollRegion label={screen.caption} className="mt-2">
@@ -161,7 +161,7 @@ export function LiveListPage({ screen }: { screen: ListScreen }) {
               <caption className="sr-only">{screen.caption}</caption>
               <thead className="bg-page text-sm text-ink-secondary">
                 <tr>
-                  {[...screen.columns.map((column) => column.heading), 'Review status'].map((heading) => (
+                  {[...screen.columns.map((column) => column.heading), 'Decision so far'].map((heading) => (
                     <th key={heading} scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
                       {heading}
                     </th>

@@ -210,7 +210,7 @@ function fakeApi(reviewer: string | null = 'tester') {
       return Promise.resolve({
         total: items.length,
         items,
-        marks: { first_item_preposition: 'The first item of this list holds a preposition.' },
+        marks: { first_item_preposition: 'The first item of this list starts with a few shared words.' },
       });
     },
     notes: () => Promise.resolve(structuredClone(notes)),
@@ -239,9 +239,14 @@ describe('the review workspace against the review service', () => {
     const { api, decide, requests } = fakeApi();
     const user = renderLive('/review/data', api);
 
-    expect(await screen.findByRole('heading', { name: 'Data quality: repeated column headings' })).toBeInTheDocument();
-    expect(screen.getByText(/Decisions are recorded under tester/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Vocabulary links' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Repeated columns in the data files' })).toBeInTheDocument();
+    expect(screen.getByText(/Your decisions are saved under the name tester/)).toBeInTheDocument();
+    // In live mode nothing is a sample scenario, and the notice at the top says so.
+    expect(screen.getByRole('region', { name: 'Demo notice' })).toHaveTextContent(
+      'Test version · Connected to the service on this computer · Not a medical assessment.',
+    );
+    expect(screen.queryByText(/Sample scenarios/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Matches to reference lists' })).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Review itching (column 3)' }));
     // The list asked the service for the repeated headings only.
     expect(requests[0]).toMatchObject({
@@ -295,17 +300,17 @@ describe('the review workspace against the review service', () => {
     const { api } = fakeApi();
     const user = renderLive('/review/evidence', api);
 
-    expect(await screen.findByRole('heading', { name: 'Statements and claims' })).toBeInTheDocument();
-    expect(await screen.findByText(/pretend ache · symptom · has a mark to check/)).toBeInTheDocument();
-    expect(screen.getByText('Check: first item preposition')).toBeInTheDocument();
-    expect(screen.getByText('Proposed feature: hat')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Texts about conditions' })).toBeInTheDocument();
+    expect(await screen.findByText(/pretend ache · Symptoms · has something to check/)).toBeInTheDocument();
+    expect(screen.getByText('Check: how the list is worded')).toBeInTheDocument();
+    expect(screen.getByText('Symptom recognised: hat')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Review claim: a hat' }));
     const drawer = await screen.findByRole('dialog');
     // The drawer says what to check for the mark, in the words the service gives.
-    expect(within(drawer).getByText('The first item of this list holds a preposition.')).toBeInTheDocument();
+    expect(within(drawer).getByText('The first item of this list starts with a few shared words.')).toBeInTheDocument();
     await user.type(within(drawer).getByLabelText('For whom or when this holds'), 'in winter');
-    await user.click(within(drawer).getByRole('button', { name: 'Save applicability' }));
-    expect(api.setApplicability).toHaveBeenCalledWith('cl_hat', 'in winter', 'Applicability recorded: in winter');
+    await user.click(within(drawer).getByRole('button', { name: 'Save for whom or when' }));
+    expect(api.setApplicability).toHaveBeenCalledWith('cl_hat', 'in winter', 'For whom or when this holds: in winter');
   });
 
   it('shows a suggested match in plain words, lets a reviewer confirm it, and offers no decision without a suggestion', async () => {
@@ -391,8 +396,8 @@ describe('the review workspace against the review service', () => {
     const { api, requests } = fakeApi(null);
     renderLive('/review/data', api);
 
-    expect(await screen.findByRole('heading', { name: 'Reviewer sign-in is not configured' })).toBeInTheDocument();
-    expect(screen.getByText(/nothing in the browser is authorization/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Reviewer sign-in is not set up' })).toBeInTheDocument();
+    expect(screen.getByText(/nothing in the browser decides that/)).toBeInTheDocument();
     expect(requests).toEqual([]);
   });
 });

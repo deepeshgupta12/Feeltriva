@@ -3,113 +3,119 @@ import type { ReactNode } from 'react';
 import { field, part, type ReviewItem } from '@/api/liveReview';
 
 import { LiveListPage, type ListScreen } from './LiveListPage';
+import { howGrouped, howMatched, kindOfName, zeroMeaning } from './words';
 
 const code = (text: string): ReactNode => <code className="break-all text-sm">{text}</code>;
 
 function conflictText(item: ReviewItem): string {
   const conflicts = part(item, 'conflicts');
   if (!conflicts.repeated_header) {
-    return 'None recorded';
+    return 'Not repeated';
   }
   const positions = Array.isArray(conflicts.repeated_positions) ? conflicts.repeated_positions.join(', ') : '';
   return `The heading is repeated at columns ${positions}; the columns disagree in ${field(conflicts, 'disagreement_rows') || '0'} rows`;
 }
 
 const DISEASE_MAPPINGS: ListScreen = {
-  title: 'Disease mappings',
+  title: 'Condition names',
   intro: (
     <p>
-      Source labels grouped by spelling only. Sharing a group means the labels are spelled alike after normalisation; it
-      does not mean they are the same condition. A decision here is recorded under your name.
+      The names of conditions exactly as they appear in the data files, and the name each is grouped under. Names are
+      grouped only when they are spelled the same once capital letters and extra spaces are ignored. Being in one group
+      does not mean the names are the same condition. A decision you make here is saved under your name.
     </p>
   ),
   path: '/disease-mappings',
   targetType: 'disease_mapping',
   idField: 'mapping_id',
-  caption: 'Source labels and the disease label each is mapped to',
-  searchLabel: 'Search source labels',
+  caption: 'Condition names from the data files and the name each is grouped under',
+  searchLabel: 'Search names from the data files',
   titleOf: (item) => field(item, 'original_term'),
   columns: [
-    { heading: 'Original label', cell: (item) => field(item, 'original_term') },
-    { heading: 'Proposed label', cell: (item) => field(item, 'proposed_canonical_term') },
-    { heading: 'Mapping method', cell: (item) => field(item, 'mapping_method') },
+    { heading: 'Name in the data file', cell: (item) => field(item, 'original_term') },
+    { heading: 'Name it is grouped under', cell: (item) => field(item, 'proposed_canonical_term') },
+    { heading: 'How it was grouped', cell: (item) => howGrouped(field(item, 'mapping_method')) },
     { heading: 'Decided by', cell: (item) => field(item, 'reviewer') || 'Nobody yet' },
   ],
   details: (item) => [
-    { label: 'Original label, exactly as imported', value: code(field(item, 'original_term')) },
-    { label: 'Proposed label', value: field(item, 'proposed_canonical_term') },
-    { label: 'Mapping method', value: field(item, 'mapping_method') },
-    { label: 'Source', value: code(field(item, 'source_id')) },
-    { label: 'ID in the source', value: field(item, 'original_id') || 'None' },
+    { label: 'Name exactly as in the data file', value: code(field(item, 'original_term')) },
+    { label: 'Name it is grouped under', value: field(item, 'proposed_canonical_term') },
+    { label: 'How it was grouped', value: howGrouped(field(item, 'mapping_method')) },
+    { label: 'Data file it came from (name in the system)', value: code(field(item, 'source_id')) },
+    { label: 'Number the data file gives it', value: field(item, 'original_id') || 'None' },
   ],
 };
 
 const featureMappings = (duplicatesOnly: boolean): ListScreen => ({
-  title: duplicatesOnly ? 'Data quality: repeated column headings' : 'Feature mappings',
+  title: duplicatesOnly ? 'Repeated columns in the data files' : 'Symptom and question names',
   intro: duplicatesOnly ? (
     <p>
-      Column headings that appear more than once in a source file. Every column position is kept as imported, with the
-      number of rows in which the columns disagree, so that a reviewer can reconcile them. Nothing was merged.
+      Column headings that appear more than once in the same data file. Each column is kept exactly as it came, with the
+      number of rows in which the repeated columns disagree, so that someone can decide which one to trust. Nothing was
+      merged.
     </p>
   ) : (
     <p>
-      One row per source column, with the heading exactly as imported. The proposed terms are candidates by wording.
-      They include questionnaire and history items and are not verified symptoms.
+      One row for each column of a data file, with its heading exactly as it came. The name suggested for it is based on
+      its wording only. The columns include questions and past history, not only symptoms, and none has been checked by
+      a clinician.
     </p>
   ),
   path: '/feature-mappings',
   targetType: 'feature_mapping',
   idField: 'mapping_id',
-  caption: duplicatesOnly ? 'Repeated column headings by source file' : 'Feature mappings by source column',
+  caption: duplicatesOnly ? 'Repeated column headings, by data file' : 'Columns of the data files and their names',
   searchLabel: 'Search column headings',
   fixedParams: duplicatesOnly ? { conflicts_only: true } : undefined,
   titleOf: (item) => `${field(item, 'original_term')} (column ${field(item, 'column_index') || 'list'})`,
   columns: [
-    { heading: 'Original heading', cell: (item) => field(item, 'original_term') },
+    { heading: 'Heading in the data file', cell: (item) => field(item, 'original_term') },
     {
-      heading: 'File and column',
+      heading: 'File and column number',
       cell: (item) => `${field(item, 'file_path')} · column ${field(item, 'column_index') || 'list term'}`,
     },
-    { heading: 'What a zero means', cell: (item) => field(item, 'zero_semantics') },
-    { heading: 'Conflicts', cell: conflictText },
+    { heading: 'What a 0 in this column means', cell: (item) => zeroMeaning(field(item, 'zero_semantics')) },
+    { heading: 'Repeated columns', cell: conflictText },
   ],
   details: (item) => [
-    { label: 'Original heading, exactly as imported', value: code(field(item, 'original_term')) },
+    { label: 'Heading exactly as in the data file', value: code(field(item, 'original_term')) },
     {
-      label: 'File and column position',
+      label: 'File and column number',
       value: `${field(item, 'file_path')} · column ${field(item, 'column_index') || 'list term'}`,
     },
-    { label: 'Proposed feature', value: code(field(item, 'proposed_canonical_id')) },
-    { label: 'What a zero means (proposal)', value: field(item, 'zero_semantics') },
-    { label: 'Conflicts', value: conflictText(item) },
-    { label: 'Source', value: code(field(item, 'source_id')) },
+    { label: 'Name suggested for it (name in the system)', value: code(field(item, 'proposed_canonical_id')) },
+    { label: 'What a 0 in this column means (suggested)', value: zeroMeaning(field(item, 'zero_semantics')) },
+    { label: 'Repeated columns', value: conflictText(item) },
+    { label: 'Data file it came from (name in the system)', value: code(field(item, 'source_id')) },
   ],
 });
 
 const VOCABULARY_LINKS: ListScreen = {
-  title: 'Vocabulary links',
+  title: 'Matches to medical reference lists',
   intro: (
     <>
       <p>
-        Candidate links from our own terms to outside vocabularies. A link is a match of names, or an equivalence a
-        vocabulary states; it is a candidate until a reviewer decides. Codes are shown here for reviewers only and are
-        never shown to a user.
+        Our names for conditions and symptoms, matched to entries in standard medical reference lists (ICD-11, HPO,
+        MONDO, SNOMED CT, LOINC). A match was made automatically when a list has an entry with exactly our name, or when
+        one list says that its entry is the same as an entry of another list. Every match is a suggestion until a
+        reviewer decides. The codes are shown to reviewers only and never to a patient.
       </p>
       <p>
-        Rejecting a MONDO link retires the links taken through it. Where a term has a general and a narrower candidate,
-        the general one is the default: the service refuses the narrower one and says why.
+        Some codes were reached by way of a MONDO entry. If you reject that MONDO match, the codes reached through it
+        are set aside as well. Where a name has both a general entry and a more specific one, the general one is
+        preferred: the service will not approve the specific one while the general one stands, and tells you why.
       </p>
     </>
   ),
   path: '/terminology-links',
   targetType: 'terminology_link',
   idField: 'link_id',
-  caption: 'Candidate links to outside vocabularies',
-  searchLabel: 'Search our terms, titles or codes',
+  caption: 'Matches to medical reference lists',
+  searchLabel: 'Search our names, entries or codes',
   filters: [
     {
       param: 'system',
-      label: 'Vocabulary',
+      label: 'Reference list',
       options: ['ICD-11 MMS', 'ICD-11 Foundation', 'MONDO', 'HPO', 'SNOMED CT', 'LOINC', 'ICD-10'].map((value) => ({
         value,
         label: value,
@@ -117,36 +123,41 @@ const VOCABULARY_LINKS: ListScreen = {
     },
     {
       param: 'subject_type',
-      label: 'Kind of term',
+      label: 'Kind of name',
       options: [
-        { value: 'disease', label: 'Disease labels' },
-        { value: 'feature', label: 'Features' },
+        { value: 'disease', label: 'Conditions' },
+        { value: 'feature', label: 'Symptoms and other items' },
       ],
     },
   ],
   titleOf: (item) => `${field(part(item, 'subject'), 'term')} → ${field(item, 'title')}`,
   columns: [
-    { heading: 'Our term', cell: (item) => field(part(item, 'subject'), 'term') },
-    { heading: 'Vocabulary', cell: (item) => field(item, 'system') },
-    { heading: 'Term in the vocabulary', cell: (item) => field(item, 'title') },
+    { heading: 'Our name', cell: (item) => field(part(item, 'subject'), 'term') },
+    { heading: 'Reference list', cell: (item) => field(item, 'system') },
+    { heading: 'Entry in the list', cell: (item) => field(item, 'title') },
     { heading: 'Code', cell: (item) => code(field(item, 'code')) },
-    { heading: 'How it was found', cell: (item) => field(item, 'match_method') },
+    { heading: 'How the match was found', cell: (item) => howMatched(field(item, 'match_method')) },
   ],
   details: (item) => {
     const via = part(part(item, 'detail'), 'via');
     const category = part(part(item, 'detail'), 'category_through_mondo');
     return [
-      { label: 'Our term', value: `${field(part(item, 'subject'), 'term')} (${field(part(item, 'subject'), 'type')})` },
-      { label: 'Vocabulary and version', value: `${field(item, 'system')} · ${field(item, 'system_version')}` },
-      { label: 'Term in the vocabulary', value: field(item, 'title') },
-      { label: 'Code (reviewers only)', value: code(field(item, 'code')) },
-      { label: 'How it was found', value: field(item, 'match_method') },
       {
-        label: 'Taken through',
-        value: via.link_id ? `MONDO term "${field(via, 'title')}" (${field(via, 'our_match')})` : 'Its own name match',
+        label: 'Our name',
+        value: `${field(part(item, 'subject'), 'term')} (${kindOfName(field(part(item, 'subject'), 'type'))})`,
+      },
+      { label: 'Reference list and its edition', value: `${field(item, 'system')} · ${field(item, 'system_version')}` },
+      { label: 'Entry in the list', value: field(item, 'title') },
+      { label: 'Code of the entry (for reviewers only)', value: code(field(item, 'code')) },
+      { label: 'How the match was found', value: howMatched(field(item, 'match_method')) },
+      {
+        label: 'Found by way of',
+        value: via.link_id
+          ? `The MONDO entry "${field(via, 'title')}", which our name is matched to`
+          : 'Our name itself',
       },
       {
-        label: 'Category this is the unspecified sub-code of',
+        label: 'Group this entry is the “unspecified” member of',
         value: category.icd_title ? field(category, 'icd_title') : 'Not recorded',
       },
       { label: 'Decided by', value: field(item, 'reviewer') || 'Nobody yet' },
@@ -275,7 +286,19 @@ const LINK_PROPOSALS: ListScreen = {
   columns: [
     { heading: 'Our name', cell: (item) => field(part(item, 'subject'), 'term') },
     { heading: 'Reference list', cell: (item) => field(item, 'system') },
-    { heading: 'Suggested entry', cell: (item) => field(part(item, 'term'), 'title') || 'No suggestion' },
+    {
+      heading: 'Suggested entry',
+      // Two suggestions for one name can carry the same title (two codes of one list), so the code is shown too.
+      cell: (item) =>
+        field(part(item, 'term'), 'title') ? (
+          <>
+            {field(part(item, 'term'), 'title')}
+            <span className="block text-sm">Code {code(field(part(item, 'term'), 'code'))}</span>
+          </>
+        ) : (
+          'No suggestion'
+        ),
+    },
     { heading: 'Why it was not matched automatically', cell: whyNotMatched },
     { heading: 'Match made', cell: matchMade },
   ],
@@ -285,7 +308,7 @@ const LINK_PROPOSALS: ListScreen = {
     return [
       {
         label: 'Our name',
-        value: `${field(part(item, 'subject'), 'term')} (${field(part(item, 'subject'), 'type') === 'disease' ? 'a condition' : 'a symptom or other item'})`,
+        value: `${field(part(item, 'subject'), 'term')} (${kindOfName(field(part(item, 'subject'), 'type'))})`,
       },
       { label: 'Reference list and its edition', value: `${field(item, 'system')} · ${field(item, 'system_version')}` },
       { label: 'Suggested entry', value: field(term, 'title') || 'No suggestion' },

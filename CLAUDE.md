@@ -74,6 +74,10 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
   tests of the current sub-step need and say in every report which one is running. The browser
   test of the review workspace (`pnpm e2e:review`) uses no web port. Restart servers after
   changes that need it and say so.
+- **The review workspace is written in plain words** (owner's instruction, 2026-11-24; decision E97): a
+  person who is neither a programmer nor a clinician must understand every title, explanation, column
+  heading, button and message. Use the word list of E97 for any new screen or message, put system codes
+  into words through `apps/web/src/routes/review/live/words.ts`, and never change the stored data to do so.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
 
 ### GitNexus impact analysis before ANY code change (mandatory)

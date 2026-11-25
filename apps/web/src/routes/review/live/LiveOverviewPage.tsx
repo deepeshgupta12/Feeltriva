@@ -1,4 +1,4 @@
-import { field, part, REVIEW_STATE_LABELS, REVIEW_STATES, type ReviewItem } from '@/api/liveReview';
+import { part, REVIEW_STATE_LABELS, REVIEW_STATES, type ReviewItem } from '@/api/liveReview';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useAsync } from '@/lib/useAsync';
 import { useServices } from '@/state/services';
@@ -6,11 +6,14 @@ import { useServices } from '@/state/services';
 import { ReviewLoadError, ReviewLoading, ReviewPageHeader } from '../ReviewPageHeader';
 
 const QUEUES: ReadonlyArray<{ name: string; label: string }> = [
-  { name: 'disease_mappings', label: 'Disease mappings' },
-  { name: 'feature_mappings', label: 'Feature mappings' },
-  { name: 'statements', label: 'Statements' },
-  { name: 'terminology_links', label: 'Vocabulary links' },
-  { name: 'relation_suggestions', label: 'Synonym and subtype suggestions' },
+  { name: 'disease_mappings', label: 'Condition names from the data files' },
+  { name: 'feature_mappings', label: 'Symptom and question names (columns of the data files)' },
+  { name: 'statements', label: 'Texts about conditions' },
+  { name: 'terminology_links', label: 'Matches to medical reference lists' },
+  {
+    name: 'relation_suggestions',
+    label: 'Pairs of names that may mean the same, or where one may be a kind of the other',
+  },
 ];
 
 function count(item: ReviewItem, name: string): string {
@@ -25,10 +28,11 @@ export function LiveOverviewPage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Review overview" badge={<StatusBadge tone="info">Live review data</StatusBadge>}>
+      <ReviewPageHeader title="Overview" badge={<StatusBadge tone="info">Real stored data</StatusBadge>}>
         <p>
-          What is stored and what has been decided. Everything imported starts as pending. A decision is recorded under
-          your name with a note; nothing is shown to a person until a published release holds it.
+          What is stored and what has been decided so far. Everything that was imported starts as &ldquo;waiting for a
+          decision&rdquo;. Each decision is saved under your name with a note. Nothing is shown to a patient until it
+          has been approved and then published.
         </p>
       </ReviewPageHeader>
       {state.status === 'loading' ? <ReviewLoading label="Loading overview…" /> : null}
@@ -36,16 +40,16 @@ export function LiveOverviewPage() {
       {state.status === 'loaded' ? (
         <>
           <p className="text-ink">
-            {count(state.data, 'sources')} sources · {count(state.data, 'disease_candidates')} disease labels ·{' '}
-            {count(state.data, 'feature_columns_with_repeated_header')} column positions with a repeated heading
+            {count(state.data, 'sources')} data sources · {count(state.data, 'disease_candidates')} condition names ·{' '}
+            {count(state.data, 'feature_columns_with_repeated_header')} columns whose heading is repeated
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[40rem] border-collapse text-left text-[0.9375rem]">
-              <caption className="sr-only">Review queues by status</caption>
+              <caption className="sr-only">What waits for a decision, by list</caption>
               <thead className="bg-page text-sm text-ink-secondary">
                 <tr>
                   <th scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
-                    Queue
+                    List
                   </th>
                   {REVIEW_STATES.map((status) => (
                     <th key={status} scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
@@ -70,7 +74,9 @@ export function LiveOverviewPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-sm text-ink-secondary">{field(state.data, 'label')}</p>
+          <p className="mt-3 text-sm text-ink-secondary">
+            Everything here was grouped or matched by its wording only. None of it has been checked by a clinician.
+          </p>
         </>
       ) : null}
     </div>

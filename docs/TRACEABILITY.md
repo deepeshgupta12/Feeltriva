@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.4a (2026-11-24).
+Last updated after sub-step M2.4d (2026-11-25).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -53,7 +53,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | FR09 | Revisions invalidate stale assessments; recompute from confirmed observations; keep an audit | Done | Append-only corrections, 409 on stale version, audit events; tested on PostgreSQL | M3.3 |
 | FR10 | Summary previewed by the user with symptoms, negatives, onset/duration, context, answers, missing facts, guidance; sharing is explicit | Done | API summary; web blocks export until reviewed; nothing auto-shared | M3.3, M3.6 |
 | FR11 | Optional saved history; delete sessions, summaries and retrieval traces per retention policy; no automatic training consent | Partial | Deletion of primary data with honest receipt. No saved history (no list endpoint; web keeps it in memory). No retention policy | M3.3; **M3.10 new**, C8, L1 |
-| FR12 | Review console: approve mappings, evidence, questions, rules; publish immutable versions; rollback | Partial | API for mappings and statements with notes and audit. No rule/question approval, no publishing, no rollback; screens on fixtures | M2.1; M2.4, M2.5 |
+| FR12 | Review console: approve mappings, evidence, questions, rules; publish immutable versions; rollback | Partial | The review service records a decision, with a note and the reviewer's name, on mappings, features, diseases, statements, single claims, text chunks, evidence, sources, vocabulary links, suggested matches, rules, questions, rule sets and response texts (M2.1, M2.5, M2.17, M2.4b). Rule, mapping and knowledge releases are published as versions that cannot be changed, and rolled back by making an earlier one current (M2.5b, M2.5c2, M2.5c3). The live web workspace reads the stored data and records through the service, in plain words (M2.4a to M2.4d). Not yet: publishing and rollback from a screen (service only); screens for follow-up questions and text chunks; deciding many rows at once; a real reviewer sign-in | M2.1; M2.4, M2.5; M5.7 |
 | FR13 | Timeout or error gives an explicit incomplete state, never reassurance | Done | 503 with nothing concluded; state `system_unavailable`; tested | M3.3 |
 | FR14 | MCP surface on the same service, no bypass of scope, safety or access control | Partial | Nine tools over stdio with parity tests. No remote authenticated transport | M3.5; **M3.11 new** |
 | States | `consent_pending → intake → clarifying → assessing → result_ready` plus urgent, out of scope, insufficient, unavailable, closed; version on every question and assessment | Done | Enforced in service and database check constraint | M3.3, M0.4 |
@@ -281,8 +281,8 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | 8 | Ten urgent/incomplete/unsupported states | Done | | M3.6 |
 | 9 | Print-friendly summary, review acknowledgement, no auto-share | Done | | M3.6 |
 | 10 | History and privacy screens; nothing sensitive in browser storage | Partial | History is in-memory only | M3.10 |
-| 11 | Condition information page from reviewed content | Partial | Runs on fixtures; not wired to the API endpoint | M2.4 |
-| 12 | Reviewer console with real audit facts | Partial | Runs on fixtures | M2.4 |
+| 11 | Condition information page from reviewed content | Partial | The service answers from the reviewed serving views (`GET /v1/conditions/{disease_id}`, M2.2 and M2.9). The web page still shows sample fixtures in every mode: it has no reader for that route. This had no sub-step (it was assigned to M2.4, none of whose parts carries it); added as M2.9a | M2.9a |
+| 12 | Reviewer console with real audit facts | Partial | In live mode the workspace shows the stored data and records notes and decisions through the service (M2.4a to M2.4d). The design demo (`pnpm dev`) still runs on fixtures and keeps its earlier wording | M2.4 |
 | 13 | Twenty components, state model, service interface, OpenAPI types, idempotency | Done | BUG-010 (latent) | M3.6; M3.14 |
 | 14 | Responsive 320 – 1440, 200 % zoom, keyboard, screen reader, focus restore | Partial | Zoom and screen reader untested; BUG-007 | M3.14, M3.15 |
 | 15 | Ten demo scenarios and README | Done | | M3.6 |

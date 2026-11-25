@@ -48,9 +48,11 @@ LIST_ITEM = "list_item"
 EVIDENCE_TYPE, RELATIONSHIP = "reviewed_claim", "listed_as_symptom_in_statement"
 # What a reviewer should check on a claim that carries one of these marks (decision E74).
 MARKS = {
-    "cut_off": "The source cut this text off: the sentence is not whole, and the last item of a list in it was dropped.",
-    "first_item_preposition": "The first item of this list holds a preposition. The other items may share its first "
-    'words ("infection with viruses, bacteria, fungi") or may not ("loss of appetite, nausea, vomiting").',
+    "cut_off": "The source cut this text short: its last sentence is not whole, and if that sentence lists things, "
+    "the last item of the list is missing.",
+    "first_item_preposition": "The first item of this list starts with a few words that the other items may share "
+    '("infection with viruses, bacteria, fungi" means an infection with each of them) or may not share ("loss of '
+    'appetite, nausea, vomiting"). Check which it is before approving the items.',
 }
 # The statement type of a chunk, from the heading of the section the source put it under. Anything else, and
 # the opening part of a text, is a description.

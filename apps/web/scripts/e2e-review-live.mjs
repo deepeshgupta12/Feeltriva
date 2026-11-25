@@ -105,7 +105,7 @@ const drawer = () => page.getByRole('dialog');
 
 async function search(text) {
   await page.getByRole('searchbox').fill(text);
-  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.getByRole('button', { name: 'Show results' }).click();
 }
 
 async function record(note, button) {
@@ -116,10 +116,17 @@ async function record(note, button) {
 try {
   // ---- 1. Inspect a duplicate column and save a note ------------------------------------------------
   await page.goto(`${BASE}/review/data`);
-  await page.getByRole('heading', { name: 'Data quality: repeated column headings' }).waitFor();
+  await page.getByRole('heading', { name: 'Repeated columns in the data files' }).waitFor();
+  check(
+    'in live mode the notice at the top does not call the page a design demo with sample scenarios',
+    (await page.getByRole('region', { name: 'Demo notice' }).innerText()).startsWith(
+      'Test version · Connected to the service',
+    ),
+    await page.getByRole('region', { name: 'Demo notice' }).innerText(),
+  );
   check(
     'the workspace says under whose name decisions are recorded',
-    await page.getByText('Decisions are recorded under e2e').isVisible(),
+    await page.getByText('Your decisions are saved under the name e2e').isVisible(),
   );
   await search(`itching ${TAG}`);
   await page.getByRole('button', { name: `Review itching ${TAG} (column 3)` }).click();
@@ -163,7 +170,7 @@ try {
 
   // ---- 2. Vocabulary links: the general term is the default; approve one, reject the other ----------
   await page.goto(`${BASE}/review/links`);
-  await page.getByRole('heading', { name: 'Vocabulary links' }).waitFor();
+  await page.getByRole('heading', { name: 'Matches to medical reference lists' }).waitFor();
   await search(TAG);
   await page.getByRole('button', { name: new RegExp(`Pretend ache of the left side ${TAG}`) }).click();
   await drawer().waitFor();
@@ -195,19 +202,19 @@ try {
 
   // ---- 3. A statement with its claims: a mark to check, a proposed feature, a decision --------------
   await page.goto(`${BASE}/review/evidence?statement=e2e_st_${TAG}`);
-  await page.getByRole('heading', { name: 'Statements and claims' }).waitFor();
+  await page.getByRole('heading', { name: 'Texts about conditions' }).waitFor();
   await page.getByRole('button', { name: 'Review claim: a pretend hat' }).waitFor();
   check(
-    'the item shows its mark and its proposed feature',
-    (await page.getByText('Check: first item preposition').isVisible()) &&
-      (await page.getByText(`Proposed feature: hat ${TAG}`).isVisible()),
+    'the item shows what to check and the symptom recognised in it',
+    (await page.getByText('Check: how the list is worded').isVisible()) &&
+      (await page.getByText(`Symptom recognised: hat ${TAG}`).isVisible()),
   );
   await page.getByRole('button', { name: 'Review claim: a pretend hat' }).click();
   await drawer().waitFor();
   check(
     'the drawer says what to check for the mark',
     await drawer()
-      .getByText(/The first item of this list holds a preposition/)
+      .getByText(/The first item of this list starts with a few words/)
       .isVisible(),
   );
   await record('The item names the feature.', 'Approve');

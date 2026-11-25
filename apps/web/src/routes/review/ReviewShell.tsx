@@ -24,14 +24,14 @@ const SECTIONS = [
 /** The sections in http mode, where every screen reads and writes through the review API. */
 const LIVE_SECTIONS = [
   { to: '/review', label: 'Overview', end: true },
-  { to: '/review/diseases', label: 'Disease mappings', end: false },
-  { to: '/review/features', label: 'Feature mappings', end: false },
-  { to: '/review/data', label: 'Data quality', end: false },
-  { to: '/review/links', label: 'Vocabulary links', end: false },
+  { to: '/review/diseases', label: 'Condition names', end: false },
+  { to: '/review/features', label: 'Symptom and question names', end: false },
+  { to: '/review/data', label: 'Repeated columns', end: false },
+  { to: '/review/links', label: 'Matches to reference lists', end: false },
   { to: '/review/suggestions', label: 'Suggested matches', end: false },
-  { to: '/review/evidence', label: 'Statements and claims', end: false },
+  { to: '/review/evidence', label: 'Texts about conditions', end: false },
   { to: '/review/rules', label: 'Urgency rules', end: false },
-  { to: '/review/releases', label: 'Releases', end: false },
+  { to: '/review/releases', label: 'Published versions', end: false },
 ] as const;
 
 /**
@@ -53,15 +53,15 @@ export function ReviewShell() {
       <main id="main-content" className="mx-auto w-full max-w-[760px] flex-1 px-4 py-10 sm:px-6">
         <StatusPanel
           tone="attention"
-          title="Reviewer sign-in is not configured"
+          title="Reviewer sign-in is not set up"
           headingLevel="h1"
           icon={<Lock aria-hidden="true" className="size-6" />}
           actions={<ButtonLink to="/">Back to Feeltriva</ButtonLink>}
         >
-          <p>This area is the internal review workspace. It isn’t part of the symptom check.</p>
+          <p>This area is for the people who check the stored information. It isn’t part of the symptom check.</p>
           <p>
-            This build has no reviewer sign-in, so nothing is requested from the review service. The service checks the
-            reviewer role itself on every request; nothing in the browser is authorization.
+            This version of the app has no reviewer sign-in, so it asks the service for nothing. The service itself
+            checks on every request that the person is a reviewer; nothing in the browser decides that.
           </p>
         </StatusPanel>
       </main>
@@ -101,7 +101,7 @@ export function ReviewShell() {
             </span>
             <span className="font-display text-lg font-bold">Internal review</span>
             {live ? (
-              <StatusBadge tone="info">Decisions are recorded under {liveReview.reviewer}</StatusBadge>
+              <StatusBadge tone="info">Your decisions are saved under the name {liveReview.reviewer}</StatusBadge>
             ) : (
               <StatusBadge tone="sample">Reviewer preview · not real authorization</StatusBadge>
             )}

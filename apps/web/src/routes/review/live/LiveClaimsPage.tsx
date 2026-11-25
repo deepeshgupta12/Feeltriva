@@ -21,6 +21,7 @@ import { useServices } from '@/state/services';
 import { ReviewLoadError, ReviewLoading, ReviewPageHeader } from '../ReviewPageHeader';
 
 import { DecisionDrawer, StateBadge, type ReviewTarget } from './DecisionDrawer';
+import { kindOfText, thingToCheck, wordingCue } from './words';
 
 const PAGE_SIZE = 10;
 
@@ -32,7 +33,7 @@ function list(item: ReviewItem, name: string): ReviewItem[] {
 function cueText(claim: ReviewItem): string {
   const cues = part(claim, 'cues');
   return Object.entries(cues)
-    .map(([name, words]) => `${name.replace(/_/g, ' ')}: ${Array.isArray(words) ? words.join(', ') : String(words)}`)
+    .map(([name, words]) => `${wordingCue(name)}: ${Array.isArray(words) ? words.join(', ') : String(words)}`)
     .join(' · ');
 }
 
@@ -55,9 +56,9 @@ function ApplicabilityForm({ api, claim, onSaved }: { api: LiveReviewApi; claim:
       await api.setApplicability(
         field(claim, 'claim_id'),
         value.length > 0 ? value : null,
-        value.length > 0 ? `Applicability recorded: ${value}` : 'Applicability removed.',
+        value.length > 0 ? `For whom or when this holds: ${value}` : 'Removed for whom or when this holds.',
       );
-      setMessage(value.length > 0 ? 'Applicability recorded.' : 'Applicability removed.');
+      setMessage(value.length > 0 ? 'Saved.' : 'Removed.');
       onSaved();
     } catch (caught) {
       setError(caught instanceof ReviewApiError ? caught.message : 'This could not be recorded.');
@@ -72,8 +73,8 @@ function ApplicabilityForm({ api, claim, onSaved }: { api: LiveReviewApi; claim:
         For whom or when this holds
       </label>
       <p className="mb-1 text-ink-secondary">
-        In your words, for example &ldquo;in children&rdquo;. It decides nothing, and nothing interprets it yet. Leave
-        it empty to remove what was recorded.
+        In your own words, for example &ldquo;in children&rdquo;. For now this is a note only: nothing else changes
+        because of it. Leave it empty to remove what was written.
       </p>
       <input
         id={`${id}-applies`}
@@ -89,7 +90,7 @@ function ApplicabilityForm({ api, claim, onSaved }: { api: LiveReviewApi; claim:
         </p>
       ) : null}
       <Button type="submit" size="sm" variant="secondary" className="mt-2" loading={busy} loadingLabel="Saving…">
-        Save applicability
+        Save for whom or when
       </Button>
       <p role="status" className="mt-1 min-h-6 font-medium text-info">
         {message}
@@ -139,22 +140,22 @@ export function LiveClaimsPage() {
           title: field(claim, 'text'),
           status: field(claim, 'review_status'),
           details: [
-            { label: 'Kind', value: field(claim, 'kind') === 'list_item' ? 'Item of a list' : 'Sentence' },
-            { label: 'Disease label', value: field(part(openClaim.statement, 'disease'), 'term') },
-            { label: 'The whole statement', value: field(openClaim.statement, 'text') },
-            { label: 'Wording cues', value: cueText(claim) || 'None' },
+            { label: 'What it is', value: field(claim, 'kind') === 'list_item' ? 'An item of a list' : 'A sentence' },
+            { label: 'Condition', value: field(part(openClaim.statement, 'disease'), 'term') },
+            { label: 'The whole text', value: field(openClaim.statement, 'text') },
+            { label: 'Words in it that change the meaning', value: cueText(claim) || 'None found' },
             {
               label: 'What to check',
               value:
                 texts(claim, 'marks')
                   .map((name) => field(marks, name))
-                  .join(' ') || 'No mark on this claim.',
+                  .join(' ') || 'Nothing in particular.',
             },
             {
-              label: 'Feature this item is proposed for',
+              label: 'Symptom recognised in this item',
               value: field(part(claim, 'proposed_feature'), 'term') || 'None',
             },
-            { label: 'Made by rule', value: field(claim, 'rule') },
+            { label: 'How it was split out (name of the rule in the system)', value: field(claim, 'rule') },
           ],
         }
       : null;
@@ -173,11 +174,11 @@ export function LiveClaimsPage() {
         <StateBadge status={field(entry, 'review_status')} />
         {texts(entry, 'marks').map((name) => (
           <StatusBadge key={name} tone="attention">
-            Check: {name.replace(/_/g, ' ')}
+            Check: {thingToCheck(name)}
           </StatusBadge>
         ))}
         {field(part(entry, 'proposed_feature'), 'term') ? (
-          <StatusBadge tone="neutral">Proposed feature: {field(part(entry, 'proposed_feature'), 'term')}</StatusBadge>
+          <StatusBadge tone="neutral">Symptom recognised: {field(part(entry, 'proposed_feature'), 'term')}</StatusBadge>
         ) : null}
       </div>
       {list(entry, 'items').length > 0 ? (
@@ -188,18 +189,19 @@ export function LiveClaimsPage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Statements and claims" badge={<StatusBadge tone="info">Live review data</StatusBadge>}>
+      <ReviewPageHeader title="Texts about conditions" badge={<StatusBadge tone="info">Real stored data</StatusBadge>}>
         <p>
-          Every stored statement, split by rules of wording into its sentences and the items of its lists. A claim is
-          used for nothing until a reviewer approves it. An approved list item that names a feature becomes an evidence
-          row for that disease and feature.
+          Every stored text about a condition, split into its sentences and, where a sentence lists things, into the
+          items of that list. None of these single points is used for anything until a reviewer approves it. When you
+          approve a list item in which a symptom was recognised, it is recorded as a fact that links the condition and
+          that symptom.
         </p>
       </ReviewPageHeader>
 
       <form onSubmit={apply} className="flex flex-wrap items-end gap-3">
         <div className="min-w-[14rem]">
           <label htmlFor={`${id}-mark`} className="mb-1 block text-sm font-medium text-ink-secondary">
-            Mark to check
+            Things to check
           </label>
           <select
             id={`${id}-mark`}
@@ -207,14 +209,14 @@ export function LiveClaimsPage() {
             onChange={(event) => setMark(event.target.value)}
             className="field-control"
           >
-            <option value="">All statements, marked ones first</option>
-            <option value="cut_off">Cut off by the source</option>
-            <option value="first_item_preposition">List whose first item holds a preposition</option>
+            <option value="">All texts, those with something to check first</option>
+            <option value="cut_off">Text cut short by its source</option>
+            <option value="first_item_preposition">List whose first item starts with shared words</option>
           </select>
         </div>
         <div className="min-w-[11rem]">
           <label htmlFor={`${id}-status`} className="mb-1 block text-sm font-medium text-ink-secondary">
-            Claim status
+            Decision so far
           </label>
           <select
             id={`${id}-status`}
@@ -222,7 +224,7 @@ export function LiveClaimsPage() {
             onChange={(event) => setStatus(event.target.value as ReviewState | '')}
             className="field-control"
           >
-            <option value="">All statuses</option>
+            <option value="">Any</option>
             {REVIEW_STATES.map((value) => (
               <option key={value} value={value}>
                 {REVIEW_STATE_LABELS[value]}
@@ -232,28 +234,28 @@ export function LiveClaimsPage() {
         </div>
         <label className="flex min-h-11 items-center gap-2 text-ink">
           <input type="checkbox" checked={withFeature} onChange={(event) => setWithFeature(event.target.checked)} />
-          Only statements with a proposed feature
+          Only texts in which a symptom was recognised
         </label>
         <Button type="submit" size="sm" variant="secondary">
-          Apply
+          Show results
         </Button>
       </form>
 
-      {state.status === 'loading' ? <ReviewLoading label="Loading statements…" /> : null}
+      {state.status === 'loading' ? <ReviewLoading label="Loading texts…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
         <>
           <p role="status" className="mt-3 text-sm text-ink-secondary">
             {total === 0
-              ? 'No statements match.'
-              : `Showing statements ${offset + 1} to ${offset + statements.length} of ${total.toLocaleString('en-IN')}`}
+              ? 'Nothing matches.'
+              : `Showing texts ${offset + 1} to ${offset + statements.length} of ${total.toLocaleString('en-IN')}`}
           </p>
           <ul className="mt-2 space-y-4">
             {statements.map((statement) => (
               <li key={field(statement, 'statement_id')} className="rounded-control border border-line p-4">
                 <p className="text-sm font-semibold text-ink-secondary">
-                  {field(part(statement, 'disease'), 'term')} · {field(statement, 'statement_type')}
-                  {statement.has_a_mark ? ' · has a mark to check' : ''}
+                  {field(part(statement, 'disease'), 'term')} · {kindOfText(field(statement, 'statement_type'))}
+                  {statement.has_a_mark ? ' · has something to check' : ''}
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-ink">{field(statement, 'text')}</p>
                 <ul className="mt-2">{list(statement, 'claims').map((entry) => claimRow(entry, statement, false))}</ul>
