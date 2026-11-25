@@ -5149,3 +5149,15 @@ rollback" were brought up to date.
   kept; the page explains once that they are standard medical reference lists.
 - Whether the wording is plain enough is the owner's judgement; I have read every screen through
   but have not had a person outside the project read them.
+
+**Committed and indexed (web port, M2.4b, M2.4c, M2.4d).** `64889a8` (one web port; CI passed on
+both jobs, run 45376106560), `5f2830f` (M2.4b; CI passed on both jobs, run 45544142140), `848ddbe`
+(M2.4c; CI passed on both jobs, run 45548141382) and `357791a` (M2.4d; CI passed on both jobs, run
+45554233819). The code graph was re-indexed after each and reports up-to-date at `357791a`.
+Migration `0019` is applied to the main database, and the three look-ups were run on it
+(3,668 rows for review; no link made). The API on port 8000 was restarted after M2.4b, after
+M2.4c and after M2.4d. The web app on port 5173 now runs in live review mode (`pnpm dev:review`),
+because the owner's tests of these sub-steps need the real data; the design demo (`pnpm dev`) is
+not running, and it uses the same port. Nothing runs on port 5174. The test service on port 8001
+ran only during the browser test and is stopped. This paragraph was added in a following
+documents-only commit, after which the index was refreshed again.
