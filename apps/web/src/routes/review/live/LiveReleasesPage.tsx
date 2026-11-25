@@ -80,7 +80,8 @@ export function LiveReleasesPage() {
                   {state.data.lists[index].items.map((release) => (
                     <li key={field(release, 'release_id')} className="rounded-control border border-line p-3">
                       <p className="font-semibold text-ink">
-                        {field(release, 'release_id')}{' '}
+                        <code className="break-all">{field(release, 'release_id')}</code>{' '}
+                        <span className="font-normal text-ink-secondary">(its name in the system)</span>{' '}
                         {release.is_current ? <StatusBadge tone="info">In use now</StatusBadge> : null}
                       </p>
                       <p className="text-ink-secondary">{holdsText(release, kind.holds)}</p>
@@ -103,8 +104,9 @@ export function LiveReleasesPage() {
                 {field(state.data.bundle, 'features')} symptoms and other items,{' '}
                 {field(state.data.bundle, 'response_texts')} standard replies and{' '}
                 {field(state.data.bundle, 'candidates')} possible conditions. It is put together from the set of rules{' '}
-                {field(part(part(state.data.bundle, 'built_from'), 'rule_release'), 'release_id')} and the list of names{' '}
-                {field(part(part(state.data.bundle, 'built_from'), 'mapping_release'), 'release_id')}.
+                <code>{field(part(part(state.data.bundle, 'built_from'), 'rule_release'), 'release_id')}</code> and the
+                list of names{' '}
+                <code>{field(part(part(state.data.bundle, 'built_from'), 'mapping_release'), 'release_id')}</code>.
               </p>
             ) : (
               <div className="mt-1 text-ink">

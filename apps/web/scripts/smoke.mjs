@@ -727,7 +727,11 @@ async function run() {
     await expectVisible(page, drawer.getByText('Column 12:'), 's10: column position preserved');
     await drawer.getByLabel('Add a note').fill('Demo note: columns 12 and 601 disagree; needs reconciliation.');
     await drawer.getByRole('button', { name: 'Save demo note' }).click();
-    await expectVisible(page, drawer.getByText('Demo note saved. It is kept in memory only.'), 's10: demo note saved');
+    await expectVisible(
+      page,
+      drawer.getByText('Demo note saved. It is not stored and is gone when you close the page.'),
+      's10: demo note saved',
+    );
     await expectVisible(page, drawer.getByText('Demo change'), 's10: change is labelled as a demo change');
     await shot(page, 's10-review-drawer');
     await page.keyboard.press('Escape');
@@ -738,12 +742,15 @@ async function run() {
       await expectVisible(page, page.getByText(figure, { exact: true }), `s10: audit fact ${figure}`);
     }
     await shot(page, 's10-review-overview');
-    await reviewNav.getByRole('link', { name: 'Releases' }).click();
-    check('s10: publish control is disabled', await page.getByRole('button', { name: 'Publish release' }).isDisabled());
-    await reviewNav.getByRole('link', { name: 'Model evaluation' }).click();
+    await reviewNav.getByRole('link', { name: 'Published versions' }).click();
+    check(
+      's10: publish control is disabled',
+      await page.getByRole('button', { name: 'Publish this version' }).isDisabled(),
+    );
+    await reviewNav.getByRole('link', { name: 'Model test results' }).click();
     await expectVisible(
       page,
-      page.getByText('Baseline rejected for clinical serving.'),
+      page.getByText('The trial model was rejected: it must not be used for patients.'),
       's10: research baseline verdict',
     );
     await expectVisible(page, page.getByText('Not evaluated').first(), 's10: clinical validation says "Not evaluated"');
@@ -755,13 +762,13 @@ async function run() {
     await page.waitForURL('**/review/data');
     for (const name of [
       'Overview',
-      'Disease mappings',
-      'Feature mappings',
-      'Evidence',
-      'Questions/rules',
-      'Releases',
-      'Data quality',
-      'Model evaluation',
+      'Condition names',
+      'Symptom and question names',
+      'Texts and facts',
+      'Questions and rules',
+      'Published versions',
+      'Repeated columns',
+      'Model test results',
     ]) {
       await page.getByRole('navigation', { name: 'Internal review sections' }).getByRole('link', { name }).click();
       await page.getByRole('heading', { level: 1 }).first().waitFor();

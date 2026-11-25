@@ -12,7 +12,7 @@ import { ReviewLoadError, ReviewLoading, ReviewPageHeader } from './ReviewPageHe
 
 const STATUS_LABELS: Record<EvidenceReviewItem['status'], string> = {
   draft: 'Draft',
-  needs_review: 'Needs review',
+  needs_review: 'Waiting to be checked',
 };
 
 export function ReviewEvidencePage() {
@@ -42,7 +42,7 @@ export function ReviewEvidencePage() {
       setData(items.map((item) => (item.id === updated.id ? updated : item)));
       setNote('');
       setError(null);
-      setMessage('Demo note saved. It is kept in memory only.');
+      setMessage('Demo note saved. It is not stored and is gone when you close the page.');
     } catch {
       setError('The note could not be saved.');
     }
@@ -50,14 +50,15 @@ export function ReviewEvidencePage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Evidence" badge={<SampleTag>Sample items</SampleTag>}>
+      <ReviewPageHeader title="Texts and facts" badge={<SampleTag>Sample items</SampleTag>}>
         <p>
-          No evidence has been imported or approved yet. The items below are synthetic placeholders that show the review
-          layout: original statement, source and locator, proposed atomic claim, applicability, status and notes.
+          Nothing shown here is real: no text or fact has been approved in this demo. The items below are invented
+          samples that show how one is laid out: the original wording, where it comes from, the single point taken from
+          it, for whom or when it holds, the decision so far, and notes.
         </p>
       </ReviewPageHeader>
 
-      {state.status === 'loading' ? <ReviewLoading label="Loading evidence…" /> : null}
+      {state.status === 'loading' ? <ReviewLoading label="Loading the samples…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
         <ul className="grid gap-3 lg:grid-cols-2">
@@ -81,9 +82,9 @@ export function ReviewEvidencePage() {
                   setMessage(null);
                   setError(null);
                 }}
-                aria-label={`Open evidence detail: ${item.proposedAtomicClaim}`}
+                aria-label={`Open details: ${item.proposedAtomicClaim}`}
               >
-                Open detail
+                Open details
               </Button>
             </li>
           ))}
@@ -95,19 +96,19 @@ export function ReviewEvidencePage() {
         onOpenChange={(next) => {
           if (!next) setOpenId(null);
         }}
-        title="Evidence detail"
-        description="Sample item · not approved for serving"
+        title="Details"
+        description="Sample item · not approved for real use"
         side="right"
       >
         {open ? (
           <div className="space-y-4 text-[0.9375rem]">
             <dl className="space-y-3">
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Original statement</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Original wording</dt>
                 <dd className="mt-1 border-l-2 border-line pl-3 text-ink">{open.originalStatement}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Source and locator</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Where it comes from</dt>
                 <dd className="text-ink">
                   {open.sourceTitle}
                   <span className="block text-ink-secondary">{open.locator}</span>
@@ -121,20 +122,20 @@ export function ReviewEvidencePage() {
                       {url} (opens in a new tab)
                     </a>
                   ) : (
-                    <span className="block text-ink-secondary">No source URL supplied.</span>
+                    <span className="block text-ink-secondary">No web address was given.</span>
                   )}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Proposed atomic claim</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">The single point taken from it</dt>
                 <dd className="text-ink">{open.proposedAtomicClaim}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Applicability</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">For whom or when it holds</dt>
                 <dd className="text-ink">{open.applicability}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Status</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Decision so far</dt>
                 <dd className="mt-1">
                   <StatusBadge tone={open.status === 'needs_review' ? 'attention' : 'neutral'}>
                     {STATUS_LABELS[open.status]}
@@ -145,7 +146,7 @@ export function ReviewEvidencePage() {
 
             <section aria-labelledby={`${id}-notes`}>
               <h3 id={`${id}-notes`} className="font-display text-base font-bold text-ink">
-                Reviewer notes
+                Notes
               </h3>
               {open.notes.length > 0 ? (
                 <ul className="mt-2 space-y-2">

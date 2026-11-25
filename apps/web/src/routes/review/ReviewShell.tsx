@@ -12,13 +12,13 @@ import { useServices } from '@/state/services';
 
 const SECTIONS = [
   { to: '/review', label: 'Overview', end: true },
-  { to: '/review/diseases', label: 'Disease mappings', end: false },
-  { to: '/review/features', label: 'Feature mappings', end: false },
-  { to: '/review/evidence', label: 'Evidence', end: false },
-  { to: '/review/rules', label: 'Questions/rules', end: false },
-  { to: '/review/releases', label: 'Releases', end: false },
-  { to: '/review/data', label: 'Data quality', end: false },
-  { to: '/review/evaluation', label: 'Model evaluation', end: false },
+  { to: '/review/diseases', label: 'Condition names', end: false },
+  { to: '/review/features', label: 'Symptom and question names', end: false },
+  { to: '/review/evidence', label: 'Texts and facts', end: false },
+  { to: '/review/rules', label: 'Questions and rules', end: false },
+  { to: '/review/releases', label: 'Published versions', end: false },
+  { to: '/review/data', label: 'Repeated columns', end: false },
+  { to: '/review/evaluation', label: 'Model test results', end: false },
 ] as const;
 
 /** The sections in http mode, where every screen reads and writes through the review API. */
@@ -78,13 +78,13 @@ export function ReviewShell() {
           icon={<Lock aria-hidden="true" className="size-6" />}
           actions={<ButtonLink to="/">Back to Feeltriva</ButtonLink>}
         >
-          <p>This area is the internal review workspace. It isn’t part of the symptom check.</p>
+          <p>This area is for the people who check the stored information. It isn’t part of the symptom check.</p>
           <p>
             {toolsEnabled
               ? 'In this demo, turn on “Reviewer preview” in Demo tools to look at it.'
-              : 'Reviewer preview is not enabled in this build.'}{' '}
-            The preview switch is not real authorization: the production service must check reviewer roles on the server
-            before returning any review data.
+              : 'Reviewer preview is not switched on in this version of the app.'}{' '}
+            That switch is only for looking around: it is not a real permission. In the real product the service itself
+            must check that a person is a reviewer before it shows any of this.
           </p>
         </StatusPanel>
       </main>
@@ -103,7 +103,7 @@ export function ReviewShell() {
             {live ? (
               <StatusBadge tone="info">Your decisions are saved under the name {liveReview.reviewer}</StatusBadge>
             ) : (
-              <StatusBadge tone="sample">Reviewer preview · not real authorization</StatusBadge>
+              <StatusBadge tone="sample">Reviewer preview · not a real permission</StatusBadge>
             )}
           </div>
           <Link to="/" className="inline-flex min-h-11 items-center gap-1.5 font-medium underline underline-offset-4">

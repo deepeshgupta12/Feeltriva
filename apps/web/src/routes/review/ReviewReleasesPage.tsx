@@ -15,11 +15,14 @@ export function ReviewReleasesPage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Releases">
-        <p>A release bundles the sources, mappings and rules that the assessment service is allowed to use.</p>
+      <ReviewPageHeader title="Published versions">
+        <p>
+          A published version is a fixed set of data sources, names and rules that the service is allowed to use. Once
+          published it is never changed; a correction is a new version.
+        </p>
       </ReviewPageHeader>
 
-      {state.status === 'loading' ? <ReviewLoading label="Loading releases…" /> : null}
+      {state.status === 'loading' ? <ReviewLoading label="Loading published versions…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
         <ul className="space-y-4">
@@ -28,12 +31,12 @@ export function ReviewReleasesPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-mono text-lg font-bold text-ink">{release.version}</h2>
                 <ReleaseBadge status={release.status} />
-                {release.isSample ? <SampleTag>Demo release</SampleTag> : null}
+                {release.isSample ? <SampleTag>Sample version</SampleTag> : null}
               </div>
 
               <div className="mt-4 grid gap-5 lg:grid-cols-2">
                 <div>
-                  <h3 className="font-display text-base font-bold text-ink">Included</h3>
+                  <h3 className="font-display text-base font-bold text-ink">What it holds</h3>
                   <dl className="mt-1.5 space-y-2 text-[0.9375rem]">
                     {release.included.map((item) => (
                       <div key={item.label}>
@@ -44,7 +47,7 @@ export function ReviewReleasesPage() {
                   </dl>
                 </div>
                 <div>
-                  <h3 className="font-display text-base font-bold text-ink">Pending before publication</h3>
+                  <h3 className="font-display text-base font-bold text-ink">Still to do before it can be published</h3>
                   <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[0.9375rem] text-ink">
                     {release.pendingItems.map((item) => (
                       <li key={item}>{item}</li>
@@ -55,7 +58,7 @@ export function ReviewReleasesPage() {
 
               <div className="mt-5 border-t border-line pt-4">
                 <Button disabled={!release.publication.enabled} aria-describedby={`${id}-reason-${index}`}>
-                  Publish release
+                  Publish this version
                 </Button>
                 <p id={`${id}-reason-${index}`} className="mt-2 text-[0.9375rem] text-ink-secondary">
                   {release.publication.enabled

@@ -11,32 +11,32 @@ export function ReviewRulesPage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Questions/rules" badge={<SampleTag>Demo fixtures</SampleTag>}>
+      <ReviewPageHeader title="Questions and rules" badge={<SampleTag>Samples</SampleTag>}>
         <p>
-          No clinical question bundle or rule set has been authored or approved. The questions listed here are the
-          synthetic fixtures used by the demo scenarios; they carry no clinical meaning.
+          No set of clinical questions or rules has been written or approved in this demo. The questions listed here are
+          invented samples used by the demo&rsquo;s example cases; they have no medical meaning.
         </p>
       </ReviewPageHeader>
 
       {state.status === 'loading' ? <ReviewLoading label="Loading questions…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
-        <ScrollRegion label="Demo question fixtures">
+        <ScrollRegion label="Sample questions">
           <table className="w-full min-w-[44rem] border-collapse text-left text-[0.9375rem]">
-            <caption className="sr-only">Demo question fixtures</caption>
+            <caption className="sr-only">Sample questions</caption>
             <thead className="bg-page text-sm text-ink-secondary">
               <tr>
                 <th scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
-                  Question ID
+                  Name of the question in the system
                 </th>
                 <th scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
                   Wording
                 </th>
                 <th scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
-                  Answer type
+                  Kind of answer
                 </th>
                 <th scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
-                  Status
+                  Decision so far
                 </th>
               </tr>
             </thead>
@@ -64,8 +64,8 @@ export function ReviewRulesPage() {
           Clinical rules
         </h2>
         <p className="mt-1 text-ink-secondary">
-          None authored. Urgency, scope and clarification rules must be written and approved by clinical reviewers
-          before they can be included in a release.
+          None written. Rules about urgency, about what the service does not cover, and about when to ask again must be
+          written and approved by clinicians before they can be part of a published version.
         </p>
       </section>
     </div>

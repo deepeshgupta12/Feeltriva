@@ -19,20 +19,20 @@ interface ReviewTableProps {
 }
 
 const DEMO_ACTIONS: ReadonlyArray<{ status: ReviewStatus; label: string }> = [
-  { status: 'flagged_demo', label: 'Flag for reconciliation' },
+  { status: 'flagged_demo', label: 'Mark: needs sorting out' },
   { status: 'accepted_demo', label: 'Mark acceptable' },
   { status: 'rejected_demo', label: 'Mark rejected' },
 ];
 
 function columnText(row: MappingRow): string {
   if (row.columns.length === 0) {
-    return 'Label column value';
+    return 'A value of the name column';
   }
-  return row.columns.map((column) => `col ${column.columnIndex}`).join(', ');
+  return row.columns.map((column) => `column ${column.columnIndex}`).join(', ');
 }
 
 function lastReviewedText(row: MappingRow): string {
-  return row.lastReviewed ? formatDateTime(new Date(row.lastReviewed)) : 'Not reviewed';
+  return row.lastReviewed ? formatDateTime(new Date(row.lastReviewed)) : 'Not looked at yet';
 }
 
 /**
@@ -90,7 +90,7 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
     try {
       await onSaveNote(open.id, note);
       setNote('');
-      setSavedMessage('Demo note saved. It is kept in memory only.');
+      setSavedMessage('Demo note saved. It is not stored and is gone when you close the page.');
     } catch {
       setNoteError('The note could not be saved.');
     } finally {
@@ -105,7 +105,7 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
     setSaving(true);
     try {
       await onSetStatus(open.id, next);
-      setSavedMessage(`Demo change saved: ${REVIEW_STATUS_LABELS[next]}. Nothing was approved for live serving.`);
+      setSavedMessage(`Demo change saved: ${REVIEW_STATUS_LABELS[next]}. Nothing was approved for real use.`);
     } finally {
       setSaving(false);
     }
@@ -116,7 +116,7 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[14rem] flex-1">
           <label htmlFor={`${id}-search`} className="mb-1 block text-sm font-medium text-ink-secondary">
-            Search terms, sources or candidate IDs
+            Search names, data files or names in the system
           </label>
           <div className="relative">
             <Search
@@ -134,7 +134,7 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
         </div>
         <div className="min-w-[12rem]">
           <label htmlFor={`${id}-status`} className="mb-1 block text-sm font-medium text-ink-secondary">
-            Review status
+            Decision so far
           </label>
           <select
             id={`${id}-status`}
@@ -142,7 +142,7 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
             onChange={(event) => setStatus(event.target.value as ReviewStatus | 'all')}
             className="field-control"
           >
-            <option value="all">All statuses</option>
+            <option value="all">Any</option>
             {statuses.map((value) => (
               <option key={value} value={value}>
                 {REVIEW_STATUS_LABELS[value]}
@@ -171,13 +171,13 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
           <thead className="bg-page text-sm text-ink-secondary">
             <tr>
               {[
-                'Source',
-                'Original term',
-                'Proposed canonical term',
-                'Mapping method',
-                'Review status',
-                'Conflicts',
-                'Last reviewed',
+                'Data file',
+                'Name in the data file',
+                'Name it is grouped under',
+                'How it was grouped',
+                'Decision so far',
+                'Disagreements',
+                'Last looked at',
               ].map((heading) => (
                 <th key={heading} scope="col" className="border-b border-line px-3 py-2.5 font-semibold">
                   {heading}
@@ -215,14 +215,14 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
                 <td className="px-3 py-2.5">
                   <ReviewStatusBadge status={row.reviewStatus} />
                 </td>
-                <td className="px-3 py-2.5 text-ink-secondary">{row.conflicts ?? 'None recorded'}</td>
+                <td className="px-3 py-2.5 text-ink-secondary">{row.conflicts ?? 'None found'}</td>
                 <td className="px-3 py-2.5 text-ink-secondary">{lastReviewedText(row)}</td>
               </tr>
             ))}
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-6 text-center text-ink-secondary">
-                  No rows match the current search and filter.
+                  Nothing matches.
                 </td>
               </tr>
             ) : null}
@@ -236,18 +236,18 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
           if (!next) setOpenId(null);
         }}
         title={open ? open.originalTerm : 'Details'}
-        description="Imported dataset audit · lexical candidate, not clinically approved"
+        description="Counted from the data files · grouped by spelling only, not clinically approved"
         side="right"
       >
         {open ? (
           <div className="space-y-5 text-[0.9375rem]">
             <dl className="space-y-3">
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Source</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Data file</dt>
                 <dd className="text-ink">{open.source}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Original term and column position</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Name and column in the data file</dt>
                 <dd className="text-ink">
                   {open.columns.length > 0 ? (
                     <ul className="list-disc pl-5">
@@ -259,42 +259,42 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
                     </ul>
                   ) : (
                     <>
-                      <code>{open.originalTerm}</code> (value in the label column)
+                      <code>{open.originalTerm}</code> (a value of the name column)
                     </>
                   )}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Proposed canonical term</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Name it is grouped under</dt>
                 <dd className="text-ink">
                   {open.proposedCanonicalTerm}{' '}
                   <span className="font-mono text-sm text-ink-secondary">({open.candidateId})</span>
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Mapping method</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">How it was grouped</dt>
                 <dd className="text-ink">{open.mappingMethod}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Review status</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Decision so far</dt>
                 <dd className="mt-1 flex flex-wrap items-center gap-2">
                   <ReviewStatusBadge status={open.reviewStatus} />
                   {open.demoChanged ? <StatusBadge tone="sample">Demo change</StatusBadge> : null}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Conflicts</dt>
-                <dd className="text-ink">{open.conflicts ?? 'None recorded'}</dd>
+                <dt className="text-sm font-semibold text-ink-secondary">Disagreements</dt>
+                <dd className="text-ink">{open.conflicts ?? 'None found'}</dd>
               </div>
               <div>
-                <dt className="text-sm font-semibold text-ink-secondary">Last reviewed</dt>
+                <dt className="text-sm font-semibold text-ink-secondary">Last looked at</dt>
                 <dd className="text-ink">{lastReviewedText(open)}</dd>
               </div>
             </dl>
 
             <section aria-labelledby={`${id}-notes`}>
               <h3 id={`${id}-notes`} className="font-display text-base font-bold text-ink">
-                Reviewer notes
+                Notes
               </h3>
               {open.notes.length > 0 ? (
                 <ul className="mt-2 space-y-2">
@@ -340,10 +340,10 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
 
             <section aria-labelledby={`${id}-actions`}>
               <h3 id={`${id}-actions`} className="font-display text-base font-bold text-ink">
-                Review actions
+                Mark this row
               </h3>
               <p className="mt-1 text-ink-secondary">
-                These change demo state only. They do not approve medical content for live serving.
+                These marks exist in this demo only. They approve no medical content for real use.
               </p>
               <div className="mt-2 flex flex-col gap-2">
                 {DEMO_ACTIONS.map((action) => (

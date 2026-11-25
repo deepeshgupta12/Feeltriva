@@ -10,13 +10,11 @@ export function ReviewEvaluationPage() {
 
   return (
     <div>
-      <ReviewPageHeader title="Model evaluation" badge={<StatusBadge tone="attention">Research only</StatusBadge>}>
-        <p>
-          Internal evaluation material. These figures must not be shown to patients or used as marketing statistics.
-        </p>
+      <ReviewPageHeader title="Model test results" badge={<StatusBadge tone="attention">Research only</StatusBadge>}>
+        <p>Internal test results. These figures must not be shown to patients or used in advertising.</p>
       </ReviewPageHeader>
 
-      {state.status === 'loading' ? <ReviewLoading label="Loading evaluation…" /> : null}
+      {state.status === 'loading' ? <ReviewLoading label="Loading the results…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
         <div className="space-y-5">
@@ -33,11 +31,13 @@ export function ReviewEvaluationPage() {
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[30rem] border-collapse text-left text-[0.9375rem]">
-                <caption className="sr-only">Measured research baseline on the archive 11 test split</caption>
+                <caption className="sr-only">
+                  Measured results of the trial model on the test rows of archive 11
+                </caption>
                 <thead className="text-sm text-ink-secondary">
                   <tr>
                     <th scope="col" className="border-b border-line px-3 py-2 font-semibold">
-                      Measure (test split)
+                      What was measured (on the test rows)
                     </th>
                     <th scope="col" className="border-b border-line px-3 py-2 font-semibold">
                       Value
@@ -67,11 +67,10 @@ export function ReviewEvaluationPage() {
             className="rounded-control border border-line bg-surface p-4 sm:p-5"
           >
             <h2 id="clinical-heading" className="font-display text-lg font-bold text-ink">
-              Clinical validation
+              Checks by clinicians
             </h2>
             <p className="mt-1 text-[0.9375rem] text-ink-secondary">
-              No clinical validation has been carried out. These fields are empty, which is different from a result of
-              zero.
+              No clinician has checked anything yet. These fields are empty, which is not the same as a result of zero.
             </p>
             <dl className="mt-3 grid gap-3 sm:grid-cols-3">
               {state.data.clinicalValidation.map((metric) => (

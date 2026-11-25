@@ -438,11 +438,11 @@ describe('history', () => {
 });
 
 describe('internal review', () => {
-  it('is gated behind the reviewer preview and says the gate is not authorization', async () => {
+  it('is gated behind the reviewer preview and says the switch is not a real permission', async () => {
     renderApp('/review/data');
 
     expect(await screen.findByRole('heading', { name: 'Reviewer access is required' })).toBeInTheDocument();
-    expect(screen.getByText(/The preview switch is not real authorization/)).toBeInTheDocument();
+    expect(screen.getByText(/it is not a real permission/)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
@@ -452,7 +452,9 @@ describe('internal review', () => {
     const tools = await screen.findByRole('dialog', { name: 'Demo tools' });
     await user.click(within(tools).getByRole('button', { name: /Internal reviewer/ }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Data quality' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Repeated columns in the data files' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Internal review')).toBeInTheDocument();
     const table = await screen.findByRole('table');
     // All 37 repeated header names from the audit, plus the header row.
@@ -465,12 +467,14 @@ describe('internal review', () => {
     expect(within(drawer).getByText(/values disagree in 22,272 rows/)).toBeInTheDocument();
     await user.type(within(drawer).getByLabelText('Add a note'), 'Columns disagree; needs reconciliation.');
     await user.click(within(drawer).getByRole('button', { name: 'Save demo note' }));
-    expect(await within(drawer).findByText('Demo note saved. It is kept in memory only.')).toBeInTheDocument();
+    expect(
+      await within(drawer).findByText('Demo note saved. It is not stored and is gone when you close the page.'),
+    ).toBeInTheDocument();
     expect(within(drawer).getByText('Columns disagree; needs reconciliation.')).toBeInTheDocument();
     expect(within(drawer).getByText('Demo change')).toBeInTheDocument();
   });
 
-  it('labels audit figures as imported dataset audit and keeps research metrics research-only', async () => {
+  it('labels the figures as counted from the data files and keeps the model test results research-only', async () => {
     const { user } = renderApp('/');
     await user.click(screen.getByRole('button', { name: 'Demo tools' }));
     const tools = await screen.findByRole('dialog', { name: 'Demo tools' });
@@ -481,12 +485,14 @@ describe('internal review', () => {
     for (const figure of ['6', '960', '37', '27,622']) {
       expect(await screen.findByText(figure)).toBeInTheDocument();
     }
-    expect(screen.getAllByText('Imported dataset audit')).toHaveLength(4);
+    expect(screen.getAllByText('Counted from the data files')).toHaveLength(4);
     expect(screen.getByText(/Not clinically approved conditions/)).toBeInTheDocument();
     expect(screen.getByText(/Not a count of unique patients/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('link', { name: 'Model evaluation' }));
-    expect(await screen.findByText('Baseline rejected for clinical serving.')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Model test results' }));
+    expect(
+      await screen.findByText('The trial model was rejected: it must not be used for patients.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Research only')).toBeInTheDocument();
     for (const value of ['15.71%', '20.56%', '39.67%', '39 / 46']) {
       expect(screen.getByText(value)).toBeInTheDocument();
@@ -494,8 +500,8 @@ describe('internal review', () => {
     expect(screen.getAllByText('Not evaluated')).toHaveLength(3);
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('link', { name: 'Releases' }));
-    expect(await screen.findByRole('button', { name: 'Publish release' })).toBeDisabled();
+    await user.click(screen.getByRole('link', { name: 'Published versions' }));
+    expect(await screen.findByRole('button', { name: 'Publish this version' })).toBeDisabled();
     expect(screen.getByText(/Publishing is disabled\./)).toBeInTheDocument();
   });
 });

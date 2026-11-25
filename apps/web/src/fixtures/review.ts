@@ -34,7 +34,7 @@ export interface ReviewFixtures {
   evaluation: EvaluationSummary;
 }
 
-const LEXICAL_METHOD = 'Lexical normalisation (casefold, trim, collapse whitespace)';
+const LEXICAL_METHOD = 'Same spelling, ignoring capital letters and extra spaces';
 
 function buildMappings(): Mutable<MappingRow>[] {
   const dataQuality: Mutable<MappingRow>[] = REPEATED_HEADERS.map((header) => ({
@@ -47,7 +47,7 @@ function buildMappings(): Mutable<MappingRow>[] {
     candidateId: header.candidateFeatureId,
     mappingMethod: LEXICAL_METHOD,
     reviewStatus: header.mappingStatus,
-    conflicts: `Header repeated in ${header.columns.length} columns; values disagree in ${formatCount(header.conflictingRows)} rows`,
+    conflicts: `The heading appears in ${header.columns.length} columns; their values disagree in ${formatCount(header.conflictingRows)} rows`,
     conflictingRows: header.conflictingRows,
     lastReviewed: null,
     notes: [],
@@ -83,7 +83,7 @@ function buildMappings(): Mutable<MappingRow>[] {
     reviewStatus: row.mappingStatus,
     conflicts:
       row.spellingsInGroup > 1
-        ? `${row.spellingsInGroup} source spellings share this lexical group across ${row.sourceFilesInGroup} files; equivalence not reviewed`
+        ? `${row.spellingsInGroup} spellings from ${row.sourceFilesInGroup} files are in this group; nobody has checked that they mean the same`
         : null,
     conflictingRows: null,
     lastReviewed: null,
@@ -98,27 +98,30 @@ const overview: ReviewOverview = {
   facts: [
     {
       id: 'source_archives',
-      label: 'Source archives',
+      label: 'Data archives received',
       value: AUDIT_FACTS.sourceArchives,
-      detail: `${AUDIT_FACTS.sourceFiles} files audited. Imported datasets, not reviewed knowledge sources.`,
+      detail: `${AUDIT_FACTS.sourceFiles} files checked. These are data sets that were handed over, not reviewed medical knowledge.`,
     },
     {
       id: 'lexical_disease_candidates',
-      label: 'Lexical disease candidates',
+      label: 'Different condition names',
       value: AUDIT_FACTS.lexicalDiseaseCandidates,
-      detail: 'Distinct labels after lexical normalisation. Not clinically approved conditions.',
+      detail:
+        'Names that still differ once capital letters and extra spaces are ignored. Not clinically approved conditions.',
     },
     {
       id: 'repeated_header_names',
-      label: 'Repeated header names requiring review',
+      label: 'Column headings that appear more than once',
       value: AUDIT_FACTS.repeatedHeaderNames,
-      detail: 'In the archive 16 symptom matrix. Every repeated header has rows where its columns disagree.',
+      detail:
+        'In the symptom table of archive 16. For every one of them there are rows in which the repeated columns disagree.',
     },
     {
       id: 'shared_profile_signatures',
-      label: 'Shared archive-15 train/test profile signatures',
+      label: 'Answer patterns found in both files of archive 15',
       value: AUDIT_FACTS.sharedArchive15ProfileSignatures,
-      detail: 'Profile signatures present in both files, excluding patient ID. Not a count of unique patients.',
+      detail:
+        'The same set of answers appears in the training file and in the test file, leaving the patient number aside. Not a count of unique patients.',
     },
   ],
   normalization: AUDIT_FACTS.normalization,
@@ -133,8 +136,8 @@ function buildEvidence(): Mutable<EvidenceReviewItem>[] {
       sourceTitle: 'Sample source A (placeholder)',
       sourceUrl: 'https://example.org/feeltriva-sample-source-a',
       locator: 'Sample locator: section 2, paragraph 3',
-      proposedAtomicClaim: 'Sample claim: one checkable statement derived from the original wording.',
-      applicability: 'Sample applicability: not specified',
+      proposedAtomicClaim: 'Sample point: one statement that can be checked, taken from the original wording.',
+      applicability: 'Sample: for whom or when it holds is not stated',
       status: 'needs_review',
       notes: [],
       isSample: true,
@@ -145,8 +148,8 @@ function buildEvidence(): Mutable<EvidenceReviewItem>[] {
       sourceTitle: 'Sample source B (placeholder, no link supplied)',
       sourceUrl: null,
       locator: 'Sample locator: page 4',
-      proposedAtomicClaim: 'Sample claim: a second placeholder claim.',
-      applicability: 'Sample applicability: not specified',
+      proposedAtomicClaim: 'Sample point: a second placeholder.',
+      applicability: 'Sample: for whom or when it holds is not stated',
       status: 'draft',
       notes: [],
       isSample: true,
@@ -159,7 +162,7 @@ const rules: RuleReviewItem[] = Object.values(SAMPLE_QUESTIONS).map((question) =
   kind: 'question',
   wording: question.wording,
   answerType: question.answer_schema.type,
-  status: 'Demo fixture · not approved',
+  status: 'Sample · not approved',
   isSample: true,
 }));
 
@@ -170,48 +173,48 @@ const releases: ReleaseInfo[] = [
     isSample: true,
     included: [
       {
-        label: 'Sources',
-        value: `${AUDIT_FACTS.sourceArchives} imported archives audited · 0 approved knowledge sources`,
+        label: 'Data sources',
+        value: `${AUDIT_FACTS.sourceArchives} data archives checked · 0 approved sources of medical knowledge`,
       },
       {
-        label: 'Mappings',
-        value: `0 approved · ${formatCount(AUDIT_FACTS.lexicalDiseaseCandidates)} lexical disease candidates and ${formatCount(AUDIT_FACTS.positionalFeatureMappings)} positional feature mappings unreviewed`,
+        label: 'Names',
+        value: `0 approved · ${formatCount(AUDIT_FACTS.lexicalDiseaseCandidates)} condition names grouped by spelling and ${formatCount(AUDIT_FACTS.positionalFeatureMappings)} columns with a suggested name, none checked`,
       },
-      { label: 'Rules and questions', value: `0 approved · bundle ${DEMO_RULES_VERSION} contains demo fixtures only` },
+      { label: 'Rules and questions', value: `0 approved · the set ${DEMO_RULES_VERSION} holds samples only` },
     ],
     pendingItems: [
-      `${AUDIT_FACTS.repeatedHeaderNames} repeated header names need reconciliation`,
-      'Lexical disease and feature candidates need semantic review',
-      'No evidence items are approved',
-      'No clinical rule bundle has been authored or approved',
+      `${AUDIT_FACTS.repeatedHeaderNames} column headings that appear more than once need sorting out`,
+      'The grouped condition names and the suggested column names need their meaning checked',
+      'No texts or facts are approved',
+      'No set of clinical rules has been written or approved',
     ],
     publication: {
       enabled: false,
       reason:
-        'Publishing needs a reviewer role enforced by the backend and a completed clinical approval. Neither exists in this demo.',
+        'Publishing needs a reviewer permission that the service itself checks, and a completed approval by clinicians. Neither exists in this demo.',
     },
   },
 ];
 
 const evaluation: EvaluationSummary = {
-  title: 'Research baseline · archive 11 only',
+  title: 'Research test of a trial model · archive 11 only',
   scope:
-    'Experimental classifier scored against dataset labels. It does not measure real diagnoses or the product, and is research-only.',
-  verdict: 'Baseline rejected for clinical serving.',
+    'A trial model was scored against the labels in the data set. That measures neither real diagnoses nor this product. For research only.',
+  verdict: 'The trial model was rejected: it must not be used for patients.',
   researchMetrics: [
-    { label: 'Test accuracy', value: '15.71%' },
+    { label: 'Right answers on the test rows', value: '15.71%' },
     {
-      label: 'Majority-class comparator',
+      label: 'Always answering with the most common label',
       value: '20.56%',
-      note: 'Always predicts the most frequent training label. The baseline does not beat it.',
+      note: 'What one gets without any model, by always giving the most frequent label. The trial model does worse.',
     },
-    { label: 'Top-3 accuracy', value: '39.67%' },
-    { label: 'Test labels represented', value: '39 / 46', note: 'Seven labels have no test examples.' },
+    { label: 'Right answer among its three best guesses', value: '39.67%' },
+    { label: 'Labels that have test rows', value: '39 / 46', note: 'Seven labels have no test rows.' },
   ],
   clinicalValidation: [
-    { label: 'Clinical accuracy', value: null },
-    { label: 'Urgency/triage safety', value: null },
-    { label: 'Calibration approved for display', value: null },
+    { label: 'Accuracy checked by clinicians', value: null },
+    { label: 'Safety of the urgency advice', value: null },
+    { label: 'Certainty figures approved for showing', value: null },
   ],
 };
 
@@ -228,9 +231,9 @@ export function buildReviewFixtures(): ReviewFixtures {
 }
 
 export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
-  lexical_only_unreviewed: 'Lexical only · unreviewed',
-  needs_semantic_review: 'Needs semantic review',
-  flagged_demo: 'Flagged for reconciliation',
+  lexical_only_unreviewed: 'Grouped by spelling only · not checked',
+  needs_semantic_review: 'Meaning needs checking',
+  flagged_demo: 'Marked: needs sorting out',
   accepted_demo: 'Marked acceptable',
   rejected_demo: 'Marked rejected',
 };

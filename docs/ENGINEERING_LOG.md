@@ -5308,3 +5308,81 @@ that uses it; seen at once in the test run and put back. No product bug.
 - The 223 question sentences now have three rows each (ICD-11, HPO, MONDO), all saying the same:
   a question is not a name. They are there so that the count of names is complete.
 - LOINC has no rows for review: it fits measurements, and the data hold one measurement item.
+
+### M2.4g — The review screens of the design demo in plain words
+
+**What it is for.** M2.4d reworded the live workspace and left the review screens of the design
+demo (`pnpm dev`, sample data). The owner on 2026-11-25: that "needs to be done".
+
+**Impact analysis before editing** (all LOW). The pieces are screen components and the
+hand-written sample texts (`ReviewTable`, the six demo pages, `fixtures/review.ts`, the demo's
+entries in `ReviewShell`); the graph traces no callers. Their text is asserted in
+`routes.test.tsx` and `scripts/smoke.mjs`, both updated.
+
+**Implemented.** Words only, by the list of E97, which gained nine entries.
+
+| Was | Is now |
+|---|---|
+| Disease mappings; Feature mappings; Data quality | Condition names; Symptom and question names; Repeated columns |
+| Evidence; Questions/rules; Releases; Model evaluation | Texts and facts; Questions and rules; Published versions; Model test results |
+| Imported dataset audit | Counted from the data files |
+| Lexical disease candidates; Repeated header names requiring review | Different condition names; Column headings that appear more than once |
+| Shared archive-15 train/test profile signatures | Answer patterns found in both files of archive 15 |
+| Normalisation used for lexical grouping; Clinical de-duplication status | How names were tidied before grouping; Whether the same patient appears more than once |
+| Original term; Proposed canonical term; Mapping method; Conflicts; Last reviewed | Name in the data file; Name it is grouped under; How it was grouped; Disagreements; Last looked at |
+| Lexical only · unreviewed; Needs semantic review; Flag for reconciliation | Grouped by spelling only · not checked; Meaning needs checking; Mark: needs sorting out |
+| Original statement; Source and locator; Proposed atomic claim; Applicability | Original wording; Where it comes from; The single point taken from it; For whom or when it holds |
+| Research baseline; Baseline rejected for clinical serving | Research test of a trial model; The trial model was rejected: it must not be used for patients |
+| Test accuracy; Majority-class comparator; Top-3 accuracy | Right answers on the test rows; Always answering with the most common label; Right answer among its three best guesses |
+| Clinical validation; Calibration approved for display | Checks by clinicians; Certainty figures approved for showing |
+| Publish release; Pending before publication | Publish this version; Still to do before it can be published |
+| Reviewer preview · not real authorization | Reviewer preview · not a real permission |
+
+- Two notes of the data check were shown as recorded ("casefold + strip + collapse whitespace
+  only; no semantic synonym merges"). The page now says them in words; a note it does not know is
+  shown as recorded. The generated file is not edited.
+- Live workspace, found while doing the owner's checklist: on "Published versions" the stored
+  names of the versions (`mapping-lexical-0.r1`) stood as headings. They are now set as code and
+  labelled "its name in the system".
+
+**The owner's browser checklist, done on the real data** (owner: "Cross all these yourself"). A
+script opened the workspace on port 5173 and went through every point, reading only: it clicked
+no decision button, and it fails if the browser sends a request that changes data.
+
+| Point | Result |
+|---|---|
+| 1. The notice at the top | as written |
+| 2. "Your decisions are saved under the name owner" | shown |
+| 3. The nine sections, in order | as listed |
+| 4. Suggested matches | "Showing 1 to 25 of 4,587": 3,668 before M2.4f, which added 919 |
+| 5. "Close search result" | "of 431"; the first row is "abdominal distention" with "Abdominal distension" |
+| 6. Opening that row | the reason in plain words; "Search score 1 (the best possible is 1)", reworded in M2.4f; "Confirm match" and "Reject match" are offered. Neither was clicked: a decision on the real data is the owner's |
+| 7. "Read only: no suggestion" | "of 2,484" (1,804 before M2.4f); every row shown says "No decision needed"; opening one offers only "Save note" |
+| 8. Urgency rules | 20 rules; rule 1 opens in words; `pnpm e2e:rules` compares all 20 with the document |
+| 9. The other sections, read for unclear words | all open and show their rows. Two findings, both dealt with: the stored names of published versions stood as headings (now labelled as names in the system); and on the first pass one list was still loading, because the test suite was running at the same time. On the second pass no old term and no raw code was found on any page |
+| Requests that change data | none |
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 73 files |
+| `uv run pytest` (SQLite, archives included) | 279 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 357 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 135 passed (9 files); built |
+| `pnpm smoke` (design demo on port 5173) | 375 passed, 0 failed |
+| `pnpm e2e:review` against the test database | 21 passed, 0 failed |
+| `pnpm e2e:rules` against the real rule set | 4 passed, 0 failed |
+| `detect_changes` before commit | 18 files; risk "high" by the flows through `run` of `smoke.mjs` (the one function that holds the whole smoke test), `ReviewTable` and `LiveReleasesPage`. The changed symbols are the six demo pages, the table, the demo's entries in the shell, the sample texts, the live page of published versions, and the tests; only their words changed. `apps/web/README.md` is listed again though `git status` shows it unchanged |
+
+For `pnpm smoke` the web server on port 5173 was changed to the design demo and back to live
+review mode afterwards; nothing ran on another web port.
+
+**Bugs and slips.** Two lines of `smoke.mjs` became too long for the formatter with the new
+wording; laid out again. No product bug.
+
+**Limits, stated plainly.**
+
+- File names, column headings and the sample texts' own content are shown as they are.
+- `formatCount`, the dates and the figures of the demo are unchanged; only their labels changed.
+- Whether the wording is plain enough remains the owner's judgement.

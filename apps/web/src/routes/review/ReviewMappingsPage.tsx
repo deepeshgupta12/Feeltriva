@@ -24,10 +24,10 @@ function MappingsView({ kind, title, caption, children }: MappingsViewProps) {
 
   return (
     <div>
-      <ReviewPageHeader title={title} badge={<StatusBadge tone="neutral">Imported dataset audit</StatusBadge>}>
+      <ReviewPageHeader title={title} badge={<StatusBadge tone="neutral">Counted from the data files</StatusBadge>}>
         {children}
       </ReviewPageHeader>
-      {state.status === 'loading' ? <ReviewLoading label="Loading mappings…" /> : null}
+      {state.status === 'loading' ? <ReviewLoading label="Loading…" /> : null}
       {state.status === 'failed' ? <ReviewLoadError onRetry={reload} /> : null}
       {state.status === 'loaded' ? (
         <ReviewTable
@@ -49,16 +49,17 @@ export function ReviewDataQualityPage() {
   return (
     <MappingsView
       kind="data_quality"
-      title="Data quality"
-      caption="Repeated header names in the archive 16 symptom matrix"
+      title="Repeated columns in the data files"
+      caption="Column headings that appear more than once in the symptom table of archive 16"
     >
       <p>
-        37 header names appear more than once in the archive 16 symptom matrix, and every one has rows where its columns
-        disagree. Each column position is kept as imported so the columns can be reconciled by a reviewer.
+        37 column headings appear more than once in the symptom table of archive 16, and for every one there are rows in
+        which the repeated columns disagree. Each column is kept exactly as it came, so that someone can decide which
+        one to trust.
       </p>
       <p>
-        A single row can disagree on several headers, so the conflicting-row counts cannot be added together as a count
-        of unique rows.
+        One row can disagree on several headings, so the numbers of disagreeing rows cannot be added up to a number of
+        different rows.
       </p>
     </MappingsView>
   );
@@ -68,13 +69,13 @@ export function ReviewFeatureMappingsPage() {
   return (
     <MappingsView
       kind="feature"
-      title="Feature mappings"
-      caption="Sample of positional feature mappings by source column"
+      title="Symptom and question names"
+      caption="A sample of columns of the data files and the names suggested for them"
     >
       <p>
-        A sample of the positional feature mappings: one row per source column, with the header exactly as imported. The
-        proposed terms are lexical candidates. They include questionnaire and history items and are not verified
-        symptoms.
+        A sample: one row for each column of a data file, with its heading exactly as it came. The name suggested for it
+        is based on its wording only. The columns include questions and past history, not only symptoms, and none has
+        been checked by a clinician.
       </p>
     </MappingsView>
   );
@@ -84,12 +85,13 @@ export function ReviewDiseaseMappingsPage() {
   return (
     <MappingsView
       kind="disease"
-      title="Disease mappings"
-      caption="Sample of lexical disease label mappings by source file"
+      title="Condition names"
+      caption="A sample of condition names from the data files and the name each is grouped under"
     >
       <p>
-        A sample of source labels grouped by lexical normalisation only. Sharing a group means the labels have the same
-        spelling after normalisation; it does not mean they are the same condition or that any is clinically approved.
+        A sample of condition names from the data files, grouped only when they are spelled the same once capital
+        letters and extra spaces are ignored. Being in one group does not mean the names are the same condition, and
+        none is clinically approved.
       </p>
     </MappingsView>
   );

@@ -4,7 +4,7 @@ import { REVIEW_STATUS_LABELS } from '@/fixtures/review';
 
 const RELEASE_LABELS: Record<ReleaseStatus, { label: string; tone: BadgeTone }> = {
   draft: { label: 'Draft · not published', tone: 'neutral' },
-  in_review: { label: 'In review', tone: 'attention' },
+  in_review: { label: 'Being checked', tone: 'attention' },
   approved: { label: 'Approved', tone: 'info' },
   published: { label: 'Published', tone: 'info' },
 };
