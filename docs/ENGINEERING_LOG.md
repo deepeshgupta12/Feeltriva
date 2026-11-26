@@ -5882,3 +5882,14 @@ knows every list). The web app is not touched.
   no match) and should not be counted as work to do; the screen still shows them as pending.
 - Nothing is published. The approved rows are not used by the service until a version of a list
   is made and put in use, which is the owner's step.
+
+**Committed and indexed (M2.4j, M2.4h, M2.4i, M2.9a, the cross-check, M2.18, M2.19).** `32913dc`
+(M2.4j; CI passed on both jobs, run 45597522563), `ff99df0` (M2.4h; **CI failed** in the web job,
+run 45602572726, on the component test of BUG-030; the backend job passed; fixed in `8e9b9a1`),
+`25e4ade` (M2.4i; passed, run 45604872678), `6218263` (M2.9a; passed, run 45606357612), `d712b31`
+(cross-check of the design demo with section 12 of the handoff; passed, run 45607265198),
+`8e9b9a1` (M2.18; passed, run 45752987605), `d58c587` (M2.19; passed, run 45760674639). All
+verified with `gh run view`. GitNexus index at `d58c587`, up to date. After the approvals,
+`pnpm e2e:lists` against the real data, reading only: 13 passed, 0 failed, no request that changes
+data. A pull request opened by the dependency robot (prettier 3.9.10 to 3.10.1) fails its own CI
+run 45605271889; it is not merged and not part of this work.
