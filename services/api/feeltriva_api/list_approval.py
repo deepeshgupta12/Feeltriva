@@ -59,6 +59,7 @@ from .settings import get_settings
 
 # Why a pending row is not decided by an approval given for its whole list.
 REPEATED_HEADING = "the name is a repeated column heading of a data file, not an item of its own"
+SAMPLE = "an invented sample of the test rule set, not an item of the vocabulary"
 TEXT_RETIRED = "its text was retired as a word-for-word copy of another"
 REFERENCE_LIST = "a list of references or links in a text file, not a statement about the condition"
 MENTION = "a fact taken from a mention in a text: the row itself records that a mention is not an assertion"
@@ -105,7 +106,8 @@ def _pending(tx: Any, key: Any, *where: Any) -> list[str]:
 
 def _features(tx: Any) -> tuple[list[str], dict[str, list[str]]]:
     names = {plain(name) for name in tx.scalars(select(Feature.preferred_name)).all()}
-    ids, repeated = [], []
+    ids, repeated, invented = [], [], []
+    samples = published_mappings.sample_items()
     rows = tx.execute(
         select(Feature.feature_id, Feature.preferred_name)
         .where(Feature.status == "pending")
@@ -113,11 +115,13 @@ def _features(tx: Any) -> tuple[list[str], dict[str, list[str]]]:
     ).all()
     for feature_id, name in rows:
         numbered = _NUMBERED.match(name)
-        if numbered and plain(numbered.group(1)) in names:
+        if feature_id in samples:
+            invented.append(feature_id)
+        elif numbered and plain(numbered.group(1)) in names:
             repeated.append(feature_id)
         else:
             ids.append(feature_id)
-    return ids, {REPEATED_HEADING: repeated}
+    return ids, {REPEATED_HEADING: repeated, SAMPLE: invented}
 
 
 def _chunks(tx: Any) -> tuple[list[str], dict[str, list[str]]]:

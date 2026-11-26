@@ -24,8 +24,10 @@ its features from the current mapping release in a later sub-step.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
+from feeltriva_clinical import load_fixture_bundle
 from sqlalchemy import func, select
 
 from . import publishing
@@ -56,6 +58,13 @@ _TARGETS["feature"] = (Feature, "feature_id")
 _TARGETS["disease"] = (Disease, "disease_id")
 
 
+@lru_cache
+def sample_items() -> frozenset[str]:
+    """The invented items of the synthetic test rule set. They are stored beside the real items, because the
+    service runs on them while clinical mode is off; they are samples and never part of the vocabulary (BUG-037)."""
+    return frozenset(load_fixture_bundle().feature_ids())
+
+
 def _disease_guard(tx: Any, disease: Disease, status: str, principal: Principal) -> None:
     if disease.redirected_to:
         raise ApiError(
@@ -69,6 +78,12 @@ _GUARDS["disease"] = _disease_guard
 
 
 def _feature_guard(tx: Any, feature: Feature, status: str, principal: Principal) -> None:
+    if status == "approved" and feature.feature_id in sample_items():
+        raise ApiError(
+            409,
+            "sample_item",
+            "This is an invented sample of the test rule set, not an item of the vocabulary. It cannot be approved.",
+        )
     if feature.redirected_to:
         raise ApiError(
             409,

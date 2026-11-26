@@ -45,6 +45,7 @@ command output, not estimated.
 | BUG-034 | M2.5c2 / M2.20 | The lists of published versions read the whole content of every version on every request, and the list of knowledge versions read, for each of them, the whole list of names it was published against. With one version this is nothing; in the test database, where test runs had left 480 lists of names and 287 knowledge versions, the two requests took 5 and 8 seconds, the page "Published versions" about 14, and the browser test of that page ran out of time. Found by `pnpm e2e:review` | Fixed in M2.20: a published version never changes, so it is counted once; the list reads no content after that. Measured on the test database: 0.02 s a request after the first (6.7 s and 3.2 s for the first after a start) |
 | BUG-035 | M3.2 / M3.14a | Observations written in one request (two details confirmed together) had no order: they are read back by version and time, and the database gives every row of one transaction the same time. The same flow could return them in either order. Seen three times as the REST and MCP parity test failing in a full PostgreSQL run and passing on the next; each time the output had not been kept. Caught in M3.14a with the output saved | Fixed in M3.14a: each row of a request gets its own time, in the order given; a test checks the times themselves, because the wrong order is too rare to wait for |
 | BUG-036 | M2.5a / M3.8 | A follow-up question lost three things on its way from the rule file through the database into a published rule set: which option means "not present" (so "None of these" would have been read as present), the reviewer's order, and now the mark "essential". The table had no place for them and the published content did not list them. No effect so far: the only published rule set holds rules and no questions. Found while reading the path for M3.8 | Fixed in M3.8: kept with the question (`branch_rules`), listed in the published content, read by the serving bundle; a rule set published before the fix is read as before |
+| BUG-037 | M2.19 | The list approval of 2026-11-26 approved the seven invented items of the synthetic test rule set ("Fixture signal alpha (sample)" and six more) under the doctor's name. They are stored beside the real items, were pending, and nothing told them apart; the invented questions and the invented rule set had been set aside, the items not. They were in no published list, but a new version of the list of names would have carried them. Found on 2026-11-26 while reading the test rule set for M3.9 | Fixed: the seven are pending again, with a note under the assistant's name; the approval command sets such items aside; the review service refuses to approve one (`sample_item`). Corrects a figure of M2.20: the real items in use are 933, not 940 |
 
 ## Entries
 
@@ -6305,3 +6306,42 @@ rule set (`tests/api/test_serving_bundle.py`).
   supervised trial. That has not happened.
 - The four invented questions of the test rule set stored in the real database were written
   before the fix; `python -m feeltriva_api.seed` writes them again with their option meanings.
+
+### Correction of M2.19 — the invented items of the test rule set were approved (BUG-037)
+
+**What happened.** The synthetic test rule set, on which the service runs while clinical mode is
+off, has seven invented items. `python -m feeltriva_api.seed` stores them in the same table as
+the real symptoms, and they were pending. The list approval of M2.19 approved every pending item
+that was not a repeated column heading, these seven with them, under the doctor's name. I had set
+the invented questions and the invented rule set aside (E102) and did not think of the items.
+Found while reading the test rule set for M3.9.
+
+**How far it went.** No published list holds them (checked in the database). No mapping, fact,
+match or pair refers to one. A preview of the next list of names counted 940 items; seven of
+them were these.
+
+**Impact analysis** (LOW): `_feature_guard` (no caller in the graph; called through the review
+service's table of rules), `list_approval._features` (one caller, `plan`).
+
+**Resolution.**
+
+- `published_mappings.sample_items()`: the items of the synthetic test rule set. The review
+  service refuses to approve one (`sample_item`, 409), on a single row and on many.
+- `list_approval`: such items are set aside with the reason "an invented sample of the test rule
+  set, not an item of the vocabulary".
+- The real data: the seven are put back to pending through the review service, under the
+  assistant's name, with a note that says the approval was a mistake of the entry and was not
+  meant by the approval given for the list.
+
+Figures after the correction: 933 items approved and in use, 28 merged names, 7 invented samples
+pending. M2.20 said "968 to 940 in use"; of the real items it was 961 to 933.
+
+**Tests run.** `uv run ruff check .`, `uv run mypy …`: clean. `uv run pytest` (SQLite): 307
+passed, 80 skipped. PostgreSQL with archives, full output saved: 386 passed, 1 skipped. New test:
+an invented sample is set aside by the plan and refused by the review service. `detect_changes`:
+medium; compared with the last commit function by function, `_feature_guard` and `_features` changed and
+`sample_items` was added; `_chunks`, `_disease_guard` and `_decisions` are listed and only moved.
+
+**What I take from it.** Before a decision is entered on a whole table, every kind of row in it is
+named, the invented ones first. The check that would have caught it was one query for the IDs of
+the test rule set.

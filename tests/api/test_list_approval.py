@@ -383,3 +383,31 @@ def test_suggested_matches_are_entered_only_when_asked_and_only_where_a_name_has
         made = tx.get(TerminologyLink, f"tl_{tag}_made_one")
         assert (made.status, made.reviewer, made.match_method) == ("approved", WHO.subject, "reviewer_confirmed")
         assert tx.get(TerminologyLink, f"tl_{tag}_made_two_a") is None
+
+
+def test_an_invented_sample_of_the_test_rule_set_is_set_aside_and_cannot_be_approved(owner_db, client, container):
+    # BUG-037: the items of the synthetic test rule set are stored beside the real ones and were approved with
+    # them by the list approval of 2026-11-26. They are samples, never items of the vocabulary.
+    from tests.conftest import Api
+
+    with owner_db.transaction(None, role="migration") as tx:
+        sample = tx.get(Feature, "fx.signal_alpha")
+        before = sample.status
+        sample.status = "pending"
+    try:
+        with owner_db.transaction(None, role="migration") as tx:
+            planned = {entry["target_type"]: entry for entry in list_approval.plan(tx, [])}
+        assert "fx.signal_alpha" not in planned["feature"]["ids"]
+        assert "fx.signal_alpha" in planned["feature"]["set_aside"][list_approval.SAMPLE]
+        # The review service refuses it for any reviewer, on a single row as on many.
+        reviewer = Api(client, subject="samples", token="dev-reviewer:samples")
+        body = {"target_type": "feature", "target_id": "fx.signal_alpha", "note": "Looks fine.", "status": "approved"}
+        refused = client.post("/internal/v1/review/decisions", headers=reviewer.headers(None), json=body)
+        assert (refused.status_code, refused.json()["code"]) == (409, "sample_item")
+        done = list_approval.enter(
+            container.db, WHO, NOTE, [{"target_type": "feature", "ids": ["fx.signal_alpha"], "set_aside": {}}]
+        )[0]
+        assert (done["approved"], done["refused"]) == (0, {"sample_item": 1})
+    finally:
+        with owner_db.transaction(None, role="migration") as tx:
+            tx.get(Feature, "fx.signal_alpha").status = before
