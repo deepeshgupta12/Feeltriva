@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (
     disease_merges,
+    feature_merges,
     published_knowledge,
     published_mappings,
     releases,
@@ -316,6 +317,22 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     def review_disease_split(body: DiseaseSplit, who: Who) -> JSONResponse:
         return JSONResponse(disease_merges.split(container.db, who, disease_id=body.disease_id, note=body.note))
 
+    @app.get("/internal/v1/review/features/{feature_id}/history")
+    def review_feature_history(feature_id: str, who: Who) -> JSONResponse:
+        return JSONResponse(feature_merges.state(container.db, who, feature_id))
+
+    @app.post("/internal/v1/review/feature-merges")
+    def review_feature_merge(body: FeatureMerge, who: Who) -> JSONResponse:
+        return JSONResponse(
+            feature_merges.merge(
+                container.db, who, source_id=body.source_feature_id, target_id=body.target_feature_id, note=body.note
+            )
+        )
+
+    @app.post("/internal/v1/review/feature-splits")
+    def review_feature_split(body: FeatureSplit, who: Who) -> JSONResponse:
+        return JSONResponse(feature_merges.split(container.db, who, feature_id=body.feature_id, note=body.note))
+
     @app.get("/internal/v1/review/releases")
     def review_releases(who: Who) -> JSONResponse:
         return JSONResponse(releases.list_releases(container.db, who))
@@ -583,3 +600,16 @@ class BulkDecision(BaseModel):
     target_ids: list[str] = Field(min_length=1, max_length=200)
     note: str = Field(min_length=1, max_length=4000)
     status: str
+
+
+class FeatureMerge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_feature_id: str
+    target_feature_id: str
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class FeatureSplit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    feature_id: str
+    note: str = Field(min_length=1, max_length=4000)

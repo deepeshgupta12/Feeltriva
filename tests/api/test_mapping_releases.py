@@ -200,6 +200,7 @@ def test_a_mapping_release_holds_only_what_is_approved(client, api: Api, reviewe
         "features",
         "diseases",
         "redirects",
+        "feature_redirects",  # names of items merged into a kept one (M2.20)
         "disease_mappings",
         "feature_mappings",
         "sources",
@@ -324,6 +325,28 @@ def test_a_rollback_makes_an_earlier_mapping_release_current_and_removes_nothing
         return [feature["feature_id"] for feature in _mine(features, tag, "feature_id")]
 
     assert mine() == {f"map-{tag}.r1": False, f"map-{tag}.r2": True}
+    # The list gives each version its counts without reading its whole content again: a published version never
+    # changes, so it is counted once (BUG-034).
+    from feeltriva_api import publishing
+    from sqlalchemy import inspect
+
+    with owner_db.transaction(None, role="migration") as tx:
+        rows = {
+            release.release_id: (release, counts)
+            for release, counts in publishing.listed(tx, PublishedMapping, published_mappings._counts)
+        }
+        release, counts = rows[f"map-{tag}.r2"]
+        assert "content" in inspect(release).unloaded
+        assert (release.release_id, release.sha256) in publishing._COUNTED
+        # The published list holds every approved item of the database, not only this test's.
+        in_it = len(tx.get(PublishedMapping, f"map-{tag}.r2").content["features"])
+        assert counts["features"] == in_it
+    shown = {
+        item["release_id"]: item["features"]
+        for item in client.get(RELEASES, headers=reviewer.headers(None)).json()["items"]
+        if item["mapping_release_id"] == f"map-{tag}"
+    }
+    assert shown == {f"map-{tag}.r1": in_it - 1, f"map-{tag}.r2": in_it}
     # The first release still holds what it held: publishing the second changed nothing in it.
     assert held(f"map-{tag}.r1") == [f"feat_{tag}_hat"]
     assert held(f"map-{tag}.r2") == [f"feat_{tag}_coat", f"feat_{tag}_hat"]

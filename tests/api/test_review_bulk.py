@@ -189,7 +189,10 @@ def test_the_sets_a_version_is_published_from_are_listed_for_reviewers_only(clie
     for kind, wanted in (("rule_sets", "ws-rules"), ("name_lists", "ws-names"), ("knowledge_sets", "ws-know")):
         mine = [row for row in body[kind] if row["id"] == f"{wanted}-{tag}"]
         assert mine == [{"id": f"{wanted}-{tag}", "version": f"{wanted}-{tag}-1", "review_status": "pending"}]
-        assert [row["id"] for row in body[kind]] == sorted(row["id"] for row in body[kind])
+        # In the order of their names. Checked on the rows of this kind of name only: where a hyphen falls in the
+        # alphabet is the database's affair, and other tests name their rows differently (BUG-032).
+        alike = [row["id"] for row in body[kind] if row["id"].startswith(f"{wanted}-")]
+        assert alike == sorted(alike) and len(alike) == len(set(alike))
 
 
 def test_follow_up_questions_and_sets_of_rules_are_listed_and_decided_like_any_other_row(

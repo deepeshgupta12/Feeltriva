@@ -19,6 +19,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select, update
+from sqlalchemy.orm import defer
 
 from .auth import Principal
 from .errors import ApiError
@@ -143,3 +144,25 @@ def make_current(tx: Any, model: Any, principal: Principal, *, kind: str, releas
     _record(tx, principal, kind, release_id, note, "made_current")
     tx.flush()
     return release
+
+
+# What a published version holds, counted. A published version is never changed (the database refuses it), so its
+# counts are worked out once for each version and content digest, and a list of versions does not read every
+# version's whole content on every request (BUG-034: with some hundreds of versions the list took seconds).
+_COUNTED: dict[tuple[str, str], dict[str, Any]] = {}
+
+
+def listed(tx: Any, model: Any, count: Any) -> list[tuple[Any, dict[str, Any]]]:
+    """The published versions in the order of a list, each with its counts and without its content. The content
+    of the versions not counted yet is read in one query."""
+    releases = tx.scalars(select(model).options(defer(model.content)).order_by(model.working_id, model.number)).all()
+    missing = [release.release_id for release in releases if (release.release_id, release.sha256) not in _COUNTED]
+    for start in range(0, len(missing), 200):
+        rows = tx.execute(
+            select(model.release_id, model.sha256, model.content).where(
+                model.release_id.in_(missing[start : start + 200])
+            )
+        ).all()
+        for release_id, sha256, content in rows:
+            _COUNTED[(release_id, sha256)] = count(content)
+    return [(release, _COUNTED[(release.release_id, release.sha256)]) for release in releases]

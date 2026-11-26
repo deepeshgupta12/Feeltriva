@@ -113,7 +113,7 @@ def report(db: Database) -> dict[str, Any]:
             "conditions_same_spelling": _same_spelling(
                 tx, Disease, Disease.disease_id, Disease.redirected_to.is_(None)
             ),
-            "items_same_spelling": _same_spelling(tx, Feature, Feature.feature_id, Feature.feature_id.is_not(None)),
+            "items_same_spelling": _same_spelling(tx, Feature, Feature.feature_id, Feature.redirected_to.is_(None)),
             "pairs_suggested_as_the_same": [
                 {"kind": kind, "status": status, "pairs": count} for kind, status, count in suggested
             ],
@@ -301,7 +301,15 @@ def main() -> int:
     parser.add_argument("--merge", action="store_true", help="merge the condition names that are one condition by rule")
     parser.add_argument("--reviewer", help="the name the merges are recorded under (with --merge)")
     parser.add_argument("--note", help="the note recorded with every merge (with --merge)")
+    parser.add_argument("--items", action="store_true", help="with --merge: the names of symptoms and other items")
+    parser.add_argument(
+        "--headings",
+        action="store_true",
+        help="with --merge --items: only the groups that hold a repeated column heading (otherwise only the others)",
+    )
     args = parser.parse_args()
+    from . import item_duplicates  # here, not at the top: that module takes `plain` from this one
+
     settings = get_settings()
     owner = Database(settings.migration_database_url or settings.database_url)
     print(json.dumps(report(owner), indent=2)[:6000])
@@ -312,6 +320,14 @@ def main() -> int:
         print(f'  keep "{group["kept_name"]}" for: {" | ".join(group["names"])}')
     for entry in found["left_for_a_person"]:
         print(f"  left for a person: {' | '.join(entry['names'])}: {entry['reason']}")
+    with owner.transaction(None, role="migration") as tx:
+        items = item_duplicates.item_groups(tx)
+    print(f"item names that are one item by rule: {len(items['groups'])} groups")
+    for group in items["groups"]:
+        why = " (a repeated column heading)" if group["repeated_heading"] else ""
+        print(f'  keep "{group["kept_name"]}" for: {" | ".join(group["names"])}{why}')
+    for entry in items["left_for_a_person"]:
+        print(f"  left for a person: {' | '.join(entry['names'])}: {entry['reason']}")
     if not args.merge:
         print("nothing was changed (run with --merge, --reviewer and --note to merge)")
         return 0
@@ -320,6 +336,10 @@ def main() -> int:
         return 2
     principal = Principal(subject=f"dev-reviewer:{args.reviewer}", roles=frozenset({"reviewer"}))
     db = Database(settings.database_url)
+    if args.items:
+        chosen = [group for group in items["groups"] if group["repeated_heading"] == args.headings]
+        print(json.dumps(item_duplicates.merge_item_groups(db, principal, chosen, args.note), indent=2))
+        return 0
     print(json.dumps(merge_groups(db, principal, found["groups"], args.note), indent=2))
     print(json.dumps(retire_duplicate_texts(db, principal, args.note), indent=2))
     return 0

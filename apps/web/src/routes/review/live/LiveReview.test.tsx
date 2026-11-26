@@ -130,6 +130,20 @@ function fakeApi(reviewer: string | null = 'tester') {
         in_words_unavailable: 'The rule file this rule set was stored from is not on this installation.',
       },
     ],
+    '/features': [
+      {
+        feature_id: 'feat_cross_eyed',
+        name: 'cross-eyed',
+        kind: 'symptom',
+        value_type: 'boolean',
+        unit: null,
+        other_names: [],
+        merged_into: null,
+        review_status: 'approved',
+        decided_by: 'dev-reviewer:tester',
+        decision_note: null,
+      },
+    ],
     '/diseases': [
       {
         disease_id: 'dis_flu',
@@ -280,6 +294,17 @@ function fakeApi(reviewer: string | null = 'tester') {
       });
       return Promise.resolve({ disease_id: 'dis_flu', merged_into: body.target_disease_id });
     }
+    if (path === '/feature-merges') {
+      if (body.target_feature_id === 'feat_named_by_a_rule') {
+        return Promise.reject(
+          new ReviewApiError(409, 'item_named_by_a_rule', 'This item is named by 1 rules or questions in use.'),
+        );
+      }
+      (rows['/features'] ?? []).forEach((row) => {
+        row.merged_into = body.target_feature_id;
+      });
+      return Promise.resolve({ feature_id: 'feat_cross_eyed' });
+    }
     if (path === '/mapping-releases/current') {
       for (const release of published) {
         release.is_current = release.release_id === body.release_id;
@@ -316,6 +341,12 @@ function fakeApi(reviewer: string | null = 'tester') {
     }),
     '/serving-bundle': () => ({ assembled: false, problems: ['no rule release is current'] }),
     '/diseases/dis_flu/history': () => ({ disease_id: 'dis_flu', synonyms: [], merged_labels: [], history: [] }),
+    '/features/feat_cross_eyed/history': () => ({
+      feature_id: 'feat_cross_eyed',
+      other_names: ['squint'],
+      merged_items: [],
+      history: [],
+    }),
   };
   const api: LiveReviewApi = {
     reviewer,
@@ -674,6 +705,46 @@ describe('the review workspace against the review service', () => {
       await within(drawer).findByText('Merged. This name is now kept as another name of that condition.'),
     ).toBeInTheDocument();
     // Once merged, the panel offers to take the name out again.
+    expect(await within(drawer).findByRole('button', { name: 'Take this name out again' })).toBeInTheDocument();
+  });
+
+  it('merges one item name into another, without a field to rename it, and shows a refusal', async () => {
+    const { api, post } = fakeApi();
+    const user = renderLive('/review/items', api);
+
+    // The list shows the name in the system, to be copied into the panel of the other name.
+    expect(await screen.findByText('feat_cross_eyed')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Review cross-eyed' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(await within(drawer).findByRole('heading', { name: 'Two names for one item' })).toBeInTheDocument();
+    expect(within(drawer).getByText(/An item that a rule or a question names is the one to keep/)).toBeInTheDocument();
+    expect(await within(drawer).findByText('Other names kept under this item: squint')).toBeInTheDocument();
+    // An item keeps its own name: there is nothing to rename.
+    expect(within(drawer).queryByLabelText(/Name to show for it/)).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole('button', { name: 'Merge this name into that item' }));
+    expect(within(drawer).getByRole('alert')).toHaveTextContent('Give the name in the system of the item to keep');
+    expect(post).not.toHaveBeenCalled();
+
+    // The service's refusal is shown in its own words.
+    const into = within(drawer).getByLabelText('Name in the system of the item to keep');
+    await user.type(into, 'feat_named_by_a_rule');
+    await user.type(within(drawer).getByLabelText('Note for the merge (required)'), 'The same thing.');
+    await user.click(within(drawer).getByRole('button', { name: 'Merge this name into that item' }));
+    await user.click(within(drawer).getByRole('button', { name: 'Yes, merge it' }));
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent('This item is named by 1 rules or questions');
+
+    await user.clear(into);
+    await user.type(into, 'feat_cross_eyed_2');
+    await user.click(within(drawer).getByRole('button', { name: 'Merge this name into that item' }));
+    await user.click(within(drawer).getByRole('button', { name: 'Yes, merge it' }));
+    expect(post).toHaveBeenLastCalledWith('/feature-merges', {
+      source_feature_id: 'feat_cross_eyed',
+      target_feature_id: 'feat_cross_eyed_2',
+      note: 'The same thing.',
+    });
+    expect(
+      await within(drawer).findByText('Merged. This name is now kept as another name of that item.'),
+    ).toBeInTheDocument();
     expect(await within(drawer).findByRole('button', { name: 'Take this name out again' })).toBeInTheDocument();
   });
 

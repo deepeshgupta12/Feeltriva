@@ -40,6 +40,9 @@ command output, not estimated.
 | BUG-029 | M2.18 | A new test retired every word-for-word copy of a text in the test database, not only its own invented rows. One text of the real archives, loaded there by the archive tests, was retired with it, and the archive test that expects every loaded text to be pending then failed on the next full PostgreSQL run. Found by that run, before commit | Fixed in M2.18: the retiring step takes the conditions it may touch, the test gives its own; the one row of the test database was put back |
 | BUG-030 | M2.4j / M2.18 | In the panel that decides all rows shown at once, the line that says what was recorded stood in two places, one for a list with rows and one for a list without. The list has no row for a moment while it is read again after a decision, so the line was taken away and put back as a new element. A screen reader could announce it twice or not at all, and the component test failed about one run in three (it held the element that had just been taken away). Seen three times since M2.4j and put down to a busy machine until the failing output was saved | Fixed in M2.18: the line is one element outside both cases; 8 runs of 8 pass (before: 2 of 6 failed) |
 | BUG-031 | M2.19 | Started as a command, the new approval command stopped at its first row with "Unknown review target type": the review service learns most kinds of row from the modules that hold their rules, and the command had loaded none of them. The tests did not show it, because the test service loads them all. Found on the first run on the real data; nothing was changed by that run | Fixed in M2.19: the command names the modules it needs; a test starts it as a fresh process and checks that the service knows every list |
+| BUG-032 | M2.4j / M2.20 | An existing test of the list of sets compared the order the database gives with the order Python gives. The two differ on where a hyphen falls in the alphabet, so the test passed only while every other test happened to name its rule sets alike. A new test of M2.20 named one `dr-…` and the old test failed. Found by the full PostgreSQL run before commit | Fixed in M2.20: the order is checked on rows named alike; the new test uses the usual name; the stray rows were removed from the test database |
+| BUG-033 | M2.20 | The same slip as BUG-029, a second time: a new test of M2.20 wrote a fact straight into the test database as approved, under a real kind of fact. The loaders' own tests count every fact of that kind in the whole table and found 7 "changed by no reviewer" (one per run of the new test). Found by the full PostgreSQL run before commit | Fixed in M2.20: the test's fact is approved through the review path, as a reviewer's decision; the stray rows were removed from the test database |
+| BUG-034 | M2.5c2 / M2.20 | The lists of published versions read the whole content of every version on every request, and the list of knowledge versions read, for each of them, the whole list of names it was published against. With one version this is nothing; in the test database, where test runs had left 480 lists of names and 287 knowledge versions, the two requests took 5 and 8 seconds, the page "Published versions" about 14, and the browser test of that page ran out of time. Found by `pnpm e2e:review` | Fixed in M2.20: a published version never changes, so it is counted once; the list reads no content after that. Measured on the test database: 0.02 s a request after the first (6.7 s and 3.2 s for the first after a start) |
 
 ## Entries
 
@@ -5985,3 +5988,125 @@ own re-layout.
 **Not done.** Thirteen other pull requests of the dependency robot are open (GitHub Actions,
 pydantic, numpy, sqlalchemy, ruff, boto3, react-router, lucide-react and others). They were not
 asked for and are untouched.
+
+### M2.20 — Merging the names of symptoms and other items
+
+**What it is for.** Found in M2.18: item names have the same kinds of duplicate as condition names
+("cross eyed", "cross-eyed"), and the service could merge conditions only. The owner on
+2026-11-26: "start it."
+
+**Impact analysis before editing.** Two results were HIGH and were reported to the owner in a
+message, with the plan for every caller, before any edit.
+
+| Changed | Risk | Callers, and what was done about each |
+|---|---|---|
+| `Feature` (model): one optional column added, `redirected_to` | HIGH, 19 direct users | The readers that select or list items, the seed and the loader's `INSERT` name their columns and need no change; the two publishing modules are changed on purpose; the serving bundle reads the published list |
+| `decisions.changed_by_no_reviewer` (loaders' check) | HIGH through `standing`, `completeness._reference`, `evidence.summarise` | For items, the exception that exists for conditions: a name merged with a recorded merge is reviewed, not "changed by nobody". The SQL for every other table is unchanged |
+| `published_mappings._content`, `published_knowledge._content` | LOW (`preview`, `publish` of each) | Both read a merged name through the kept item |
+| `list_features`, `duplicates.report`, `duplicates.main`, `create_app`, the web `MergePanel` | LOW | One field added; item groups printed; three routes added; the panel serves both kinds of name |
+| `list_published` of both publishing modules (for BUG-034) | LOW; no caller in the graph, by search one route each | The same answer, read without each version's content |
+
+**Implemented** (decision E105).
+
+- Migration 0020: `features.redirected_to` with a check and an index; `feature_history`, which
+  cannot be changed or deleted and takes a row only inside a reviewer's transaction; the
+  application role may set `redirected_to`.
+- `feeltriva_api/feature_merges.py`: `merge`, `split`, `state`, as for conditions, with two
+  refusals of its own: an item that a rule or question in use names is not merged away
+  (`item_named_by_a_rule`, with the rule's ID and what to do instead), and two items that do not
+  hold the same kind of value are not merged (`not_the_same_kind_of_value`).
+- Routes: `GET /internal/v1/review/features/{id}/history`, `POST …/feature-merges`,
+  `POST …/feature-splits`. A merged name takes no decision of its own (`feature_is_merged`); the
+  list of items gives `merged_into`.
+- Published lists: in a list of names a kept item carries the merged names as other names and
+  `merged_items`; a column given a merged name is listed under the kept item, with
+  `named_feature_id`; `feature_redirects` holds the whole table. In a knowledge version a fact
+  stored under a merged name is published under the kept item, likewise marked. Published
+  versions are not touched; the serving views need no change, because they read the kept item.
+- `feeltriva_api/item_duplicates.py` and `python -m feeltriva_api.duplicates --merge --items`:
+  the groups that are one item by rule, the name kept, and what is left for a person.
+- Web: the merge panel moved to `MergePanel.tsx` (its settings to `mergeKinds.ts`) and serves
+  conditions and items; the list "Symptoms and other items" shows the name in the system and
+  whether a name stands on its own or is merged. `moreScreens.tsx` went from 25.5 KB to 20.2 KB.
+
+**Done on the real data.** Migration 0020 applied. Restore point first:
+`data/derived/backups/2026-11-26_before_item_merges/` (outside Git).
+
+| | Before | After |
+|---|---:|---:|
+| Items in use | 968 | 940 |
+| Names kept as another name of an item | 0 | 28 |
+| Groups merged / merges refused | | 26 / 0 |
+| Recorded under the doctor's name (pairs the list approval of M2.19 covered) | | 26 names in 25 groups |
+| Recorded under the assistant's name (a repeated column heading; not a medical decision) | | 2 names in 1 group |
+| Groups left for a person | | 2 |
+
+Examples: "diarrhea" keeps "diarrhoea"; "joint swelling" keeps "swelling joints" and "swelling of
+the joints"; "tremors" keeps "tremor symptom"; "regurgitation" keeps "regurgitation.1" and
+"regurgitation 1". Left for a person: "difficulty in swallowing" / "difficulty swallowing" and
+"seizures" / "seizures symptom", because an urgency rule names both spellings of each. Checked
+afterwards: the loaders' check finds 0 items changed without a reviewer; a preview of the list of
+names (reading only) gives 940 items, all 1,962 column names resolving, publishable as version 2.
+Nothing was published.
+
+**Bugs.**
+
+- **BUG-032 — a test compared the database's alphabet with Python's** (index above). *Found* by
+  the full PostgreSQL run. *Cause:* the list is ordered by the database, the test sorted it again
+  in Python; they disagree on a hyphen. My new test's `dr-…` made the difference visible.
+  *Resolution:* the check is made on rows named alike.
+- **BUG-033 — a new test wrote an approved fact of a real kind into the test database** (index
+  above). The same slip as BUG-029. My first correction, an invented kind of fact, was not enough:
+  the check counts facts of every kind, and the next full run said so. *Resolution:* the test
+  approves its fact through the review path, so it carries a reviewer's decision; leftover rows
+  removed. What I take from the two: a test that needs a row in a state a reviewer gives must give
+  it through the review path.
+- **BUG-034 — the lists of published versions read every version's whole content on every
+  request** (index above). *Found* when `pnpm e2e:review` stopped on the page "Published versions":
+  the screenshot showed it still loading after 30 seconds. *Cause:* the list counted what each
+  version holds from its content each time, and for a knowledge version also loaded the list of
+  names it was published against; the test database had 767 versions by then. Not caused by this
+  sub-step, and nothing on the real data (one version) showed it. *Resolution:* `publishing.listed`
+  reads the versions without their content and counts each version once for the process (a
+  published version cannot change; the count is kept under its ID and content digest); which list
+  of names is in use is asked once. My first version of the fix fetched the content of each
+  uncounted version with its own query and made the first request slower (14 s and 25 s); it now
+  reads them in one query.
+- While measuring that, I named a shell variable `path`, which in zsh is the command search path;
+  the commands after it failed and a test service was left on port 8001 for a minute. Stopped; no
+  effect on data.
+- The first version of the grouping asked the database for every rule once per item name; its
+  test took two minutes on the test database. The rules are now read once. No effect on the
+  product had been released.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 79 files |
+| `uv run pytest` (SQLite, archives included) | 297 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | first run: 372 passed, 4 failed (BUG-032 once, BUG-033 three times), 1 skipped; second: 373 passed, 3 failed (BUG-033, my first correction not being enough); final: 376 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format:check` / `pnpm build` | clean; all files formatted; built |
+| `pnpm test` | 144 passed (10 files) |
+| `pnpm e2e:review` (test database) / `pnpm e2e:lists` (real data, reading only) | first run: 21 passed, 1 failed (BUG-034); after the fix: 26 passed, 0 failed / 13 passed, 0 failed, no request that changes data |
+| `python -m feeltriva_api.duplicates` after the merges | 0 item groups left to merge; the 2 groups listed for a person |
+| `detect_changes` before commit | critical by its own count (64 symbols, 25 flows, the publishing flows among them). Compared with the last commit function by function, nested functions apart: changed are `_content`, `list_features`, `list_published` (names), `_content`, `list_published` (knowledge), `report`, `main` (duplicates), `Feature`, `changed_by_no_reviewer` and three tests; added are the routes, the guard, `listed` and the history model. Every other listed symbol only moved lines |
+
+New tests: `tests/api/test_feature_merges.py` (5: a merge keeps one item and records who and why,
+with every refusal; a split gives the name back its status; a published list and a knowledge
+version read a merged name through the kept item; the database keeps the history unchanged, lets
+only a reviewer merge, and the loaders' check reads a merged name as reviewed; the groups by rule,
+the name kept, and that a pair sharing only a code is never merged). Web: one component test of
+the panel on the item list. One existing test was changed on purpose: the keys of a published
+list of names now include `feature_redirects`.
+
+**Limits, stated plainly.**
+
+- Whether two names are one item is a judgement. The rule merges only names that are the same
+  words; 37 pairs that share only a code stay pairs for a person.
+- Two groups cannot be merged until the urgency rule file names one spelling of each.
+- A rule drafted later could name a merged name; the check of a rule draft against the list of
+  items does not yet refuse that.
+- The published list of names in use (version 1) still has the 28 names as items of their own. A
+  new version would carry them as other names; making it is the owner's step.
+- There is no "is a kind of" between items, as there is none between conditions.

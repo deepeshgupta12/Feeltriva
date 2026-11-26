@@ -32,6 +32,7 @@ from . import publishing
 from .auth import Principal
 from .db import Database
 from .errors import ApiError
+from .feature_merges import other_names
 from .models import (
     Disease,
     DiseaseHistory,
@@ -65,6 +66,18 @@ def _disease_guard(tx: Any, disease: Disease, status: str, principal: Principal)
 
 
 _GUARDS["disease"] = _disease_guard
+
+
+def _feature_guard(tx: Any, feature: Feature, status: str, principal: Principal) -> None:
+    if feature.redirected_to:
+        raise ApiError(
+            409,
+            "feature_is_merged",
+            f"This name is merged into {feature.redirected_to}. Decide that item, or take this name out first.",
+        )
+
+
+_GUARDS["feature"] = _feature_guard
 
 
 def _decisions(tx: Any, target_type: str, ids: list[str]) -> dict[str, ReviewNote]:
@@ -164,6 +177,7 @@ def list_features(
             "value_type": feature.value_type,
             "unit": feature.unit,
             "other_names": feature.aliases or [],
+            "merged_into": feature.redirected_to,
         },
     )
 
@@ -207,7 +221,15 @@ def _obstacles(content: dict[str, Any]) -> list[str]:
 
 def _content(tx: Any, working: MappingRelease) -> tuple[dict[str, Any], list[str]]:
     """What a release of this working set would hold now, and everything that keeps it from being published."""
-    features = tx.scalars(select(Feature).where(Feature.status == "approved").order_by(Feature.feature_id)).all()
+    items = tx.scalars(select(Feature).order_by(Feature.feature_id)).all()
+    features = [item for item in items if item.status == "approved" and not item.redirected_to]
+    # A name merged into a kept item (M2.20) is not listed by itself: the kept item carries it as another name,
+    # and a column or a fact that was given the merged name is read through the kept item.
+    merged_items: dict[str, list[Feature]] = {}
+    for item in items:
+        if item.redirected_to:
+            merged_items.setdefault(item.redirected_to, []).append(item)
+    item_resolves = {item.feature_id: item.redirected_to or item.feature_id for item in items}
     labels = tx.scalars(select(Disease).order_by(Disease.disease_id)).all()
     kept = {label.disease_id: label for label in labels if label.status == "approved" and not label.redirected_to}
     merged: dict[str, list[Disease]] = {}
@@ -258,7 +280,8 @@ def _content(tx: Any, working: MappingRelease) -> tuple[dict[str, Any], list[str
         .where(FeatureMapping.release_id == working.release_id, FeatureMapping.status == "approved")
         .order_by(FeatureMapping.mapping_id)
     ).all():
-        if column.feature_id not in approved_features:
+        item_id = item_resolves.get(column.feature_id or "")
+        if item_id not in approved_features:
             held["feature_mappings"] += 1
             continue
         details = {k: v for k, v in (column.transformation or {}).items() if k not in _REVIEW_NOTES}
@@ -271,7 +294,9 @@ def _content(tx: Any, working: MappingRelease) -> tuple[dict[str, Any], list[str
                 "file_path": column.file_path,
                 "column_index": column.column_index,
                 "original_term": column.original_term,
-                "feature_id": column.feature_id,
+                "feature_id": item_id,
+                # Only when the column was given a name that is now merged into the item above.
+                **({"named_feature_id": column.feature_id} if item_id != column.feature_id else {}),
                 "zero_semantics": column.zero_semantics,
                 "details": details,
             }
@@ -294,7 +319,12 @@ def _content(tx: Any, working: MappingRelease) -> tuple[dict[str, Any], list[str
                 "kind": feature.kind,
                 "value_type": feature.value_type,
                 "unit": feature.unit,
-                "aliases": list(feature.aliases or []),
+                "aliases": other_names(feature, merged_items.get(feature.feature_id, [])),
+                **(
+                    {"merged_items": [other.feature_id for other in merged_items[feature.feature_id]]}
+                    if feature.feature_id in merged_items
+                    else {}
+                ),
             }
             for feature in features
         ],
@@ -309,6 +339,11 @@ def _content(tx: Any, working: MappingRelease) -> tuple[dict[str, Any], list[str
             for disease_id, label in kept.items()
         ],
         "redirects": {other.disease_id: disease_id for disease_id in kept for other in merged.get(disease_id, [])},
+        "feature_redirects": {
+            other.feature_id: feature.feature_id
+            for feature in features
+            for other in merged_items.get(feature.feature_id, [])
+        },
         "disease_mappings": disease_mappings,
         "feature_mappings": feature_mappings,
         "sources": [
@@ -353,10 +388,12 @@ def _working(tx: Any, mapping_release_id: str) -> MappingRelease:
 def list_published(db: Database, principal: Principal) -> dict[str, Any]:
     principal.require_role("reviewer")
     with db.transaction(principal.subject, role="reviewer") as tx:
-        releases = tx.scalars(
-            select(PublishedMapping).order_by(PublishedMapping.working_id, PublishedMapping.number)
-        ).all()
-        return {"items": [_summary(release) for release in releases]}
+        return {
+            "items": [
+                {**publishing.summary(release), "mapping_release_id": release.working_id, **counts}
+                for release, counts in publishing.listed(tx, PublishedMapping, _counts)
+            ]
+        }
 
 
 def preview(db: Database, principal: Principal, mapping_release_id: str) -> dict[str, Any]:

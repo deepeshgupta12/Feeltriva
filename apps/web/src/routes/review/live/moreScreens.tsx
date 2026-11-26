@@ -1,14 +1,14 @@
-import { useId, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Link } from 'react-router';
 
-import { field, part, ReviewApiError, texts, type LiveReviewApi, type ReviewItem } from '@/api/liveReview';
-import { Button } from '@/components/ui/Button';
+import { field, part, texts, type ReviewItem } from '@/api/liveReview';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { useAsync } from '@/lib/useAsync';
 
 import { ReviewPageHeader } from '../ReviewPageHeader';
 
 import { LiveListPage, type ListScreen } from './LiveListPage';
+import { CONDITION_MERGE, ITEM_MERGE } from './mergeKinds';
+import { MergePanel } from './MergePanel';
 import { answerKind, factKind, itemKind, kindOfText, pairReason, pairSuggestion } from './words';
 
 /**
@@ -30,7 +30,8 @@ const ITEMS: ListScreen = {
     <p>
       Every symptom, question and other thing the service can know about a person, under the name used for it. Approving
       one says that it is a real item and is named correctly. Only approved items can be part of a published list of
-      names.
+      names. Where two names mean the same item, open one of them and merge it into the other; its name in the system is
+      shown in the list so that it can be copied.
     </p>
   ),
   path: '/features',
@@ -56,6 +57,11 @@ const ITEMS: ListScreen = {
       heading: 'Other names in the data files',
       cell: (item) => texts(item, 'other_names').slice(0, 4).join(' · ') || 'None',
     },
+    { heading: 'Its name in the system', cell: (item) => code(field(item, 'feature_id')) },
+    {
+      heading: 'On its own or merged',
+      cell: (item) => (field(item, 'merged_into') ? <>Merged into {code(field(item, 'merged_into'))}</> : 'On its own'),
+    },
     { heading: 'Decided by', cell: decidedBy },
   ],
   details: (item) => [
@@ -65,173 +71,22 @@ const ITEMS: ListScreen = {
     { label: 'Unit', value: field(item, 'unit') || 'None' },
     { label: 'Other names in the data files', value: texts(item, 'other_names').join(' · ') || 'None' },
     { label: 'Its name in the system', value: code(field(item, 'feature_id')) },
+    {
+      label: 'On its own or merged',
+      value: field(item, 'merged_into') ? <>Merged into {code(field(item, 'merged_into'))}</> : 'On its own',
+    },
     lastNote(item),
   ],
+  extra: (item, tools) => (
+    <MergePanel
+      key={field(item, 'feature_id')}
+      api={tools.api}
+      item={item}
+      kind={ITEM_MERGE}
+      onChanged={tools.reload}
+    />
+  ),
 };
-
-/** Merging one condition name into another, taking it out again, and what has been done so far. */
-function MergePanel({ api, item, onChanged }: { api: LiveReviewApi; item: ReviewItem; onChanged: () => void }) {
-  const id = useId();
-  const diseaseId = field(item, 'disease_id');
-  const [into, setInto] = useState('');
-  const [keep, setKeep] = useState('');
-  const [note, setNote] = useState('');
-  const [asking, setAsking] = useState<'merge' | 'split' | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
-  const { state } = useAsync(`review:live:history:${diseaseId}:${version}`, () =>
-    api.get(`/diseases/${encodeURIComponent(diseaseId)}/history`),
-  );
-  const merged = field(item, 'merged_into');
-  const past =
-    state.status === 'loaded' && Array.isArray(state.data.history) ? (state.data.history as ReviewItem[]) : [];
-  const others = state.status === 'loaded' ? texts(state.data, 'synonyms') : [];
-
-  const ask = (what: 'merge' | 'split') => {
-    setMessage(null);
-    if (note.trim().length === 0 || (what === 'merge' && into.trim().length === 0)) {
-      setError(
-        what === 'merge'
-          ? 'Give the name in the system of the condition to keep, and write a note.'
-          : 'Write a note first.',
-      );
-      return;
-    }
-    setError(null);
-    setAsking(what);
-  };
-
-  const send = async () => {
-    if (!asking) {
-      return;
-    }
-    setBusy(true);
-    try {
-      if (asking === 'merge') {
-        const body: Record<string, unknown> = {
-          source_disease_id: diseaseId,
-          target_disease_id: into.trim(),
-          note: note.trim(),
-        };
-        if (keep.trim()) {
-          body.kept_name = keep.trim();
-        }
-        await api.post('/disease-merges', body);
-        setMessage('Merged. This name is now kept as another name of that condition.');
-      } else {
-        await api.post('/disease-splits', { disease_id: diseaseId, note: note.trim() });
-        setMessage('Taken out again. This name stands on its own.');
-      }
-      setNote('');
-      setInto('');
-      setKeep('');
-      setVersion((value) => value + 1);
-      onChanged();
-    } catch (caught) {
-      setError(caught instanceof ReviewApiError ? caught.message : 'The service could not do this.');
-    } finally {
-      setBusy(false);
-      setAsking(null);
-    }
-  };
-
-  return (
-    <section aria-labelledby={`${id}-heading`}>
-      <h3 id={`${id}-heading`} className="font-display text-base font-bold text-ink">
-        Two names for one condition
-      </h3>
-      <p className="mt-1 text-ink-secondary">
-        If this name and another one mean the same condition, merge this one into the other. Nothing is deleted: this
-        name is kept as another name of that condition, and it can be taken out again.
-      </p>
-      {others.length > 0 ? (
-        <p className="mt-1 text-ink">Other names kept under this condition: {others.join(' · ')}</p>
-      ) : null}
-      {past.length > 0 ? (
-        <ul className="mt-2 space-y-1 text-sm text-ink-secondary">
-          {past.map((event, index) => (
-            <li key={`${field(event, 'at')}-${index}`}>
-              {field(event, 'action') === 'merge' ? 'Merged' : 'Taken out again'} · {field(event, 'reviewer')} ·{' '}
-              {field(event, 'note')}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {merged ? null : (
-        <>
-          <label htmlFor={`${id}-into`} className="mb-1 mt-2 block font-medium text-ink">
-            Name in the system of the condition to keep
-          </label>
-          <input
-            id={`${id}-into`}
-            type="text"
-            value={into}
-            placeholder="dis_…"
-            onChange={(event) => setInto(event.target.value)}
-            className="field-control"
-          />
-          <label htmlFor={`${id}-keep`} className="mb-1 mt-2 block font-medium text-ink">
-            Name to show for it (leave empty to keep its present name)
-          </label>
-          <input
-            id={`${id}-keep`}
-            type="text"
-            value={keep}
-            onChange={(event) => setKeep(event.target.value)}
-            className="field-control"
-          />
-        </>
-      )}
-      <label htmlFor={`${id}-note`} className="mb-1 mt-2 block font-medium text-ink">
-        Note for the merge (required)
-      </label>
-      <textarea
-        id={`${id}-note`}
-        rows={2}
-        value={note}
-        maxLength={2000}
-        onChange={(event) => {
-          setNote(event.target.value);
-          setError(null);
-          setAsking(null);
-        }}
-        className="field-control"
-      />
-      {error ? (
-        <p role="alert" className="mt-1 text-sm font-medium text-urgent">
-          {error}
-        </p>
-      ) : null}
-      {asking ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button size="sm" loading={busy} loadingLabel="Working…" onClick={() => void send()}>
-            {asking === 'merge' ? 'Yes, merge it' : 'Yes, take it out'}
-          </Button>
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => setAsking(null)}>
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-2">
-          {merged ? (
-            <Button size="sm" variant="secondary" onClick={() => ask('split')}>
-              Take this name out again
-            </Button>
-          ) : (
-            <Button size="sm" variant="secondary" onClick={() => ask('merge')}>
-              Merge this name into that condition
-            </Button>
-          )}
-        </div>
-      )}
-      <p role="status" className="mt-1 min-h-6 font-medium text-info">
-        {message}
-      </p>
-    </section>
-  );
-}
 
 const CONDITIONS: ListScreen = {
   title: 'Conditions',
@@ -268,7 +123,13 @@ const CONDITIONS: ListScreen = {
     lastNote(item),
   ],
   extra: (item, tools) => (
-    <MergePanel key={field(item, 'disease_id')} api={tools.api} item={item} onChanged={tools.reload} />
+    <MergePanel
+      key={field(item, 'disease_id')}
+      api={tools.api}
+      item={item}
+      kind={CONDITION_MERGE}
+      onChanged={tools.reload}
+    />
   ),
 };
 

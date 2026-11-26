@@ -169,6 +169,7 @@ def _content(tx: Any, working: KnowledgeRelease, now: datetime) -> tuple[dict[st
     diseases: set[str] = set()
     features: set[str] = set()
     redirects: dict[str, str] = {}
+    item_redirects: dict[str, str] = {}  # a name of an item merged into a kept one (M2.20); none in older lists
     if pinned is None:
         problems.append("no mapping release is current")
     else:
@@ -180,6 +181,7 @@ def _content(tx: Any, working: KnowledgeRelease, now: datetime) -> tuple[dict[st
         diseases = {entry["disease_id"] for entry in pinned.content["diseases"]}
         features = {entry["feature_id"] for entry in pinned.content["features"]}
         redirects = dict(pinned.content["redirects"])
+        item_redirects = dict(pinned.content.get("feature_redirects") or {})
     sources = {source.source_id: source for source in tx.scalars(select(Source)).all()}
     cleared = {source_id for source_id, source in sources.items() if source.provenance_status == "approved"}
     held = dict.fromkeys(HELD, 0)
@@ -252,7 +254,8 @@ def _content(tx: Any, working: KnowledgeRelease, now: datetime) -> tuple[dict[st
         approved += 1
         target = kept(row.disease_id)
         source_id = origin.get(row.evidence_id)
-        if target is None or row.feature_id not in features:
+        item_id = item_redirects.get(row.feature_id, row.feature_id)
+        if target is None or item_id not in features:
             held["evidence_disease_or_feature_not_in_mapping_release"] += 1
         elif row.statement_id is not None and row.statement_id not in in_release:
             held["evidence_statement_not_in_release"] += 1
@@ -264,7 +267,9 @@ def _content(tx: Any, working: KnowledgeRelease, now: datetime) -> tuple[dict[st
                     "evidence_id": row.evidence_id,
                     "disease_id": row.disease_id,
                     "resolves_to": target,
-                    "feature_id": row.feature_id,
+                    # The kept item. A fact stored under a name that is merged into it says so beside it.
+                    "feature_id": item_id,
+                    **({"named_feature_id": row.feature_id} if item_id != row.feature_id else {}),
                     "relationship": row.relationship,
                     "evidence_type": row.evidence_type,
                     "context": row.context or {},
@@ -348,10 +353,20 @@ def _working(tx: Any, knowledge_release_id: str) -> KnowledgeRelease:
 def list_published(db: Database, principal: Principal) -> dict[str, Any]:
     principal.require_role("reviewer")
     with db.transaction(principal.subject, role="reviewer") as tx:
-        releases = tx.scalars(
-            select(PublishedKnowledge).order_by(PublishedKnowledge.working_id, PublishedKnowledge.number)
-        ).all()
-        return {"items": [_summary(tx, release) for release in releases]}
+        # Which list of names is in use is asked once, not once for every version with that list's whole content.
+        in_use = set(tx.scalars(select(PublishedMapping.release_id).where(PublishedMapping.is_current)).all())
+        return {
+            "items": [
+                {
+                    **publishing.summary(release),
+                    "knowledge_release_id": release.working_id,
+                    "mapping_release": release.mapping_release,
+                    "mapping_release_is_current": release.mapping_release in in_use,
+                    **counts,
+                }
+                for release, counts in publishing.listed(tx, PublishedKnowledge, _counts)
+            ]
+        }
 
 
 def preview(db: Database, principal: Principal, knowledge_release_id: str) -> dict[str, Any]:

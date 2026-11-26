@@ -124,6 +124,7 @@ class Feature(Base):
     unit: Mapped[str | None] = mapped_column(Text)
     aliases: Mapped[Any] = mapped_column(Json, default=list)
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
+    redirected_to: Mapped[str | None] = mapped_column(ForeignKey("features.feature_id"))  # merged into (M2.20)
 
 
 class FeatureMapping(Base):
@@ -514,3 +515,18 @@ class LinkProposal(Base):
     detail: Mapped[Any] = mapped_column(Json, default=dict)
     status: Mapped[str] = mapped_column(ReviewState, default="pending")
     reviewer: Mapped[str | None] = mapped_column(Text)
+
+
+class FeatureHistory(Base):
+    """One merge or split of the names of symptoms and other items, with who did it and why (M2.20). Never
+    changed or deleted."""
+
+    __tablename__ = "feature_history"
+    event_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    action: Mapped[str] = mapped_column(Text)
+    feature_id: Mapped[str] = mapped_column(ForeignKey("features.feature_id"))
+    other_id: Mapped[str] = mapped_column(ForeignKey("features.feature_id"))
+    detail: Mapped[Any] = mapped_column(Json, default=dict)
+    reviewer: Mapped[str] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())

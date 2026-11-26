@@ -12,7 +12,8 @@ row's standing, not its bare status:
   the only one of the three a self-check reports.
 
 A disease label merged into another is `reviewed` too: the merge set it to `retired` and is
-recorded in `disease_history` with the reviewer's name.
+recorded in `disease_history` with the reviewer's name. The same holds for the name of a symptom or
+other item merged into another, recorded in `feature_history` (M2.20).
 
 This module only builds SQL text from names fixed here. It reads no database.
 """
@@ -47,6 +48,12 @@ def changed_by_no_reviewer(table: str, alias: str | None = None) -> str:
         merged = (
             f"({row}.status = 'retired' AND {row}.redirected_to IS NOT NULL AND EXISTS (SELECT 1 FROM "
             f"disease_history h WHERE h.action = 'merge' AND h.disease_id = {row}.disease_id))"
+        )
+        condition += f" AND NOT {merged}"
+    if table == "features":  # the same for a name of an item merged into another (M2.20)
+        merged = (
+            f"({row}.status = 'retired' AND {row}.redirected_to IS NOT NULL AND EXISTS (SELECT 1 FROM "
+            f"feature_history h WHERE h.action = 'merge' AND h.feature_id = {row}.feature_id))"
         )
         condition += f" AND NOT {merged}"
     return f"({condition})"
