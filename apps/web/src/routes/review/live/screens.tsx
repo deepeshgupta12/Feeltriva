@@ -20,9 +20,10 @@ const DISEASE_MAPPINGS: ListScreen = {
   title: 'Condition names',
   intro: (
     <p>
-      The names of conditions exactly as they appear in the data files, and the name each is grouped under. Names are
-      grouped only when they are spelled the same once capital letters and extra spaces are ignored. Being in one group
-      does not mean the names are the same condition. A decision you make here is saved under your name.
+      The names of conditions exactly as they appear in the data files, and the name each is grouped under. A name
+      stands here once for every data file that uses it, so the same name on several rows is not a mistake: each row is
+      that name in another file. Names are grouped only when they are spelled the same once capital letters and extra
+      spaces are ignored. Being in one group does not mean the names are the same condition.
     </p>
   ),
   path: '/disease-mappings',
@@ -30,9 +31,10 @@ const DISEASE_MAPPINGS: ListScreen = {
   idField: 'mapping_id',
   caption: 'Condition names from the data files and the name each is grouped under',
   searchLabel: 'Search names from the data files',
-  titleOf: (item) => field(item, 'original_term'),
+  titleOf: (item) => `${field(item, 'original_term')} (${field(item, 'source_name') || field(item, 'source_id')})`,
   columns: [
     { heading: 'Name in the data file', cell: (item) => field(item, 'original_term') },
+    { heading: 'Data file', cell: (item) => field(item, 'source_name') || field(item, 'source_id') },
     { heading: 'Name it is grouped under', cell: (item) => field(item, 'proposed_canonical_term') },
     { heading: 'How it was grouped', cell: (item) => howGrouped(field(item, 'mapping_method')) },
     { heading: 'Decided by', cell: (item) => field(item, 'reviewer') || 'Nobody yet' },
@@ -41,6 +43,7 @@ const DISEASE_MAPPINGS: ListScreen = {
     { label: 'Name exactly as in the data file', value: code(field(item, 'original_term')) },
     { label: 'Name it is grouped under', value: field(item, 'proposed_canonical_term') },
     { label: 'How it was grouped', value: howGrouped(field(item, 'mapping_method')) },
+    { label: 'Data file it came from', value: field(item, 'source_name') || 'Not recorded' },
     { label: 'Data file it came from (name in the system)', value: code(field(item, 'source_id')) },
     { label: 'Number the data file gives it', value: field(item, 'original_id') || 'None' },
   ],

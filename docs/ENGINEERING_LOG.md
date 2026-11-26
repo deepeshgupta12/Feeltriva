@@ -37,6 +37,9 @@ command output, not estimated.
 | BUG-026 | M1.10 / M2.5f | A test of the chunk loader searched the shared test database for words every run stores, with a limit of 50, and expected its own row among the results; once more than 50 runs had left their rows it failed depending on the order | Fixed in M2.5f: the test searches for its own run's word |
 | BUG-027 | M2.1 / M2.4a | Two notes recorded on one item within a second came back in either order on SQLite, and every note of one transaction carried the same time on PostgreSQL, because the database filled the time in | Fixed in M2.4a: a note's time is set by the code, to the microsecond |
 | BUG-028 | M2.16 / M2.4e | An answer "not found" from the WHO ICD API was neither saved nor counted. Every run of `import-identifiers` therefore asked WHO again for the same three ICD-11 entities (four requests, one entity being reached from two labels) and reported them as none; the request for an access token was not counted either. Found when the command was first run without permission to ask WHO and four entities had no saved answer | Fixed in M2.4e: "not found" is saved like any answer; every request sent is counted |
+| BUG-029 | M2.18 | A new test retired every word-for-word copy of a text in the test database, not only its own invented rows. One text of the real archives, loaded there by the archive tests, was retired with it, and the archive test that expects every loaded text to be pending then failed on the next full PostgreSQL run. Found by that run, before commit | Fixed in M2.18: the retiring step takes the conditions it may touch, the test gives its own; the one row of the test database was put back |
+| BUG-030 | M2.4j / M2.18 | In the panel that decides all rows shown at once, the line that says what was recorded stood in two places, one for a list with rows and one for a list without. The list has no row for a moment while it is read again after a decision, so the line was taken away and put back as a new element. A screen reader could announce it twice or not at all, and the component test failed about one run in three (it held the element that had just been taken away). Seen three times since M2.4j and put down to a busy machine until the failing output was saved | Fixed in M2.18: the line is one element outside both cases; 8 runs of 8 pass (before: 2 of 6 failed) |
+| BUG-031 | M2.19 | Started as a command, the new approval command stopped at its first row with "Unknown review target type": the review service learns most kinds of row from the modules that hold their rules, and the command had loaded none of them. The tests did not show it, because the test service loads them all. Found on the first run on the real data; nothing was changed by that run | Fixed in M2.19: the command names the modules it needs; a test starts it as a fresh process and checks that the service knows every list |
 
 ## Entries
 
@@ -5564,3 +5567,392 @@ special here, the merge and the split. The plan row says so.
 - The facts have no search by words; the service filters them by where they come from.
 - The four follow-up questions and one of the two sets of rules are the invented samples of the
   tests; the pages say so.
+
+### M2.9a — The condition page reads the service
+
+**What it is for.** The web page of a condition showed sample fixtures in every mode, although
+the service has answered from reviewed content since M2.2. Found without a sub-step on
+2026-11-25; the owner: "Implement the above now".
+
+**Impact analysis before editing** (LOW). `createAppServices`: 3 direct users (the app's providers
+and tests). `ConditionPage` is not changed: it already shows "No reviewed information is
+available" when it is given nothing.
+
+**Implemented.**
+
+- `conditionInfoService.ts`: `HttpConditionInfoService` asks `GET /v1/conditions/{disease_id}`
+  with the visit's bearer token and no cookies. `toConditionInfo` lays the answer out as the page
+  shows it: the definition and the descriptions as the overview, then symptoms, causes, and
+  treatment, management and prevention together; one source line per text and record. A section
+  without a published text is left out; a kind of text the page has no section for is not shown
+  under another heading. "Not available" (404) gives nothing; any other failure is an error the
+  page reports with a retry.
+- `services.ts`: live mode uses it; the design demo keeps the labelled placeholders. One token
+  provider now serves the assessment and the condition page of a visit.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 75 files |
+| `uv run pytest` (SQLite, archives included) | 285 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 363 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 143 passed (10 files; before: 140, 9); built |
+| `pnpm e2e:lists`, read-only on the real data | 13 passed, 0 failed: the page of a real condition asks the service, gets "not available", and shows that nothing reviewed is available, not the sample content |
+| `pnpm e2e:live` (the patient flow through the service) | 43 passed, 0 failed on the second run; see below |
+| `detect_changes` before commit | 6 files and one new; risk medium; `createAppServices` with the five flows of the app's start, as intended. `ConditionInfo` is listed because it stands below the changed comment |
+
+New tests: `conditionInfoService.test.ts` (3: the layout by section with nothing added and no
+code of an outside vocabulary; the request with the token and without cookies; nothing on "not
+available" and an error on any other failure).
+
+**A timing weakness in an older test, not caused by this change.** `pnpm e2e:live` failed once in
+"after a reload the API refuses the session to the new identity": the test waits a fixed 2.5
+seconds after the reload and then looks at the requests seen so far; the machine was busy. The
+next run passed all 43. The test should wait for the answer and not for a time; not changed here.
+
+**Limits, stated plainly.**
+
+- Nothing is published, so on the real data the page can only say that nothing is available.
+  What a published condition looks like is covered by the unit test, not seen on real data.
+- The answer of the service does not name the published version it came from; the page does not
+  show one.
+- The route is not in `specs/openapi.json`; its answer is typed by hand in the web app (M3.12).
+
+### Cross-check — the design demo's review screens against section 12 of the handoff
+
+**What it is for.** After M2.4g I found that section 12 of `docs/06_LOVABLE_FRONTEND_PROMPT.md`
+prescribes words for the design demo's reviewer console, and that I had reworded them without
+checking. The owner on 2026-11-25: "cross check this as well".
+
+**Checked, requirement by requirement.**
+
+| Section 12 asks for | In the design demo now | Verdict |
+|---|---|---|
+| A denser layout with its own navigation: Overview, Disease mappings, Feature mappings, Evidence, Questions/rules, Releases, Data quality | The same seven sections and a model tab: Overview, Condition names, Symptom and question names, Texts and facts, Questions and rules, Published versions, Repeated columns, Model test results | Met; the names are the plain ones of E97 |
+| Clearly labelled "Internal review" | "Internal review" in the header | Met, word for word |
+| Overview cards with "Imported dataset audit" labels: 6 archives, 960 candidates, 37 repeated header names, 27,622 shared signatures | The four figures 6, 960, 37 and 27,622, each labelled "Imported dataset audit · counted from the data files" | Met; the label was missing after M2.4g and is put back |
+| Not described as clinically approved conditions or unique patients | "Not clinically approved conditions"; "Not a count of unique patients" | Met |
+| Mapping table: source, original term, proposed canonical term, mapping method, review status, conflicts, last reviewed | Seven columns in that order: Data file, Name in the data file, Name it is grouped under, How it was grouped, Decision so far, Disagreements, Last looked at | Met; plain names |
+| Search, status filter, detail drawer, reviewer notes; source term and column position preserved | All four; the name is shown as in the file with each column number | Met |
+| Review actions on mock state only, showing "Demo change"; nothing approved for live serving | "Demo change" on every changed row; "They approve no medical content for real use" | Met |
+| Evidence detail: original statement, source URL/locator, proposed atomic claim, applicability, status, reviewer notes | Six fields: Original wording, Where it comes from (with the address), The single point taken from it, For whom or when it holds, Decision so far, Notes | Met; plain names |
+| Release view: version, included sources/mappings/rules, pending items, a disabled publication control with a reason | Version, "What it holds" (data sources, names, rules and questions), "Still to do before it can be published", a disabled "Publish this version" with the reason | Met |
+| No invented clinical metrics; only the measured archive-11 values, labelled research-only | 15.71%, 20.56%, 39.67%, 39 / 46, under "Research only" | Met |
+| State "Baseline rejected for clinical serving." | "Baseline rejected for clinical serving. In plain words: the trial model must not be used for patients." | Met; the sentence was missing after M2.4g and is put back |
+| Empty clinical-validation fields say "Not evaluated", not 0% | "Not evaluated" three times; no "0%" | Met, word for word |
+
+**Changed.** The badge of the overview cards and of the three mapping pages, the description of
+the mapping panel, and the verdict sentence of the sample evaluation; the test and the smoke
+check that name them.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` | clean; 143 passed (10 files); built |
+| `pnpm smoke` (design demo on port 5173) | 375 passed, 0 failed |
+| `uv run pytest` (SQLite) / on PostgreSQL with archives, full output saved | 285 passed, 79 skipped / 363 passed, 1 skipped |
+| `detect_changes` before commit | text of the demo's pages and of two tests only; no flow of the service |
+
+**What remains different from the handoff, deliberately.** The names of the navigation, of the
+table's columns and of the detail's fields are the plain ones of E97, by the owner's later
+instruction. If the owner wants the handoff's own names back on the design demo, that is one
+list of words to turn round.
+
+### M2.18 — Duplicates in the data: counted, shown for what they are, merged where a rule can settle it
+
+**What it is for.** The owner on 2026-11-25: "I am finding duplicacy in many parts, do the sanity
+of the data and fix the same as well."
+
+**Measured first, on the real data, reading only.**
+
+| What looks like a duplicate | Found | What it is |
+|---|---|---|
+| The same condition name on several rows of "Condition names" | 3,117 rows for 960 conditions; a name stands in 1 to 12 files | One row per data file. Not a duplicate; the list did not show the file |
+| The same condition and item in several facts | 5,630 pairs in 14,177 rows | One counted fact per data file, or one mention per text. Not a duplicate; the list did not show the file |
+| Condition names equal but for an underscore or punctuation | 17 pairs | Real duplicates |
+| Two condition names matched to one entry of a reference list | 44 suggestions of 61 for conditions | Two names for one condition, with two doubtful pairs |
+| The same text stored twice for one condition | 1 set before the merges, 3 after | Real duplicates |
+| Item names equal but for punctuation; pairs of item names suggested as the same | 8 pairs; 67 suggestions | Real duplicates the service cannot merge yet |
+| The same match, the same part of a text file, or the same sentence stored twice | 0, 0, 0 | None |
+
+**Impact analysis before editing** (LOW). `list_disease_mappings`: one caller, its route. The
+merge, the split and the decision path of the service are used and not changed. `BulkDecision`
+(for BUG-030): LOW; the graph traces no user of a screen component, by search it is used in one
+place, the list page.
+
+**Implemented** (decision E101).
+
+- `feeltriva_api/duplicates.py`: `report` (the counts above), `condition_groups` (which names are
+  one condition by rule, the name to keep, and what is left for a person with the reason),
+  `merge_groups` (the service's own merge for every member, and the suggestions recorded as
+  approved), `duplicate_texts` and `retire_duplicate_texts`. A command:
+  `python -m feeltriva_api.duplicates` counts and changes nothing; `--merge --reviewer --note`
+  merges.
+- `specs/merge_exceptions.json`: the pairs not merged by rule, each with the reason.
+- `GET /internal/v1/review/disease-mappings` gives `source_name`. The lists "Condition names" and
+  "Facts from the data files" show the data file, name it in what a row is called, and say on the
+  page that one name on several rows is that name in several files.
+
+**Done on the real data.** A restore point of every review status was written first to
+`data/derived/backups/2026-11-25_before_duplicates_and_approval/` (outside Git).
+
+| | Before | After |
+|---|---:|---:|
+| Conditions in use | 960 | 917 |
+| Names kept as another name of a condition | 0 | 43 |
+| Groups merged / merges refused | | 37 / 0 |
+| Suggestions for conditions recorded as approved | 0 | 49 |
+| Pairs left for the doctor's explicit decision | | 2 |
+| Texts retired as word-for-word copies | 0 | 3 |
+
+Examples: "influenza" keeps "flu"; "myocardial infarction" keeps "heart attack"; "crohn disease"
+keeps "crohn_disease" and "crohn's disease"; "polycystic ovary syndrome" (so spelled now) keeps
+"pcos"; "common cold" keeps "common_cold". The merges are recorded under the reviewer name of the
+doctor the owner named, with a note that says the approval was given for the whole list of pairs
+and was entered by the assistant. The doctor's name is in the private database only: this
+repository is public.
+
+**Two flaws of my first rule, seen in the dry run before anything was changed.** (1) It gave a
+merged condition the title of the reference entry even when none of our names carries it: "common
+cold" would have become "Acute nasopharyngitis". It now keeps one of our own names. (2) It set
+aside every group whose pairs share an entry in two different lists (MONDO and ICD-11), among them
+"heart attack / myocardial infarction", as if the lists disagreed. They agree; only one list
+matching the names to two of its own entries is a doubt.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 76 files |
+| `uv run pytest` (SQLite, archives included) | 289 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | first run: 366 passed, 1 failed (BUG-029), 1 skipped; after the fix: 367 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm build` | clean; built |
+| `pnpm test` | 143 passed (10 files); before the fix of BUG-030 it failed in 2 runs of 6, after it 8 runs of 8 pass |
+| `pnpm e2e:review` (test database, invented rows) / `pnpm e2e:lists` (real data, reading only) | 26 passed, 0 failed / 13 passed, 0 failed, no request that changes data |
+| `python -m feeltriva_api.duplicates` after the merge | 0 groups left to merge; the 2 pairs listed for a person |
+| `detect_changes` before commit | medium; flows of the two lists of names. `list_feature_mappings` is listed and is not changed: compared with the last commit function by function, only `list_disease_mappings` differs (lines moved) |
+
+New tests: `tests/api/test_duplicates.py` (4: names compared as plain words, an unclear exception
+refused, the repository's file well formed; the groups, the name kept, and what is left for a
+person; merging deletes nothing, records who and why, makes a second run find nothing, and the
+copied text is retired with a note naming the copy kept; the list gives the data file).
+
+**Bugs.**
+
+- **BUG-029 — a new test changed a row of the real archives in the test database.** *Found* by the
+  first full PostgreSQL run of this sub-step: `test_reference_load_is_idempotent_and_everything_is_pending`
+  failed with one text not pending. *Cause:* my test called the retiring step for the whole
+  database. The test database is kept between runs and holds the real archives; one condition there
+  has the same text twice, and the test retired the copy. *Resolution:* `retire_duplicate_texts`
+  takes `conditions`, the test gives its own invented condition and now asserts exactly one set and
+  one copy; the row was put back to pending by hand and the test's note on it removed. The real
+  database was not affected: there the retiring was meant and is recorded.
+- **BUG-030 — what was recorded for a whole page stood in two places.** *Found* when `pnpm test`
+  failed once and passed on the next run; repeated four times with the output saved, it failed in
+  the first: the element was found and was gone from the page 76 ms into the test, so no time limit
+  was involved. *Cause:* the panel wrote the line once in the case "no row can take a decision" and
+  once in the other; after a decision the list is read again, is empty for a moment, and the line
+  was removed and written anew. I had seen the failure twice before and put it down to a busy
+  machine without the output to show it. *Resolution:* one line outside both cases. Component
+  tests: 8 runs of 8 pass.
+
+**Limits, stated plainly.**
+
+- Whether two names are one condition is a medical question. The rule merges on two narrow
+  grounds and I held back two pairs on my own doubt; a clinician may see more to merge or to split.
+- Symptom and item names are not merged (M2.20): "cross eyed" and "cross-eyed" are still two items.
+- The 349 suggestions that one name is a kind of another change nothing in the data whatever is
+  decided on them: the service has no way yet to store "is a kind of".
+- 74 repeated columns still disagree with each other in some rows. That is a fault of the source
+  file, shown on its own screen; it is not settled by any merge.
+
+### M2.19 — The doctor's approval of the pending lists, entered
+
+**What it is for.** The owner on 2026-11-25: the pending review decisions "are approved from my
+end and a doctor", then: "It is approved by the doctor only", with the doctor's name. About
+52,800 rows were pending. The doctor's name is in the private database only (this repository is
+public); here it is "the doctor named by the owner".
+
+**Looked at first, on the real data, reading only.** An approval for a whole list cannot settle a
+row that the data itself calls a guess, or two rows that cannot both be right. What I found:
+
+| List | What a look showed | So |
+|---|---|---|
+| Suggested matches (2,103 that name an entry) | Close search results, the best of them, include "retinal detachment" for "Serous retinal detachment", "sepsis" for "Sepsis without septic shock", "bipolar disorder" for "Bipolar type I disorder, unspecified" | None entered: each is to be looked at |
+| Pairs "a kind of" (348) | Made only because one name adds words to the other: "multiple sclerosis" a kind of "sclerosis", "problem during pregnancy" a kind of "pregnancy"; 14 pairs name two names that are one condition since M2.18 | None entered. An approval would change nothing in the data in any case |
+| Pairs of item names "the same" (67) | 37 share only a code: "bladder mass" and "kidney mass", "swollen tongue" and "lip swelling", "frequent nosebleeds" and "nosebleed"; 30 are the same words | The 30 entered (one of them names a repeated heading and is set aside: 29) |
+| Facts from a mention in a text (575) | Each row records "a mention is not an assertion"; among them "The absence of a paroxysmal cough" as a mention of cough | None entered |
+| Matches of an exact name (2,531) | 121 names have two ICD-11 entries, in every case one under the other | The general one entered, as the rule of the service has it; the narrower stays |
+| Item names (883) | 2 are a repeated column heading ("regurgitation.1") | Those 2 not entered |
+| Sentences (8,742) | 34 belong to the 3 texts retired as copies in M2.18 | Those 34 not entered |
+| A column given two items | The count of 2 was my query: those rows have no column number, they are values of one cell | Nothing to do |
+
+No user-facing code reads an approved row from these tables directly; it reads the published
+versions, which this sub-step does not touch (checked by search before entering anything).
+
+**Impact analysis before editing** (LOW). New code only. It calls `review_bulk.decide_each` (no
+caller in the graph, which does not trace calls through a module name; by search: the duplicates
+command) and `review._lies_under` (one caller, the rule for matches). Neither is changed.
+
+**Implemented** (decision E102).
+
+- `feeltriva_api/list_approval.py`: `plan` (for each list, the rows the approval is entered on and
+  the rows set aside with the reason; reads only), `enter` (each row through the review service's
+  own decision, 200 at a time, a refused row counted under the rule's code). A command:
+  `python -m feeltriva_api.list_approval` counts and changes nothing; `--approve --reviewer --note`
+  enters; `--only` takes one list.
+
+**Done on the real data.** A restore point of every review status was written first to
+`data/derived/backups/2026-11-26_before_list_approval/` (outside Git). Every row carries the
+doctor as reviewer and one note: approved for the whole list at once, as told to the assistant by
+the owner on 2026-11-25; entered by the assistant on 2026-11-26; the rows were not shown to the
+doctor one by one in this system.
+
+| List | Pending before | Approved | Refused by the service | Set aside, still pending |
+|---|---:|---:|---:|---|
+| Condition names | 917 | 917 | 0 | |
+| Symptom and item names | 883 | 881 | 0 | 2 repeated column headings |
+| Names as each data file writes them (conditions) | 3,117 | 3,117 | 0 | |
+| Names as each data file writes them (items) | 1,962 | 1,962 | 0 | |
+| Texts | 2,949 | 2,949 | 0 | |
+| Parts of text files | 3,651 | 3,528 | 123 reference lists | the 123 |
+| Sentences and list items | 8,742 | 8,708 | 0 | 34 of retired texts |
+| Facts | 22,947 | 22,372 | 0 | 575 from a mention in a text |
+| Matches of an exact name | 2,531 | 2,410 | 0 | 121 narrower entries |
+| Pairs of names | 417 | 29 | 0 | 348 "a kind of", 37 sharing only a code, 2 doubtful, 1 naming a repeated heading |
+| Suggested matches | 4,587 | 0 | | 2,103 that name an entry, 2,484 that record "no match" and take notes only |
+| Follow-up questions, rule sets | 4, 1 | 0 | | all: invented samples of the test rule set, and decided one at a time |
+| **Total** | **52,708** | **46,873** | **123** | **5,835** |
+
+Two kinds of row are made by an approval, as the service has done since M2.5e: 3,528 texts from
+the approved parts of text files (texts now: 6,477 approved, 3 retired) and 106 facts from the
+approved list items that name an item (facts now: 22,478 approved). Checked afterwards in the
+database: the states per table agree with the table above; 50,507 decisions were recorded, each
+with its note; no event other than a review decision was recorded in that hour; the published
+versions are as before (rule set `urgency-draft.r1`, list of names `mapping-lexical-0.r1`, no
+knowledge version); `readyz` reports clinical mode off. A second run of the command finds no row
+to enter.
+
+**Bugs.**
+
+- **BUG-031 — the command did not know the lists when started as a command.** *Found* on the first
+  run on the real data: it stopped at the first row with "Unknown review target type". Nothing was
+  changed: the run enters row by row and the first row was refused. *Cause:* the review service
+  holds condition names, item names, facts, sentences, parts of text, rules and suggested matches
+  in a table that each module fills when it is loaded; the command had loaded only the module of
+  the service itself. In the tests the whole service is loaded, so all three tests passed.
+  *Resolution:* the command names the modules whose rules it needs; a new test starts it as a
+  fresh process and checks that every list of the plan is known.
+- Three times my invented test rows passed on SQLite and broke a rule of the PostgreSQL schema (a
+  fact and a part of a text must rest on a text or a record; a list item must have a sentence).
+  Corrected in the test data. No bug of the product; noted because new tests are to be run on
+  PostgreSQL before anything else is built on them.
+- **The CI run of `ff99df0` (M2.4h) had failed**, on the component test of BUG-030 (run
+  45602572726, web job; backend job passed). I had not checked CI after that commit. The cause is
+  the one fixed in M2.18; the commits after it passed by chance of timing.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 77 files |
+| `uv run pytest` (SQLite, archives included) | 292 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 370 passed, 1 skipped |
+| `python -m feeltriva_api.list_approval` before / after the entry (real data) | 46,996 rows to enter / 0, with the rows set aside listed by reason |
+| `detect_changes` before commit | low; no existing symbol changed and no flow affected: documents and two new files (`apps/web/README.md` is listed with `README.md` and is not changed) |
+
+New tests: `tests/api/test_list_approval.py` (3: the plan takes the rows that stand on their own
+and sets the others aside with the reason, one invented row for each case; entering records the
+reviewer and the note on each row, counts a refused row under the rule's code, leaves the rows set
+aside as they were, and a second plan has nothing left; started as a fresh process the service
+knows every list). The web app is not touched.
+
+**Limits, stated plainly.**
+
+- The approval is a list approval and is recorded as one. Nobody looked at the 46,873 rows one by
+  one in this system. The note on every row says so.
+- The reviewer's name was typed on the command line by the assistant. The doctor has no sign-in
+  yet (M6.4a); until then the record shows who the owner says approved, not who operated the system.
+- Which rows are "a guess" is a rule I set from what the data says about itself (E102). A row I
+  set aside may be perfectly right, and a row I entered may be wrong: for example a fact counted in
+  a data file is as good as the file.
+- 5,835 rows stay pending. Of these 2,484 can never take a decision (they record that a name has
+  no match) and should not be counted as work to do; the screen still shows them as pending.
+- Nothing is published. The approved rows are not used by the service until a version of a list
+  is made and put in use, which is the owner's step.
+
+**Committed and indexed (M2.4j, M2.4h, M2.4i, M2.9a, the cross-check, M2.18, M2.19).** `32913dc`
+(M2.4j; CI passed on both jobs, run 45597522563), `ff99df0` (M2.4h; **CI failed** in the web job,
+run 45602572726, on the component test of BUG-030; the backend job passed; fixed in `8e9b9a1`),
+`25e4ade` (M2.4i; passed, run 45604872678), `6218263` (M2.9a; passed, run 45606357612), `d712b31`
+(cross-check of the design demo with section 12 of the handoff; passed, run 45607265198),
+`8e9b9a1` (M2.18; passed, run 45752987605), `d58c587` (M2.19; passed, run 45760674639). All
+verified with `gh run view`. GitNexus index at `d58c587`, up to date. After the approvals,
+`pnpm e2e:lists` against the real data, reading only: 13 passed, 0 failed, no request that changes
+data. A pull request opened by the dependency robot (prettier 3.9.10 to 3.10.1) fails its own CI
+run 45605271889; it is not merged and not part of this work.
+
+### M2.19a — The doctor's approval entered on the suggested matches
+
+**What it is for.** The owner on 2026-11-26, after the report of M2.19: "Mark them approved by
+doctor", for the screen of suggested matches. The owner also confirmed that the doctor's name
+stays out of this public repository and decided that the doctor needs no separate sign-in
+(decision E104).
+
+**Looked at first, on the real data, reading only.** 2,103 pending suggested matches name an
+entry. For 1,201 names in a list there is one suggested entry; for 351 there are several (902
+rows). 47 of the single ones are for a name that already has a match in that list. A sample of the
+weaker kinds, read before entering: "fluid in ear" with "Cerebrospinal fluid otorrhoea" (search
+score below zero), "chest pain" with "intermediate coronary syndrome", "fungal infection" with
+"Fungal infection of joint", "polycythemia vera" with "Polycythemia". The owner had the first
+examples in the report of M2.19 and decided; these are recorded in E103 and reported again.
+
+**Impact analysis before editing** (LOW). `list_approval.plan`: one caller, the command's `main`.
+
+**Implemented** (decision E103). `plan(..., suggested_matches=True)` and the switch
+`--suggested-matches`: the approval is entered on a suggested match whose name has no other
+suggested entry in the same list and no match there yet. Several entries for one name, and an
+entry for a name that already has a match, are set aside with the reason. Without the switch
+nothing changes (E102).
+
+**Done on the real data.** Restore point first:
+`data/derived/backups/2026-11-26_before_suggested_matches/` (outside Git).
+
+| | Rows |
+|---|---:|
+| Suggested matches approved, each making its match through the service's own rule | 1,154 |
+| Refused by the service | 0 |
+| Left pending: several entries suggested for one name in one list | 898 |
+| Left pending: the name already has a match in that list | 51 |
+| No decision needed: the row records that a name has no match | 2,484 |
+
+Of the 1,154, read from the database after the entry: 470 entries found by shared words, 390
+close search results, 234 weak search results, 57 looser synonyms and 3 identifiers marked
+equivalent. Matches now: 3,569 approved (2,415 by exact name, 1,154 confirmed suggestions),
+121 pending, 6 rejected. The note on every row says the approval was given for the whole list, as
+told to the assistant by the owner, and that the assistant entered it without checking the rows
+one by one. Nothing was published.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 77 files |
+| `uv run pytest` (SQLite, archives included) | 293 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 371 passed, 1 skipped |
+| `python -m feeltriva_api.list_approval --suggested-matches --only link_proposal` after the entry | 0 rows to enter; 898, 51 and 2,484 set aside with the reasons |
+| `detect_changes` before commit | medium; `plan` and the three flows of the command through it. `enter` is listed and is not changed (compared with the last commit function by function: `plan` and `main` changed, `_suggested` added) |
+
+New test: suggested matches are entered only with the switch, only where a name has one and no
+match yet, and confirming makes the match (run on PostgreSQL first, then SQLite).
+
+**Limits, stated plainly.**
+
+- Weak and shared-word suggestions are now recorded as approved by a doctor. Some are plainly not
+  the same thing as the name. They are internal (never shown to a user, E63) and can be taken
+  back; E103 says they are to be looked at before they are used for anything more.
+- The first version of this entry gave the split by kind from the count made before the entry; it
+  was wrong (it did not allow for the names already matched) and is replaced by the count read
+  from the database afterwards.

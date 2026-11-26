@@ -236,7 +236,7 @@ export function ReviewTable({ caption, rows, onSaveNote, onSetStatus }: ReviewTa
           if (!next) setOpenId(null);
         }}
         title={open ? open.originalTerm : 'Details'}
-        description="Counted from the data files · grouped by spelling only, not clinically approved"
+        description="Imported dataset audit · grouped by spelling only, not clinically approved"
         side="right"
       >
         {open ? (

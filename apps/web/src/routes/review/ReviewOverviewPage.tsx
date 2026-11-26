@@ -60,7 +60,7 @@ export function ReviewOverviewPage() {
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {state.data.facts.map((fact) => (
               <li key={fact.id} className="rounded-control border border-line bg-surface p-4">
-                <StatusBadge tone="neutral">Counted from the data files</StatusBadge>
+                <StatusBadge tone="neutral">Imported dataset audit · counted from the data files</StatusBadge>
                 <p className="mt-3 font-display text-3xl font-bold text-ink">{formatCount(fact.value)}</p>
                 <p className="mt-0.5 font-semibold text-ink">{fact.label}</p>
                 <p className="mt-1 text-sm text-ink-secondary">{fact.detail}</p>

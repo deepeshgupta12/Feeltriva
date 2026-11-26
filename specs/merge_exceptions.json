@@ -1,0 +1,17 @@
+{
+  "about": "Pairs of condition names that are NOT merged by rule (feeltriva_api.duplicates), although a reference list matches both names to one entry. Each stays a pair for a clinician's explicit decision. Written by the engineering assistant, who is not a clinician: the reason says why the assistant hesitated, not what is medically true.",
+  "not_merged": [
+    {
+      "names": ["laryngitis", "croup"],
+      "reason": "one reference entry lists both names, but croup is commonly described as an illness of young children and laryngitis as an inflammation of the voice box at any age; the assistant is not sure they are one condition",
+      "noted_by": "assistant",
+      "noted_on": "2026-11-25"
+    },
+    {
+      "names": ["sickle cell disease", "sickle cell anemia"],
+      "reason": "sickle cell anemia is commonly described as one form of sickle cell disease, not as another name for all of it; the assistant is not sure they are one condition",
+      "noted_by": "assistant",
+      "noted_on": "2026-11-25"
+    }
+  ]
+}

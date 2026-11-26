@@ -84,8 +84,11 @@ class ReviewService:
     ) -> dict[str, Any]:
         principal.require_role("reviewer")
         limit, offset = _page(limit, offset)
-        stmt = select(DiseaseMapping, Disease.preferred_name).join(
-            Disease, Disease.disease_id == DiseaseMapping.disease_id, isouter=True
+        # One row per data file that names the condition: the file's name is given, so that the rows can be told apart.
+        stmt = (
+            select(DiseaseMapping, Disease.preferred_name, Source.source_name)
+            .join(Disease, Disease.disease_id == DiseaseMapping.disease_id, isouter=True)
+            .join(Source, Source.source_id == DiseaseMapping.source_id, isouter=True)
         )
         if status:
             stmt = stmt.where(DiseaseMapping.status == status)
@@ -102,6 +105,7 @@ class ReviewService:
                     {
                         "mapping_id": m.mapping_id,
                         "source_id": m.source_id,
+                        "source_name": source_name,
                         "original_term": m.original_label,
                         "original_id": m.original_id,
                         "proposed_canonical_id": m.disease_id,
@@ -110,7 +114,7 @@ class ReviewService:
                         "review_status": m.status,
                         "reviewer": m.reviewer,
                     }
-                    for m, name in rows
+                    for m, name, source_name in rows
                 ],
             }
 

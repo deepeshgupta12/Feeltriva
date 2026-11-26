@@ -75,12 +75,9 @@ export function BulkDecision({ api, targetType, ids, labels, onDone }: BulkDecis
         changes nothing and tells you which row and why.
       </p>
       {count === 0 ? (
-        <>
-          {message ? null : <p className="mt-2 text-ink-secondary">No row shown here can take a decision.</p>}
-          <p role="status" className="mt-2 min-h-6 font-medium text-info">
-            {message}
-          </p>
-        </>
+        message ? null : (
+          <p className="mt-2 text-ink-secondary">No row shown here can take a decision.</p>
+        )
       ) : (
         <>
           <label htmlFor={`${id}-note`} className="mb-1 mt-3 block font-medium text-ink">
@@ -128,11 +125,13 @@ export function BulkDecision({ api, targetType, ids, labels, onDone }: BulkDecis
               ))}
             </div>
           )}
-          <p role="status" className="mt-2 min-h-6 font-medium text-info">
-            {message}
-          </p>
         </>
       )}
+      {/* One element whatever the list shows: the list is read again after a decision and has no row for a
+          moment, and what was recorded must stay where it is (and be announced once) through that. */}
+      <p role="status" className="mt-2 min-h-6 font-medium text-info">
+        {message}
+      </p>
     </section>
   );
 }

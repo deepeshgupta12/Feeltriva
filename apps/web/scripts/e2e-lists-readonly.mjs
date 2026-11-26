@@ -112,6 +112,25 @@ try {
       unclear.join(', '),
     );
   }
+  // M2.9a: the page of a condition reads the service. Nothing is published, so it shows that nothing is
+  // available, and not the sample content of the design demo.
+  await page.goto(`${BASE}/review/conditions`);
+  await page.getByText(/^Showing 1 to /).waitFor({ timeout: 60000 });
+  const condition = (await page.locator('tbody tr').first().locator('code').first().innerText()).trim();
+  const asked = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/v1/conditions/')) asked.push(response.status());
+  });
+  await page.goto(`${BASE}/conditions/${condition}`);
+  await page.getByRole('heading', { name: 'No reviewed information is available' }).waitFor({ timeout: 30000 });
+  check(
+    'the page of a condition asks the service and shows that nothing reviewed is available',
+    asked.length > 0 &&
+      asked.every((status) => status === 404) &&
+      !(await page.getByText('Placeholder content').count()),
+    JSON.stringify(asked),
+  );
+  // The refused look-up is a 404 the browser reports in its console; it is the expected answer.
   check('no error in the browser', problems.length === 0, problems.join(' || '));
   check(
     'the check recorded nothing: the browser sent no request that changes data',

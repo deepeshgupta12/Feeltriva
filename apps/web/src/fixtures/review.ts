@@ -200,7 +200,7 @@ const evaluation: EvaluationSummary = {
   title: 'Research test of a trial model · archive 11 only',
   scope:
     'A trial model was scored against the labels in the data set. That measures neither real diagnoses nor this product. For research only.',
-  verdict: 'The trial model was rejected: it must not be used for patients.',
+  verdict: 'Baseline rejected for clinical serving. In plain words: the trial model must not be used for patients.',
   researchMetrics: [
     { label: 'Right answers on the test rows', value: '15.71%' },
     {

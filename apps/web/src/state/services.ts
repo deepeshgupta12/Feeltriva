@@ -1,7 +1,11 @@
 import { createContext, useContext } from 'react';
 
 import type { AssessmentService } from '@/api/assessmentService';
-import { FixtureConditionInfoService, type ConditionInfoService } from '@/api/conditionInfoService';
+import {
+  FixtureConditionInfoService,
+  HttpConditionInfoService,
+  type ConditionInfoService,
+} from '@/api/conditionInfoService';
 import { createAuthTokenProvider } from '@/api/http/auth';
 import { HttpAssessmentService } from '@/api/http/HttpAssessmentService';
 import { HttpLiveReviewApi, type LiveReviewApi } from '@/api/liveReview';
@@ -36,19 +40,21 @@ export function createAppServices(config: AppConfig, overrides: Partial<AppServi
         ? new MockAssessmentService({ latencyMs: DEMO_LATENCY_MS })
         : null;
 
+  // One token for everything a person does in a visit: the assessment and the condition pages it links to.
+  const getAuthToken = createAuthTokenProvider({ devAuth: config.devAuth });
   const assessment =
-    overrides.assessment ??
-    mock ??
-    new HttpAssessmentService({
-      baseUrl: config.apiBaseUrl,
-      getAuthToken: createAuthTokenProvider({ devAuth: config.devAuth }),
-    });
+    overrides.assessment ?? mock ?? new HttpAssessmentService({ baseUrl: config.apiBaseUrl, getAuthToken });
 
   return {
     config,
     assessment,
     mock,
-    conditions: overrides.conditions ?? new FixtureConditionInfoService(),
+    // The design demo shows labelled placeholders; live mode reads only what the service has published.
+    conditions:
+      overrides.conditions ??
+      (config.serviceMode === 'http'
+        ? new HttpConditionInfoService({ baseUrl: config.apiBaseUrl, getAuthToken })
+        : new FixtureConditionInfoService()),
     review: overrides.review ?? new FixtureReviewService(),
     liveReview:
       overrides.liveReview ?? new HttpLiveReviewApi({ baseUrl: config.apiBaseUrl, devReviewer: config.devReviewer }),

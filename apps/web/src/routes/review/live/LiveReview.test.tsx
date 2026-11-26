@@ -630,9 +630,11 @@ describe('the review workspace against the review service', () => {
     const facts = await screen.findByRole('table');
     expect(within(facts).getByText('Counted in a data file')).toBeInTheDocument();
     expect(within(facts).getByText('52.8% of 657 rows with this condition')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Review flu and cough' }));
+    // The data file is part of what a row is called, so that the same pair from two files reads as two rows.
+    expect(within(facts).getByText('sample.zip/data.csv')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Review flu and cough (sample.zip/data.csv)' }));
     const drawer = await screen.findByRole('dialog');
-    expect(within(drawer).getByText('sample.zip/data.csv')).toBeInTheDocument();
+    expect(within(drawer).getAllByText(/sample\.zip\/data\.csv/).length).toBeGreaterThan(0);
     expect(within(drawer).getByText('12')).toBeInTheDocument();
   });
 
