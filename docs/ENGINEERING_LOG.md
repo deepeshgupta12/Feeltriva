@@ -6110,3 +6110,10 @@ list of names now include `feature_redirects`.
 - The published list of names in use (version 1) still has the 28 names as items of their own. A
   new version would carry them as other names; making it is the owner's step.
 - There is no "is a kind of" between items, as there is none between conditions.
+
+**Committed and indexed (M2.19a, the dependency update, M2.20).** `947552c` (M2.19a; CI passed on
+both jobs, run 45766935698), `42a8578` (pull request 7 merged: prettier 3.10.1; passed, run
+45769198164), `a698123` (one script formatted, log of the dependency update; passed, run
+45769476948), `10c3146` (M2.20; passed, run 45781312859). All verified with `gh run view`.
+GitNexus index at `10c3146`, up to date. Running for the owner: the API on port 8000 with the code
+of `10c3146` and migration 0020 applied, and the review workspace on port 5173.
