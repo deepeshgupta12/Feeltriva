@@ -225,3 +225,25 @@ def test_extractor_never_invents_absence_and_keeps_unmatched_text():
     only = result.observations[0]
     assert (only.feature_id, only.presence, only.text) == (None, "uncertain", "something unrelated")
     assert MockExtractor().extract("alphabet soup", VOCAB).observations[0].feature_id is None  # whole words only
+
+
+def test_a_stored_answer_is_said_in_words_and_never_as_an_internal_value():
+    from feeltriva_clinical import answer_in_words
+
+    assert answer_in_words(CHOICE, "none") == "None"
+    assert answer_in_words(CHOICE, "x") == "X"
+    assert answer_in_words({"type": "multiple_choice", "options": CHOICE["options"]}, ["x", "none"]) == "X, None"
+    # An internal value the question does not have (any more) is left out, not printed.
+    assert answer_in_words(CHOICE, "gone") is None
+    assert answer_in_words(None, "none") is None
+    assert answer_in_words({"type": "multiple_choice", "options": CHOICE["options"]}, ["gone"]) is None
+    assert answer_in_words({"type": "yes_no_unsure"}, "yes") == "Yes"
+    assert answer_in_words({"type": "yes_no_unsure"}, "not_sure") == "Not sure"
+    assert answer_in_words({"type": "number", "unit": "u"}, {"value": 5, "unit": "u"}) == "5 u"
+    assert answer_in_words({"type": "number"}, {"value": 5, "unit": None}) == "5"
+    assert answer_in_words({"type": "duration"}, {"value": 3, "unit": "days"}) == "3 days"
+    assert answer_in_words({"type": "duration"}, {"value": 1, "unit": "days"}) == "1 day"
+    assert answer_in_words({"type": "date"}, {"date": "2026-01-15"}) == "15 January 2026"
+    assert answer_in_words({"type": "date"}, {"date": "2026-02-30"}) is None
+    assert answer_in_words({"type": "free_text"}, "in my own words") == "in my own words"
+    assert answer_in_words({"type": "number"}, None) is None

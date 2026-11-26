@@ -43,6 +43,7 @@ command output, not estimated.
 | BUG-032 | M2.4j / M2.20 | An existing test of the list of sets compared the order the database gives with the order Python gives. The two differ on where a hyphen falls in the alphabet, so the test passed only while every other test happened to name its rule sets alike. A new test of M2.20 named one `dr-…` and the old test failed. Found by the full PostgreSQL run before commit | Fixed in M2.20: the order is checked on rows named alike; the new test uses the usual name; the stray rows were removed from the test database |
 | BUG-033 | M2.20 | The same slip as BUG-029, a second time: a new test of M2.20 wrote a fact straight into the test database as approved, under a real kind of fact. The loaders' own tests count every fact of that kind in the whole table and found 7 "changed by no reviewer" (one per run of the new test). Found by the full PostgreSQL run before commit | Fixed in M2.20: the test's fact is approved through the review path, as a reviewer's decision; the stray rows were removed from the test database |
 | BUG-034 | M2.5c2 / M2.20 | The lists of published versions read the whole content of every version on every request, and the list of knowledge versions read, for each of them, the whole list of names it was published against. With one version this is nothing; in the test database, where test runs had left 480 lists of names and 287 knowledge versions, the two requests took 5 and 8 seconds, the page "Published versions" about 14, and the browser test of that page ran out of time. Found by `pnpm e2e:review` | Fixed in M2.20: a published version never changes, so it is counted once; the list reads no content after that. Measured on the test database: 0.02 s a request after the first (6.7 s and 3.2 s for the first after a start) |
+| BUG-035 | M3.2 / M3.14a | Observations written in one request (two details confirmed together) had no order: they are read back by version and time, and the database gives every row of one transaction the same time. The same flow could return them in either order. Seen three times as the REST and MCP parity test failing in a full PostgreSQL run and passing on the next; each time the output had not been kept. Caught in M3.14a with the output saved | Fixed in M3.14a: each row of a request gets its own time, in the order given; a test checks the times themselves, because the wrong order is too rare to wait for |
 
 ## Entries
 
@@ -6198,3 +6199,49 @@ GitNexus index at `f1b6d6c`, up to date. Running for the owner: the API on port 
 of `f1b6d6c`, and the design demo (`pnpm dev`, sample data) on port 5173, because the date
 question of this sub-step is in the demo. The review workspace (`pnpm dev:review`) and the live
 mode (`pnpm dev:api`) use the same port and are not running.
+
+### M3.14a — The service's summary text says stored answers in words
+
+**What it is for.** Found in M3.14: the summary the service writes printed a stored value as it
+is stored (`value: "none"`; `duration: 3 days` followed by `value: {"value": 3, "unit": "days"}`;
+`Answer: {"value": 5, "unit": "sample units"}`). The same two defects as BUG-008 and BUG-009, on
+the service's side, for REST and MCP alike. First of four sub-steps the owner asked for in one
+go on 2026-11-26 ("consider multiple sub steps to be implemented in a single go").
+
+**Impact analysis before editing** (LOW). `_summary_text`: one caller, the summary creation that
+the REST route and the MCP tool share. `answer_in_words` is new, beside the functions that read
+an answer.
+
+**Implemented.**
+
+- `feeltriva_clinical.answer_in_words(schema, answer)`: a stored answer as a person reads it:
+  the option's own words, "Yes", "Not sure", "5 sample units", "1 day", "15 January 2026", the
+  person's free text. An internal value the question does not have is left out, never printed.
+- The summary: under a detail, `answer: …` in words, and not when the duration already says it;
+  under "Follow-up answers", `Answer: …` in words. An answer that cannot be put into words is
+  listed as recorded, without inventing words for it.
+
+**BUG-035, found by this sub-step's full run** (index above). The parity test of REST and MCP
+failed once: the two sessions returned the same two observations in a different order. *Cause:*
+`_current` orders by version and time; the rows of one request share the version, and the time
+was the database's, which is the same for every row of a transaction. *Resolution:* the service
+sets each row's time, a microsecond apart in the order given (as BUG-027 did for notes). A first
+test that repeated the flow twelve times passed without the fix as well, the wrong order being
+rare; the test now checks the times of the rows, which fails without the fix on PostgreSQL (three
+rows, one time) and passes with it. This is the intermittent failure noted since M2.4.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 79 files |
+| `uv run pytest` (SQLite, archives included) | 301 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, archives, object store and `tests/mcp` included; full output saved | first run: 378 passed, 1 failed (BUG-035), 1 skipped; after the fix: 380 passed, 1 skipped |
+| `detect_changes` before commit | medium; the two flows of `submit_observations`. Compared with the last commit function by function: `_summary_text` with its `describe`, and `submit_observations` changed; `answer_in_words` added; `section` and one test are listed and only moved |
+
+New tests: the words of every kind of stored answer; the summary of the flow test holds no
+internal value, no raw JSON and says the duration once; the rows of one request keep their order.
+The web app is not touched: it shows the service's summary text as it comes.
+
+**Limits.** A question removed from the rule set leaves its old answers without words; they are
+listed as recorded. The summary is in English only, like every text of the service.

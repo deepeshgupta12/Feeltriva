@@ -181,3 +181,48 @@ def interpret_answer(
         # Free text is not normalised into a finding: it stays uncertain until reviewed/confirmed.
         return AnswerOutcome("uncertain", raw_phrase=answer.strip())
     raise AnswerValidationError(f"unknown answer type {kind!r}")
+
+
+def answer_in_words(schema: dict[str, Any] | None, answer: Any) -> str | None:
+    """A stored answer as a person reads it, or None when there is nothing that can be said in words (M3.14a).
+
+    Written for the summary the service gives back. The internal value of an option is never returned: it is
+    said in the option's own words, and left out when the question does not have it. A number keeps its unit,
+    a length of time is "1 day" or "3 days", a date is written out. `schema` is the question's, or None when
+    the value belongs to no question.
+    """
+    if answer is None:
+        return None
+    if answer == NOT_SURE:
+        return "Not sure"
+    schema = schema or {}
+    kind = schema.get("type")
+    labels = {
+        option["value"]: option["label"]
+        for option in schema.get("options") or []
+        if isinstance(option, dict) and isinstance(option.get("value"), str) and isinstance(option.get("label"), str)
+    }
+    if isinstance(answer, str):
+        if kind == "yes_no_unsure":
+            return {"yes": "Yes", "no": "No"}.get(answer)
+        if kind == "free_text":
+            return answer
+        return labels.get(answer)
+    if isinstance(answer, list):
+        said = [labels[item] for item in answer if isinstance(item, str) and item in labels]
+        return ", ".join(said) or None
+    if isinstance(answer, dict):
+        if isinstance(answer.get("date"), str):
+            try:
+                day = _calendar_date(answer["date"], "the date")
+            except AnswerValidationError:
+                return None
+            return f"{day.day} {day:%B %Y}"
+        value, unit = answer.get("value"), answer.get("unit")
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            if isinstance(unit, str) and unit:
+                if unit in DURATION_UNITS and value == 1:
+                    unit = unit[:-1]
+                return f"{value} {unit}"
+            return str(value)
+    return None

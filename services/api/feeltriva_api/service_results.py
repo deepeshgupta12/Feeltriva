@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from typing import Any
 
 from feeltriva_clinical import (
+    answer_in_words,
     next_question,
     screen,
 )
@@ -236,8 +236,14 @@ class ResultOperations(ServiceCore):
                 parts.append(f'(in your words: "{phrase}")')
             mods = o.modifiers or {}
             parts += [f"{k}: {mods[k]}" for k in ("onset", "duration", "severity") if mods.get(k)]
-            if o.value is not None:
-                parts.append(f"value: {json.dumps(o.value)}")
+            # What was answered, in the words of the question it was answered to: never a stored internal value,
+            # and not a second time what the duration above already says (M3.14a).
+            asked: list[dict[str, Any] | None] = [
+                q.answer_schema for q in self._bundle.questions if q.feature_id == o.feature_id
+            ] or [None]
+            words = next((said for said in (answer_in_words(schema, o.value) for schema in asked) if said), None)
+            if words and words not in {str(mods.get(k)) for k in ("onset", "duration", "severity")}:
+                parts.append(f"answer: {words}")
             if not o.confirmed:
                 parts.append("[not yet confirmed by you]")
             return "- " + " ".join(parts)
@@ -264,7 +270,11 @@ class ResultOperations(ServiceCore):
         answer_rows = []
         for a in answers:
             q = self._bundle.question(a.question_id)
-            answer_rows.append(f"- {q.wording if q else a.question_id} Answer: {json.dumps(a.value)}")
+            said = answer_in_words(q.answer_schema, a.value) if q else None
+            # A question that is no longer in the rule set, or an answer its options no longer hold, is listed
+            # without inventing words for it.
+            wording = q.wording if q else "A question that is no longer asked."
+            answer_rows.append(f"- {wording} Answer: {said or 'recorded, and cannot be shown in words'}")
         lines += section("Follow-up answers", answer_rows)
         if latest is not None and latest.observation_version == session.observation_version:
             lines += section("Next step from the latest assessment", [f"- {latest.next_action.get('text', '')}"])

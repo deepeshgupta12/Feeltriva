@@ -174,6 +174,11 @@ class IntakeOperations(ServiceCore):
                 version = self._bump(tx, session, payload.observation_version)
                 for row in new_rows:
                     row.observation_version = version
+            # The rows of one request keep the order they were given in. Left to the database, every row of a
+            # transaction gets the same time, and then nothing orders them when the session is read (BUG-035).
+            stamp = self._now()
+            for position, row in enumerate(new_rows):
+                row.created_at = stamp + timedelta(microseconds=position)
             tx.add_all(new_rows)
             tx.flush()
             current = self._current(tx, session_id)

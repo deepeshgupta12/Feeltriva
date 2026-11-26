@@ -89,6 +89,14 @@ def test_normal_flow_intake_confirm_followup_result_summary(api: Api):
     assert "SAMPLE INFORMATION" in text and "not a diagnosis" in text
     reported, negatives = text.split("Explicitly not present")
     assert "Fixture signal alpha" in reported and "Fixture signal gamma" in negatives.split("Unclear")[0]
+    # M3.14a: what was answered is said in words. No stored internal value, no raw JSON, and nothing said twice.
+    assert "value:" not in text and '{"' not in text and '"none"' not in text
+    assert "Fixture signal gamma (sample) answer: None of these" in negatives.split("Unclear")[0]
+    lasting = [line for line in text.splitlines() if "duration: 3 days" in line]
+    assert len(lasting) == 1 and lasting[0].count("3 days") == 1 and "answer:" not in lasting[0]
+    answers_part = text.split("Follow-up answers")[1].split("Next step")[0]
+    assert "Answer: Yes" in answers_part and "Answer: None of these" in answers_part
+    assert "Answer: 5 sample units" in answers_part and "Answer: 3 days" in answers_part
 
 
 def test_correction_invalidates_result_and_recomputes(api: Api):
@@ -251,3 +259,47 @@ def test_extraction_outage_saves_nothing(settings, db, api: Api):
     assert r.status_code == 503 and r.json()["code"] == "extraction_unavailable" and r.json()["retryable"]
     session = api.get(sid).json()
     assert (session["observation_version"], session["observations"], session["state"]) == (0, [], "intake")
+
+
+def test_details_confirmed_in_one_request_come_back_in_the_order_they_were_given(api: Api, owner_db):
+    # BUG-035: two observations written in one request had the same time and no order, so the same flow gave
+    # them in either order (seen as REST and MCP disagreeing once in many runs). The wrong order is rare, so the
+    # cause is checked itself: every row of one request has its own time, later for each one given later.
+    import uuid
+
+    from feeltriva_api.models import SessionObservation
+    from sqlalchemy import select
+
+    for _attempt in range(3):
+        session = api.start({"age_years": 30}).json()
+        session = api.text(session["session_id"], 0, "I have alpha and beta but no gamma").json()
+        assert len(session["observations"]) == 3
+        wanted = list(reversed(session["observations"]))
+        confirmed = api.observe(
+            session["session_id"],
+            session["observation_version"],
+            [
+                {
+                    "feature_id": o["feature_id"],
+                    "presence": o["presence"],
+                    "confirmed": True,
+                    "supersedes": o["observation_id"],
+                }
+                for o in wanted
+            ],
+        ).json()
+        assert [o["feature_id"] for o in confirmed["observations"]] == [o["feature_id"] for o in wanted]
+        again = api.get(session["session_id"]).json()
+        assert [o["observation_id"] for o in again["observations"]] == [
+            o["observation_id"] for o in confirmed["observations"]
+        ]
+        with owner_db.transaction(None, role="migration") as tx:
+            rows = tx.execute(
+                select(SessionObservation.feature_id, SessionObservation.created_at, SessionObservation.confirmed)
+                .where(SessionObservation.session_id == uuid.UUID(session["session_id"]))
+                .order_by(SessionObservation.created_at)
+            ).all()
+        for confirmed_rows in (False, True):  # the three found in the text, then the three confirmed together
+            times = [at for _feature, at, flag in rows if flag is confirmed_rows]
+            assert len(times) == 3 and len(set(times)) == 3
+        assert [feature for feature, _at, flag in rows if flag] == [o["feature_id"] for o in wanted]
