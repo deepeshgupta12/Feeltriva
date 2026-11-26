@@ -6191,3 +6191,10 @@ flows through the demo.
   sub-step; added as M3.14a.
 - "Today" is the day of the person who answers. The service does not know their time zone, so a
   bound of "today" allows one day either way; a bound written as a date is exact.
+
+**Committed and indexed (M3.14).** `f1b6d6c` (CI passed on both jobs, run 45789545827, verified
+with `gh run view`); the documents commit before it, `104b3fe`, passed too (run 45781748482).
+GitNexus index at `f1b6d6c`, up to date. Running for the owner: the API on port 8000 with the code
+of `f1b6d6c`, and the design demo (`pnpm dev`, sample data) on port 5173, because the date
+question of this sub-step is in the demo. The review workspace (`pnpm dev:review`) and the live
+mode (`pnpm dev:api`) use the same port and are not running.
