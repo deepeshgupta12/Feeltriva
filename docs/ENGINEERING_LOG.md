@@ -5956,3 +5956,32 @@ match yet, and confirming makes the match (run on PostgreSQL first, then SQLite)
 - The first version of this entry gave the split by kind from the count made before the entry; it
   was wrong (it did not allow for the names already matched) and is replaced by the count read
   from the database afterwards.
+
+### Dependency update — prettier 3.10.1 (pull request 7)
+
+**What it is for.** The owner on 2026-11-26, about the pull request of the dependency robot that
+failed its CI run: "Fix it."
+
+**Cause.** Not prettier. The run (45605271889) failed in the web job on the component test of
+BUG-030, the intermittent one fixed on main in `8e9b9a1`; the branch had been cut before that fix.
+
+**Done.** The branch was brought up to date with main (`gh pr update-branch 7`); its CI then
+passed on both jobs (run 45768320867). The pull request was merged (`42a8578`) and pulled. Locally
+`pnpm install --frozen-lockfile` fetched prettier 3.10.1 from the npm registry: the one outside
+request of this step, asked for by the owner's instruction, carrying a package name and version
+and nothing of the project. `pnpm format:check` with the new version reported one file,
+`apps/web/scripts/e2e-live.mjs` (long lines wrapped; no other change); it was formatted with
+`prettier --write`.
+
+**Impact analysis** (LOW): the script file has no user in the graph. `detect_changes`: low; five
+symbols of that one file, formatting only.
+
+**Tests run.** `pnpm format:check`: all files pass. `node --check scripts/e2e-live.mjs`: parses.
+`pnpm typecheck`, `pnpm lint`, `pnpm build`: clean. `pnpm test`: 143 passed (10 files). The
+formatted script itself (`pnpm e2e:live`) was not run again: it needs the web app in another mode
+on port 5173, where the review workspace is running for the owner; the change is the formatter's
+own re-layout.
+
+**Not done.** Thirteen other pull requests of the dependency robot are open (GitHub Actions,
+pydantic, numpy, sqlalchemy, ruff, boto3, react-router, lucide-react and others). They were not
+asked for and are untouched.

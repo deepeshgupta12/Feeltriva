@@ -81,7 +81,10 @@ async function startCheck(page, text, age = '34') {
 
 /** The conversation has rendered once the first interpreted detail can be confirmed. */
 async function waitForInterpretation(page) {
-  await page.getByRole('button', { name: /^That’s right: / }).first().waitFor({ timeout: 15000 });
+  await page
+    .getByRole('button', { name: /^That’s right: / })
+    .first()
+    .waitFor({ timeout: 15000 });
 }
 
 async function answerCurrent(page, wording, act) {
@@ -103,11 +106,16 @@ async function answerCurrent(page, wording, act) {
   check('intake: extracted detail is listed and awaits confirmation', /alpha Please confirm/.test(text));
   check('intake: nothing the user did not mention is listed as not present', !/Not present.*beta/i.test(text));
 
-  await page.getByRole('button', { name: /^That’s right: / }).first().click();
+  await page
+    .getByRole('button', { name: /^That’s right: / })
+    .first()
+    .click();
   await page.getByText('You confirmed this').first().waitFor({ timeout: 15000 });
   check('confirm: detail is marked as confirmed by the user', true);
 
-  await answerCurrent(page, /is fixture signal beta also present/, () => page.getByRole('radio', { name: 'Yes' }).check());
+  await answerCurrent(page, /is fixture signal beta also present/, () =>
+    page.getByRole('radio', { name: 'Yes' }).check(),
+  );
   await answerCurrent(page, /best describes fixture signal gamma/, () =>
     page.getByRole('radio', { name: 'None of these' }).check(),
   );
@@ -126,10 +134,27 @@ async function answerCurrent(page, wording, act) {
   await page.waitForURL(/\/results\//, { timeout: 15000 });
   await page.getByRole('heading', { name: 'Possible explanations' }).waitFor({ timeout: 15000 });
   text = await mainText(page);
-  const order = ['What to do next', 'What we understood', 'Possible explanations', 'What is still uncertain', 'Your consultation summary', 'Sources'].map((h) => text.indexOf(h));
-  check('result: sections are in the required order', order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), order.join(','));
-  check('result: backend candidate is shown as a labelled possibility', text.includes('Illustrative possibility A') && text.includes('POSSIBLE EXPLANATION'));
-  check('result: urgency "not assessed" is not presented as low urgency', text.includes('Urgency not assessed') && /does not mean your situation is low urgency/i.test(text));
+  const order = [
+    'What to do next',
+    'What we understood',
+    'Possible explanations',
+    'What is still uncertain',
+    'Your consultation summary',
+    'Sources',
+  ].map((h) => text.indexOf(h));
+  check(
+    'result: sections are in the required order',
+    order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])),
+    order.join(','),
+  );
+  check(
+    'result: backend candidate is shown as a labelled possibility',
+    text.includes('Illustrative possibility A') && text.includes('POSSIBLE EXPLANATION'),
+  );
+  check(
+    'result: urgency "not assessed" is not presented as low urgency',
+    text.includes('Urgency not assessed') && /does not mean your situation is low urgency/i.test(text),
+  );
   check('result: backend next-step text is rendered verbatim', text.includes('Sample next step (synthetic fixture)'));
   check('result: no percentage or probability is shown', !/\d\s?%/.test(text) && !/probabilit/i.test(text));
   check('result: sample marker is visible', text.includes('Design demo · Sample result'));
@@ -138,7 +163,10 @@ async function answerCurrent(page, wording, act) {
   await page.getByRole('button', { name: 'View supporting information' }).click();
   const drawer = page.getByRole('dialog');
   await drawer.waitFor({ timeout: 10000 });
-  check('evidence: the citation returned by the API opens', (await drawer.innerText()).includes('Synthetic fixture source (sample)'));
+  check(
+    'evidence: the citation returned by the API opens',
+    (await drawer.innerText()).includes('Synthetic fixture source (sample)'),
+  );
   await page.keyboard.press('Escape');
   await drawer.waitFor({ state: 'hidden', timeout: 10000 });
 
@@ -154,20 +182,43 @@ async function answerCurrent(page, wording, act) {
   await page.getByRole('button', { name: 'Update result' }).click();
   await page.getByText('This result needs updating').waitFor({ state: 'hidden', timeout: 15000 });
   text = await mainText(page);
-  check('correction: recomputed result no longer shows the possibility that depended on beta', !text.includes('Illustrative possibility A'));
-  check('correction: incomplete result is not reassurance', /not a sign that everything is fine/i.test(text) && !/Routine/.test(text));
+  check(
+    'correction: recomputed result no longer shows the possibility that depended on beta',
+    !text.includes('Illustrative possibility A'),
+  );
+  check(
+    'correction: incomplete result is not reassurance',
+    /not a sign that everything is fine/i.test(text) && !/Routine/.test(text),
+  );
   check('correction: beta now appears under Not present', /Not present .*Signal beta/.test(text));
   await shot(page, 'live-result-refreshed');
 
   check('flow 1: no console errors or page errors', problems.length === 0, problems.join(' | '));
   const mutations = api.filter((c) => c.method !== 'GET' && c.method !== 'OPTIONS');
-  check('api: every mutation carried an Idempotency-Key', mutations.length > 0 && mutations.every((c) => c.idempotencyKey), `${mutations.length} mutations`);
-  check('api: idempotency keys are unique per operation', new Set(mutations.map((c) => c.idempotencyKey)).size === mutations.length);
+  check(
+    'api: every mutation carried an Idempotency-Key',
+    mutations.length > 0 && mutations.every((c) => c.idempotencyKey),
+    `${mutations.length} mutations`,
+  );
+  check(
+    'api: idempotency keys are unique per operation',
+    new Set(mutations.map((c) => c.idempotencyKey)).size === mutations.length,
+  );
   const tokens = new Set(api.filter((c) => c.method !== 'OPTIONS').map((c) => c.authorization));
-  check('api: dev bearer token is used and stable for the page', tokens.size === 1 && /^Bearer dev:/.test([...tokens][0] ?? ''));
+  check(
+    'api: dev bearer token is used and stable for the page',
+    tokens.size === 1 && /^Bearer dev:/.test([...tokens][0] ?? ''),
+  );
   const bad = api.filter((c) => c.status >= 400);
-  check('api: no error responses in the normal flow', bad.length === 0, bad.map((c) => `${c.method} ${c.path} ${c.status}`).join(' | '));
-  check('api: next-question 204 was received and treated as "no more questions"', api.some((c) => c.path.endsWith('/next-question') && c.status === 204));
+  check(
+    'api: no error responses in the normal flow',
+    bad.length === 0,
+    bad.map((c) => `${c.method} ${c.path} ${c.status}`).join(' | '),
+  );
+  check(
+    'api: next-question 204 was received and treated as "no more questions"',
+    api.some((c) => c.path.endsWith('/next-question') && c.status === 204),
+  );
 
   // Reload: identity and session state live in memory only, so a reload must not bring the
   // conversation back. The API answers 404 for the new identity (same as "does not exist").
@@ -176,9 +227,21 @@ async function answerCurrent(page, wording, act) {
   await page.waitForTimeout(2500);
   text = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
   const afterReload = api.slice(before).filter((c) => c.method === 'GET');
-  check('reload: no health detail survives a page reload', !/Signal beta|Illustrative possibility|alpha/.test(text), text.slice(0, 160));
-  check('reload: the API refuses the session to the new identity with 404', afterReload.some((c) => c.status === 404) && afterReload.every((c) => c.status === 404 || c.status === 204), afterReload.map((c) => `${c.path} ${c.status}`).join(' | '));
-  check('reload: the page explains the session is unavailable and offers a restart', /start a new|new symptom check|couldn’t find|not available|has ended/i.test(text), text.slice(0, 260));
+  check(
+    'reload: no health detail survives a page reload',
+    !/Signal beta|Illustrative possibility|alpha/.test(text),
+    text.slice(0, 160),
+  );
+  check(
+    'reload: the API refuses the session to the new identity with 404',
+    afterReload.some((c) => c.status === 404) && afterReload.every((c) => c.status === 404 || c.status === 204),
+    afterReload.map((c) => `${c.path} ${c.status}`).join(' | '),
+  );
+  check(
+    'reload: the page explains the session is unavailable and offers a restart',
+    /start a new|new symptom check|couldn’t find|not available|has ended/i.test(text),
+    text.slice(0, 260),
+  );
   await shot(page, 'live-after-reload');
   await context.close();
 }
@@ -191,9 +254,15 @@ async function answerCurrent(page, wording, act) {
   await startCheck(page, 'I have alpha but no beta');
   await waitForInterpretation(page);
   let text = await mainText(page);
-  check('negation: "no beta" is listed under Not present, awaiting confirmation', /Not present .*beta Please confirm/.test(text));
+  check(
+    'negation: "no beta" is listed under Not present, awaiting confirmation',
+    /Not present .*beta Please confirm/.test(text),
+  );
   for (let i = 0; i < 2; i += 1) {
-    await page.getByRole('button', { name: /^That’s right: / }).first().click();
+    await page
+      .getByRole('button', { name: /^That’s right: / })
+      .first()
+      .click();
     await page.waitForTimeout(700);
   }
   await page.getByRole('button', { name: 'Conversation options' }).click();
@@ -205,9 +274,15 @@ async function answerCurrent(page, wording, act) {
   check('summary: explicit negative is listed separately', /Explicitly not present.*beta/i.test(text));
   check('summary: states it is not a diagnosis', /not a diagnosis/i.test(text));
   await page.getByRole('button', { name: 'Print or save as PDF' }).click();
-  check('summary: export is blocked until the user confirms the review', (await mainText(page)).includes('Tick the box to confirm you’ve reviewed the summary first.'));
+  check(
+    'summary: export is blocked until the user confirms the review',
+    (await mainText(page)).includes('Tick the box to confirm you’ve reviewed the summary first.'),
+  );
   await page.getByRole('checkbox', { name: /I’ve reviewed this summary/ }).check();
-  check('summary: review acknowledgement can be given', await page.getByRole('checkbox', { name: /I’ve reviewed this summary/ }).isChecked());
+  check(
+    'summary: review acknowledgement can be given',
+    await page.getByRole('checkbox', { name: /I’ve reviewed this summary/ }).isChecked(),
+  );
   await shot(page, 'live-summary');
 
   await page.goBack();
@@ -217,14 +292,24 @@ async function answerCurrent(page, wording, act) {
   await page.getByRole('button', { name: 'Delete assessment' }).click();
   await page.getByText('Deletion scheduled').waitFor({ timeout: 15000 });
   text = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
-  check('delete: receipt shows the status the API returned (scheduled, not completed)', text.includes('Deletion scheduled') && !text.includes('Deletion completed'));
+  check(
+    'delete: receipt shows the status the API returned (scheduled, not completed)',
+    text.includes('Deletion scheduled') && !text.includes('Deletion completed'),
+  );
   check('delete: receipt id from the API is shown', /del_[0-9a-f]{8}/.test(text));
   await shot(page, 'live-delete-receipt');
   const del = api.find((c) => c.method === 'DELETE');
   check('delete: DELETE was sent and succeeded', del?.status === 200);
 
-  const storage = await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }));
-  check('privacy: no health data in browser storage', storage.session.length === 0 && storage.local.every((k) => ALLOWED_STORAGE_KEYS.includes(k)), JSON.stringify(storage));
+  const storage = await page.evaluate(() => ({
+    local: Object.keys(localStorage),
+    session: Object.keys(sessionStorage),
+  }));
+  check(
+    'privacy: no health data in browser storage',
+    storage.session.length === 0 && storage.local.every((k) => ALLOWED_STORAGE_KEYS.includes(k)),
+    JSON.stringify(storage),
+  );
   check('privacy: page title carries no symptom text', !/alpha|beta/i.test(await page.title()));
   await context.close();
   check('flow 2: no console errors or page errors', problems.length === 0, problems.join(' | '));
@@ -238,8 +323,15 @@ async function answerCurrent(page, wording, act) {
   await startCheck(page, 'alpha and the escalation marker');
   await page.waitForTimeout(2500);
   const text = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
-  check('urgent: backend urgent text is shown', text.includes('Urgent-state preview (synthetic fixture)'), text.slice(0, 300));
-  check('urgent: no follow-up question is asked', !text.includes('FOLLOW-UP QUESTION') && (await page.getByRole('button', { name: 'Send answer' }).count()) === 0);
+  check(
+    'urgent: backend urgent text is shown',
+    text.includes('Urgent-state preview (synthetic fixture)'),
+    text.slice(0, 300),
+  );
+  check(
+    'urgent: no follow-up question is asked',
+    !text.includes('FOLLOW-UP QUESTION') && (await page.getByRole('button', { name: 'Send answer' }).count()) === 0,
+  );
   check('urgent: no possible explanation is shown', !text.includes('POSSIBLE EXPLANATION'));
   check('urgent: no emergency number is invented by the client', !/\b(911|112|108|999)\b/.test(text));
   await shot(page, 'live-urgent');
