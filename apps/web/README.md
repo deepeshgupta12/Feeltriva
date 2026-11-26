@@ -203,8 +203,10 @@ schema (`code`, `message`, `retryable`, `request_id`) and mapped as follows:
 | bad 2xx   | Rejected as `invalid_response` rather than rendered partially                            |
 
 **Question answers.** `Question.answer_schema` is parsed as
-`{ type, options?, allow_not_sure?, unit?, units?, min?, max?, help_text? }` with `type` one of
-`yes_no_unsure`, `single_choice`, `multiple_choice`, `number`, `duration`, `free_text`.
+`{ type, options?, allow_not_sure?, unit?, units?, min?, max?, earliest?, latest?, help_text? }`
+with `type` one of `yes_no_unsure`, `single_choice`, `multiple_choice`, `number`, `duration`,
+`date`, `free_text`. For a date question `earliest` and `latest` are a date written `YYYY-MM-DD`
+or the word `today`.
 `help_text` is the only source of the “Why this question?” disclosure, which is hidden when it
 is absent. An unrecognised schema shows an “unsupported question” state.
 
@@ -212,10 +214,11 @@ is absent. An unrecognised schema shows an “unsupported question” state.
 | ----------------- | ----------------------------------------------------------------------- |
 | `yes_no_unsure`   | `"yes"`, `"no"` or `"not_sure"`                                         |
 | `single_choice`   | option `value`, or `"not_sure"` when allowed                            |
-| `multiple_choice` | `string[]` of option values                                             |
-| `number`          | `{ "value": number, "unit": string \| null }`                           |
+| `multiple_choice` | `string[]` of option values, or `"not_sure"` when allowed               |
+| `number`          | `{ "value": number, "unit": string \| null }`, or `"not_sure"`          |
 | `duration`        | `{ "value": number, "unit": "hours" \| "days" \| "weeks" \| "months" }` |
-| `free_text`       | `string`                                                                |
+| `date`            | `{ "date": "YYYY-MM-DD" }`, or `"not_sure"` when allowed                |
+| `free_text`       | `string` of up to 2,000 characters, or `"not_sure"` when allowed        |
 
 **Observations.** “That’s right”, “Edit” and “Remove/correct” post
 `observations: [{ feature_id, presence, confirmed: true, supersedes: <observation_id>, … }]`.
@@ -226,9 +229,11 @@ Free text posts `text`. Names shown are `raw_phrase` when present, otherwise a h
 
 These are the places where the frontend had to choose. Please confirm or correct them.
 
-1. **“Not sure” for types other than single choice.** When `allow_not_sure` is true the UI
-   sends `["not_sure"]` for `multiple_choice` (to keep the array type) and the string
-   `"not_sure"` for `number`, `duration` and `free_text`.
+1. **“Not sure” is one value.** When `allow_not_sure` is true the UI sends the string
+   `"not_sure"` for every type of question, and the service reads it as “not sure” for every
+   type (settled in M3.14; before that the UI sent `["not_sure"]` for `multiple_choice`, which
+   the service refused, and the service read `"not_sure"` on a free-text question as the
+   person’s own words).
 2. **`Session.observations` may include superseded revisions.** The UI hides any record whose
    id appears in another record’s `supersedes`. If the API returns only current records this
    is a no-op.

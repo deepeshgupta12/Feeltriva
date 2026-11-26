@@ -90,6 +90,7 @@ function Conversation({ session, state, controller }: ConversationProps) {
       onConfirm={(id) => controller.confirmObservation(id)}
       onRevise={(id, revision) => controller.reviseObservation(id, revision)}
       showTitle={showTitle}
+      optionLabels={state.optionLabels}
     />
   );
 

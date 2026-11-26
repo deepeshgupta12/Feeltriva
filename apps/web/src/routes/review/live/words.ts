@@ -83,7 +83,10 @@ export const answerKind = lookup({
   yes_no_unsure: 'Yes, no or not sure',
   single_choice: 'One of several choices',
   multi_choice: 'Several of the choices',
+  multiple_choice: 'Several of the choices',
   duration: 'A length of time',
+  date: 'A date',
+  free_text: 'Free text',
 });
 
 /** Where a fact that links a condition and a symptom comes from. */

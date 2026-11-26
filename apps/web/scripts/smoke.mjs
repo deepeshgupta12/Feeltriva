@@ -524,7 +524,28 @@ async function run() {
     await expectVisible(page, page.getByText('Enter a number of 500 or less.'), 's4: number range validated inline');
     await page.getByLabel('Number').fill('42');
     await page.getByRole('button', { name: 'Send answer' }).click();
+    // A date question (M3.14): a date field, nothing filled in, a date after today refused in words.
+    await page.getByRole('heading', { name: /on which date did sample symptom A start/ }).waitFor();
+    const dateField = page.getByLabel('Date', { exact: true });
+    check(
+      's4: a date question is asked with a date field and nothing filled in',
+      (await dateField.getAttribute('type')) === 'date' && (await dateField.inputValue()) === '',
+    );
+    await dateField.fill('2999-01-01');
+    await page.getByRole('button', { name: 'Send answer' }).click();
+    await expectVisible(
+      page,
+      page.getByText('Choose a date that is today or earlier.'),
+      's4: a date after today is refused inline',
+    );
+    await dateField.fill('2026-01-15');
+    await page.getByRole('button', { name: 'Send answer' }).click();
     await page.getByRole('heading', { name: /anything else you would like to add/ }).waitFor();
+    await expectVisible(
+      page,
+      page.getByText('15 January 2026').first(),
+      's4: the date that was given is shown in words',
+    );
     check('s4: follow-up question offered after insufficient result', true);
   });
 

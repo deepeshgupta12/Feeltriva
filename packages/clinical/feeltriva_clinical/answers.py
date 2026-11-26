@@ -5,12 +5,20 @@ Returns the observation the answer implies. Pure functions; no clinical content.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-ANSWER_TYPES = {"yes_no_unsure", "single_choice", "multiple_choice", "number", "duration", "free_text"}
+ANSWER_TYPES = {"yes_no_unsure", "single_choice", "multiple_choice", "number", "duration", "date", "free_text"}
 DURATION_UNITS = ("hours", "days", "weeks", "months")
 NOT_SURE = "not_sure"
+# A date question may bound its answer with `earliest` and `latest`: a calendar date, or the word "today".
+TODAY = "today"
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# "Today" is the day of whoever answers. Their calendar can be a day ahead of or behind the service's own, so a
+# bound given as "today" allows one day either way; a bound given as a date is exact.
+_DAY = timedelta(days=1)
 
 
 class AnswerValidationError(ValueError):
@@ -36,6 +44,23 @@ def validate_answer_schema(schema: dict[str, Any]) -> None:
         values = [o.get("value") for o in options if isinstance(o, dict)]
         if len(values) != len(options) or len(set(values)) != len(values) or NOT_SURE in values:
             raise AnswerValidationError("options need unique values distinct from 'not_sure'")
+    if kind == "date":
+        fixed = {}
+        for key in ("earliest", "latest"):
+            if key in schema and schema[key] != TODAY:
+                fixed[key] = _calendar_date(schema[key], f"'{key}'")
+        if len(fixed) == 2 and fixed["earliest"] > fixed["latest"]:
+            raise AnswerValidationError("'earliest' must not be after 'latest'")
+
+
+def _calendar_date(raw: Any, what: str) -> date:
+    """A calendar date written YYYY-MM-DD, and one that exists."""
+    if not isinstance(raw, str) or not _ISO_DATE.match(raw):
+        raise AnswerValidationError(f"{what} must be a date written as YYYY-MM-DD")
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise AnswerValidationError(f"{what} is not a date in the calendar") from exc
 
 
 def _number(raw: Any, schema: dict[str, Any]) -> float | int:
@@ -49,12 +74,20 @@ def _number(raw: Any, schema: dict[str, Any]) -> float | int:
 
 
 def interpret_answer(
-    schema: dict[str, Any], answer: Any, option_presence: dict[str, str] | None = None
+    schema: dict[str, Any],
+    answer: Any,
+    option_presence: dict[str, str] | None = None,
+    *,
+    today: date | None = None,
 ) -> AnswerOutcome:
     """Validate `answer` and map it to an observation outcome.
 
     `option_presence` is reviewer-authored mapping of option value -> presence for choice
     questions (e.g. an explicit "none of these" option meaning absent).
+
+    "Not sure" is the one string `not_sure` for every type of question (BUG-010): always for yes / no, and
+    for the other types when the question allows it. `today` is the day a "today" bound of a date question is
+    read against; the service's own day when not given.
     """
     kind = schema["type"]
     allow_not_sure = bool(schema.get("allow_not_sure"))
@@ -77,6 +110,10 @@ def interpret_answer(
             raise AnswerValidationError("answer must be one of the offered options")
         return AnswerOutcome(option_presence.get(answer, "present"), value=answer)
     if kind == "multiple_choice":
+        if answer == NOT_SURE:
+            if not allow_not_sure:
+                raise AnswerValidationError("'not_sure' is not allowed for this question")
+            return AnswerOutcome("uncertain")
         values = {o["value"] for o in schema["options"]}
         if not isinstance(answer, list) or not answer or len(set(answer)) != len(answer):
             raise AnswerValidationError("answer must be a non-empty list of distinct options")
@@ -110,7 +147,35 @@ def interpret_answer(
         return AnswerOutcome(
             "present", value={"value": value, "unit": answer["unit"]}, duration=f"{value} {answer['unit']}"
         )
+    if kind == "date":
+        if answer == NOT_SURE:
+            if not allow_not_sure:
+                raise AnswerValidationError("'not_sure' is not allowed for this question")
+            return AnswerOutcome("uncertain")
+        if not isinstance(answer, dict) or set(answer) != {"date"}:
+            raise AnswerValidationError("answer must be an object with 'date' written as YYYY-MM-DD")
+        day = _calendar_date(answer["date"], "the date")
+        reference = today or datetime.now(UTC).date()
+        earliest, latest = schema.get("earliest"), schema.get("latest")
+        if earliest is not None:
+            bound = reference - _DAY if earliest == TODAY else _calendar_date(earliest, "'earliest'")
+            if day < bound:
+                raise AnswerValidationError(
+                    "the date must not be before today"
+                    if earliest == TODAY
+                    else f"the date must not be before {earliest}"
+                )
+        if latest is not None:
+            bound = reference + _DAY if latest == TODAY else _calendar_date(latest, "'latest'")
+            if day > bound:
+                raise AnswerValidationError(
+                    "the date must not be after today" if latest == TODAY else f"the date must not be after {latest}"
+                )
+        # The value says what it is: a date, not an option of a choice question and not free text.
+        return AnswerOutcome("present", value={"date": day.isoformat()})
     if kind == "free_text":
+        if answer == NOT_SURE and allow_not_sure:
+            return AnswerOutcome("uncertain")
         if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
             raise AnswerValidationError("answer must be non-empty text of at most 2000 characters")
         # Free text is not normalised into a finding: it stays uncertain until reviewed/confirmed.

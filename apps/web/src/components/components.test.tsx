@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -165,6 +165,58 @@ describe('FollowUpQuestion', () => {
     expect(screen.getByRole('heading', { name: 'This question can’t be shown here' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send answer' })).not.toBeInTheDocument();
   });
+
+  it('takes a date with a date field, within the bounds of the question, and sends it as a date', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    render(
+      <FollowUpQuestion
+        question={question({ type: 'date', earliest: '2026-01-01', latest: '2026-01-31', allow_not_sure: true })}
+        onSubmit={onSubmit}
+      />,
+    );
+    const field = screen.getByLabelText('Date');
+    expect(field).toHaveAttribute('type', 'date');
+    expect(field).toHaveAttribute('min', '2026-01-01');
+    expect(field).toHaveAttribute('max', '2026-01-31');
+    expect(field).toHaveValue('');
+    // Nothing chosen: the form asks for a date and sends nothing.
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(screen.getByText('Choose a date to continue.')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.change(field, { target: { value: '2026-02-01' } });
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(screen.getByText('Choose a date on or before 31 January 2026.')).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: '2026-01-15' } });
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(onSubmit).toHaveBeenCalledWith({ date: '2026-01-15' }, '15 January 2026');
+  });
+
+  it('sends "not sure" as the same one value for a date and for several choices', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    const dated = render(
+      <FollowUpQuestion question={question({ type: 'date', allow_not_sure: true })} onSubmit={onSubmit} />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'I’m not sure' }));
+    expect(screen.getByLabelText('Date')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(onSubmit).toHaveBeenLastCalledWith('not_sure', 'I’m not sure');
+    dated.unmount();
+    render(
+      <FollowUpQuestion
+        question={question({
+          type: 'multiple_choice',
+          options: [{ value: 'a', label: 'Option A' }],
+          allow_not_sure: true,
+        })}
+        onSubmit={onSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'I’m not sure' }));
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(onSubmit).toHaveBeenLastCalledWith('not_sure', 'I’m not sure');
+  });
 });
 
 describe('ObservationChip', () => {
@@ -190,6 +242,31 @@ describe('ObservationChip', () => {
     expect(within(item).getByRole('button', { name: 'That’s right: Signal alpha' })).toBeInTheDocument();
     expect(within(item).getByRole('button', { name: 'Edit: Signal alpha' })).toBeInTheDocument();
     expect(within(item).getByRole('button', { name: 'Remove or correct: Signal alpha' })).toBeInTheDocument();
+  });
+
+  it('shows a chosen option in its own words and a duration once', () => {
+    render(
+      <ul>
+        <ObservationChip
+          observation={{ ...base, onset: undefined, presence: 'absent', value: 'none' }}
+          optionLabels={{ none: 'None of these' }}
+        />
+        <ObservationChip
+          observation={{
+            ...base,
+            observation_id: 'o2',
+            onset: undefined,
+            duration: '3 days',
+            value: { value: 3, unit: 'days' },
+          }}
+        />
+      </ul>,
+    );
+    const [chosen, lasting] = screen.getAllByRole('listitem');
+    expect(within(chosen!).getByText('None of these')).toBeInTheDocument();
+    expect(within(chosen!).queryByText('none')).not.toBeInTheDocument();
+    expect(within(lasting!).getByText('3 days')).toBeInTheDocument();
+    expect(within(lasting!).queryByText(/3 days · 3 days/)).not.toBeInTheDocument();
   });
 
   it('shows the user’s own phrase when the service kept it, and drops "That’s right" once confirmed', () => {

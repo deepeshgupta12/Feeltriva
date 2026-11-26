@@ -116,6 +116,7 @@ function Results({ session, state, controller }: ResultsProps) {
           onRevise={(id, revision) => controller.reviseObservation(id, revision)}
           showTitle={false}
           headingLevel="h3"
+          optionLabels={state.optionLabels}
         />
         <div className="mt-5">{correctDetailsLink}</div>
       </div>

@@ -128,6 +128,13 @@ async function answerCurrent(page, wording, act) {
   text = await mainText(page);
   check('questions: asked one at a time and finished (yes/no, choice, number, duration)', true);
   check('questions: explicit "None of these" is recorded under Not present', /Not present .*Signal gamma/.test(text));
+  // M3.14: what the service stored is shown in the person's words, and once.
+  check(
+    'questions: "None of these" is shown in its own words, not as the stored value (BUG-009)',
+    /Signal gamma\s+None of these/.test(text) && !/Signal gamma\s+none\b/.test(text),
+    text.match(/Signal gamma[^\n]*\n?[^\n]*/)?.[0] ?? '',
+  );
+  check('questions: a duration is shown once (BUG-008)', text.includes('3 days') && !/3 days\s*·\s*3 days/.test(text));
   await shot(page, 'live-assess-complete');
 
   await page.getByRole('button', { name: 'See your next step' }).click();

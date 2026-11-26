@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/api/errors';
 import { MockAssessmentService } from '@/api/mock/MockAssessmentService';
 import { CONSENT_VERSION } from '@/config/consent';
-import { SAMPLE_INTAKE_TEXT, SAMPLE_QUESTIONS } from '@/fixtures/sampleContent';
+import { SAMPLE_FEATURES, SAMPLE_INTAKE_TEXT, SAMPLE_QUESTIONS } from '@/fixtures/sampleContent';
 import type { ScenarioId } from '@/fixtures/scenarios';
 
 import { AssessmentController, CONFLICT_MESSAGE } from './AssessmentController';
@@ -271,6 +271,43 @@ describe('insufficient information', () => {
     // The follow-up it points to is the question the service offers next.
     expect(controller.getSnapshot().question?.question_id).toBe(SAMPLE_QUESTIONS.measurement.question_id);
     expect(controller.getSnapshot().session?.state).toBe('insufficient_information');
+  });
+});
+
+describe('answers the person can read back', () => {
+  it('remembers the words of the options it has shown, by their internal value', async () => {
+    const { controller } = await startWithIntake('normal');
+    expect(controller.getSnapshot().optionLabels).toEqual({});
+    expect(await controller.answerQuestion('no', 'No')).toBe(true);
+    expect(await controller.answerQuestion({ value: 3, unit: 'days' }, '3 days')).toBe(true);
+    // The third question offers three levels; their words are kept from the moment it is shown.
+    expect(controller.getSnapshot().question?.question_id).toBe(SAMPLE_QUESTIONS.severityBeta.question_id);
+    expect(controller.getSnapshot().optionLabels).toMatchObject({
+      sample_level_1: 'A little',
+      sample_level_2: 'A moderate amount',
+      sample_level_3: 'A lot',
+    });
+  });
+
+  it('asks for a date, refuses one after today, and keeps the date that was given', async () => {
+    const { controller } = await startWithIntake('insufficient');
+    expect(await controller.answerQuestion({ value: 42, unit: 'sample unit A' }, '42 sample unit A')).toBe(true);
+    expect(controller.getSnapshot().question?.question_id).toBe(SAMPLE_QUESTIONS.startDate.question_id);
+    expect(await controller.answerQuestion({ date: '2999-01-01' }, '1 January 2999')).toBe(false);
+    expect(controller.getSnapshot().failure?.error.code).toBe('invalid_answer');
+    expect(await controller.answerQuestion({ date: '2026-01-15' }, '15 January 2026')).toBe(true);
+    const session = controller.getSnapshot().session!;
+    const dated = currentObservations(session).find((item) => item.feature_id === SAMPLE_FEATURES.alpha.feature_id);
+    expect(dated?.value).toEqual({ date: '2026-01-15' });
+    // The next question is the free-text one, as before.
+    expect(controller.getSnapshot().question?.question_id).toBe(SAMPLE_QUESTIONS.freeText.question_id);
+  });
+
+  it('reads "not sure" on a date question as not sure, in the one form the service reads', async () => {
+    const { controller } = await startWithIntake('insufficient');
+    expect(await controller.answerQuestion({ value: 42, unit: 'sample unit A' }, '42 sample unit A')).toBe(true);
+    expect(await controller.answerQuestion('not_sure', 'I’m not sure')).toBe(true);
+    expect(controller.getSnapshot().question?.question_id).toBe(SAMPLE_QUESTIONS.freeText.question_id);
   });
 });
 

@@ -1,6 +1,7 @@
 import type { AssessmentService } from '@/api/assessmentService';
 import { toApiError, type ApiError } from '@/api/errors';
 import {
+  parseAnswerSchema,
   parseSessionState,
   type AnswerValue,
   type Assessment,
@@ -13,6 +14,8 @@ import {
   type Session,
   type Summary,
 } from '@/api/types';
+
+import { withOptionLabels } from '@/lib/answers';
 
 import { currentObservations, observationLabel } from './selectors';
 
@@ -58,6 +61,11 @@ export interface AssessmentViewState {
   session: Session | null;
   /** Current follow-up question, always for `session.observation_version`. */
   question: Question | null;
+  /**
+   * The words of every option of the questions shown in this visit, by the option's internal value, so that a
+   * stored answer is shown in the words the person chose and never as the internal value (BUG-009).
+   */
+  optionLabels: Readonly<Record<string, string>>;
   /** Observation version for which the service has answered "next question" (question or none). */
   questionVersion: number | null;
   /** Last assessment received. May be stale: compare with `session.observation_version`. */
@@ -119,6 +127,7 @@ export class AssessmentController {
       load: initialSession ? 'ready' : 'idle',
       session: initialSession ?? null,
       question: null,
+      optionLabels: {},
       questionVersion: null,
       assessment: null,
       summary: null,
@@ -625,6 +634,10 @@ export class AssessmentController {
   private setQuestion(question: Question | null, version: number): void {
     const unsent = this.state.unsentAnswer;
     const partial: Partial<AssessmentViewState> = { question, questionVersion: version };
+    const schema = question ? parseAnswerSchema(question.answer_schema) : null;
+    if (schema?.options?.length) {
+      partial.optionLabels = withOptionLabels(this.state.optionLabels, schema);
+    }
     if (this.state.failure?.op === 'question') {
       // An earlier attempt to load the question failed; this one succeeded.
       partial.failure = null;

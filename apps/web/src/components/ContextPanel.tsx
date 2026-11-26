@@ -22,6 +22,8 @@ interface ContextPanelProps {
   headingLevel?: 'h2' | 'h3';
   /** Omit the interactive actions (used where details are shown for reference only). */
   readOnly?: boolean;
+  /** The words of the options of the questions seen in this visit, by their internal value. */
+  optionLabels?: Readonly<Record<string, string>>;
 }
 
 export const CONTEXT_PANEL_TITLE = 'What you’ve shared';
@@ -45,6 +47,7 @@ export function ContextPanel({
   showTitle = true,
   headingLevel = 'h2',
   readOnly = false,
+  optionLabels,
 }: ContextPanelProps) {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -78,6 +81,7 @@ export function ContextPanel({
           <ObservationChip
             key={observation.observation_id}
             observation={observation}
+            optionLabels={optionLabels}
             busy={busy}
             onConfirm={readOnly ? undefined : () => void onConfirm(observation.observation_id)}
             onEdit={readOnly ? undefined : () => setEditor({ observationId: observation.observation_id, mode: 'edit' })}

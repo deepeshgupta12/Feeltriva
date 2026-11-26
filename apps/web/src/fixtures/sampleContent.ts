@@ -108,6 +108,12 @@ export const SAMPLE_QUESTIONS = {
     },
     effect: { kind: 'add_value', feature: SAMPLE_FEATURES.zeta },
   },
+  startDate: {
+    question_id: 'q.sample_start_date',
+    wording: 'Sample question: on which date did sample symptom A start?',
+    answer_schema: { type: 'date', latest: 'today', allow_not_sure: true, help_text: SAMPLE_HELP_TEXT },
+    effect: { kind: 'add_value', feature: SAMPLE_FEATURES.alpha },
+  },
   freeText: {
     question_id: 'q.sample_free_text',
     wording: 'Sample question: is there anything else you would like to add?',

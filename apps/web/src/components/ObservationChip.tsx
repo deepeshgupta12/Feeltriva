@@ -13,6 +13,8 @@ interface ObservationChipProps {
   onConfirm?: () => void;
   onEdit?: () => void;
   onCorrect?: () => void;
+  /** The words of the options of the questions seen in this visit, by their internal value. */
+  optionLabels?: Readonly<Record<string, string>>;
   className?: string;
 }
 
@@ -30,10 +32,11 @@ export function ObservationChip({
   onConfirm,
   onEdit,
   onCorrect,
+  optionLabels,
   className,
 }: ObservationChipProps) {
   const label = observationLabel(observation);
-  const details = observationDetails(observation);
+  const details = observationDetails(observation, optionLabels);
   // The service could not match this to a known feature, so there is nothing structured to edit.
   const unmatched = observation.feature_id === null;
   const interactive = !unmatched && (onConfirm || onEdit || onCorrect);

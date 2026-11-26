@@ -82,8 +82,9 @@ function SummaryView({ session, state, controller }: SummaryViewProps) {
         summary: state.summary,
         transcript: state.transcript,
         generatedAt,
+        optionLabels: state.optionLabels,
       }),
-    [session, state.assessment, stale, state.summary, state.transcript, generatedAt],
+    [session, state.assessment, stale, state.summary, state.transcript, generatedAt, state.optionLabels],
   );
 
   /**

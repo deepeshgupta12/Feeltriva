@@ -76,6 +76,74 @@ def test_free_text_answer_stays_uncertain():
     assert (outcome.presence, outcome.raw_phrase) == ("uncertain", "something")
 
 
+def test_not_sure_is_one_string_for_every_type_that_allows_it():
+    # BUG-010: the web sent ["not_sure"] for multiple choice and the service read "not_sure" on a free-text
+    # question as the user's own words. It is one string now, read the same way for every type.
+    options = CHOICE["options"]
+    for schema in (
+        {"type": "multiple_choice", "options": options, "allow_not_sure": True},
+        {"type": "free_text", "allow_not_sure": True},
+        {"type": "number", "allow_not_sure": True},
+        {"type": "duration", "allow_not_sure": True},
+        {"type": "date", "allow_not_sure": True},
+    ):
+        outcome = interpret_answer(schema, "not_sure")
+        assert (outcome.presence, outcome.value, outcome.raw_phrase) == ("uncertain", None, None), schema["type"]
+    # Where the question does not allow it, it is refused, and the old list form is not an answer.
+    for schema in ({"type": "multiple_choice", "options": options}, {"type": "date"}):
+        with pytest.raises(AnswerValidationError, match="not allowed"):
+            interpret_answer(schema, "not_sure")
+    with pytest.raises(AnswerValidationError):
+        interpret_answer({"type": "multiple_choice", "options": options, "allow_not_sure": True}, ["not_sure"])
+    # On a free-text question that does not offer "not sure", the words stay what the person wrote.
+    assert interpret_answer({"type": "free_text"}, "not_sure").raw_phrase == "not_sure"
+
+
+def test_a_date_answer_is_a_calendar_date_within_the_bounds_of_the_question():
+    from datetime import date
+
+    from feeltriva_clinical.answers import validate_answer_schema
+
+    day = date(2026, 3, 10)
+    outcome = interpret_answer({"type": "date"}, {"date": "2026-02-28"}, today=day)
+    assert (outcome.presence, outcome.value, outcome.duration) == ("present", {"date": "2026-02-28"}, None)
+    for bad in (
+        "2026-02-28",
+        {"date": "28/02/2026"},
+        {"date": "2026-02-30"},
+        {"date": "2026-2-3"},
+        {"date": 20260228},
+        {},
+        7,
+    ):
+        with pytest.raises(AnswerValidationError):
+            interpret_answer({"type": "date"}, bad, today=day)
+    with pytest.raises(AnswerValidationError):
+        interpret_answer({"type": "date"}, {"date": "2026-02-28", "time": "10:00"}, today=day)
+    # "today" is the day of whoever answers, which can be one day from the service's own: one day is allowed.
+    past = {"type": "date", "latest": "today"}
+    assert interpret_answer(past, {"date": "2026-03-11"}, today=day).value == {"date": "2026-03-11"}
+    with pytest.raises(AnswerValidationError, match="must not be after today"):
+        interpret_answer(past, {"date": "2026-03-12"}, today=day)
+    # A bound written as a date is exact.
+    fixed = {"type": "date", "earliest": "2026-01-01", "latest": "2026-01-31"}
+    assert interpret_answer(fixed, {"date": "2026-01-31"}, today=day).presence == "present"
+    for outside, words in (("2025-12-31", "before 2026-01-01"), ("2026-02-01", "after 2026-01-31")):
+        with pytest.raises(AnswerValidationError, match=words):
+            interpret_answer(fixed, {"date": outside}, today=day)
+    with pytest.raises(AnswerValidationError, match="must not be before today"):
+        interpret_answer({"type": "date", "earliest": "today"}, {"date": "2026-03-08"}, today=day)
+    # A question whose bounds make no sense is refused when its bundle is checked.
+    validate_answer_schema(fixed)
+    validate_answer_schema(past)
+    for wrong in (
+        {"type": "date", "latest": "soon"},
+        {"type": "date", "earliest": "2026-02-01", "latest": "2026-01-01"},
+    ):
+        with pytest.raises(AnswerValidationError):
+            validate_answer_schema(wrong)
+
+
 def test_fixture_bundle_is_synthetic_pending_and_refused_in_clinical_mode():
     bundle = load_fixture_bundle()
     assert bundle.synthetic and bundle.status == "pending"

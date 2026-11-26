@@ -13,6 +13,7 @@ import {
   type SampleFeature,
 } from '@/fixtures/sampleContent';
 import { MOCK_SCENARIO_PROFILES, type MockScenarioProfile, type ScenarioId } from '@/fixtures/scenarios';
+import { dateBounds } from '@/lib/answers';
 import { uuid } from '@/lib/uuid';
 
 import type { AssessmentService } from '../assessmentService';
@@ -21,6 +22,7 @@ import { MutationGate, operationFingerprint } from '../idempotency';
 import {
   DURATION_UNITS,
   NOT_SURE,
+  isCalendarDate,
   type AnswerSubmit,
   type Assessment,
   type AssessmentRequest,
@@ -623,12 +625,12 @@ export class MockAssessmentService implements AssessmentService {
         return;
       }
       case 'multiple_choice': {
-        if (!Array.isArray(answer) || answer.length === 0) throw invalid();
         if (effect.kind !== 'add_value') throw invalid();
         if (notSure) {
           this.append(record, { ...effect.feature, presence: 'uncertain', confirmed: true });
           return;
         }
+        if (!Array.isArray(answer) || answer.length === 0) throw invalid();
         const labels: string[] = [];
         for (const value of answer) {
           const option = schema.options?.find((item) => item.value === value);
@@ -655,9 +657,27 @@ export class MockAssessmentService implements AssessmentService {
         });
         return;
       }
+      case 'date': {
+        if (effect.kind !== 'add_value') throw invalid();
+        if (notSure) {
+          this.append(record, { ...effect.feature, ...carried, presence: 'uncertain', confirmed: true });
+          return;
+        }
+        if (!isRecord(answer) || !isCalendarDate(answer.date)) throw invalid();
+        const { earliest, latest } = dateBounds(schema);
+        if ((earliest && answer.date < earliest) || (latest && answer.date > latest)) throw invalid();
+        this.append(record, {
+          ...effect.feature,
+          ...carried,
+          presence: existing?.presence ?? 'present',
+          value: { date: answer.date },
+          confirmed: true,
+        });
+        return;
+      }
       case 'free_text': {
-        if (typeof answer !== 'string' || answer.trim().length === 0) throw invalid();
         if (notSure) return;
+        if (typeof answer !== 'string' || answer.trim().length === 0) throw invalid();
         this.append(record, {
           feature_id: null,
           presence: 'uncertain',
@@ -826,12 +846,7 @@ function withinRange(value: number, min: number | undefined, max: number | undef
   return (min === undefined || value >= min) && (max === undefined || value <= max);
 }
 
+/** "Not sure" is the one string `not_sure`, as the service reads it (BUG-010). */
 function isNotSure(answer: unknown): boolean {
-  if (answer === NOT_SURE) {
-    return true;
-  }
-  if (Array.isArray(answer)) {
-    return answer.length === 1 && answer[0] === NOT_SURE;
-  }
-  return false;
+  return answer === NOT_SURE;
 }

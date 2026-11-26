@@ -1,7 +1,7 @@
 import { useId } from 'react';
 
 import type { AnswerSchema, DurationUnit } from '@/api/types';
-import { choiceOptions, durationUnits, NOT_SURE_LABEL, numberUnits, type AnswerDraft } from '@/lib/answers';
+import { choiceOptions, dateBounds, durationUnits, NOT_SURE_LABEL, numberUnits, type AnswerDraft } from '@/lib/answers';
 import { cn } from '@/lib/cn';
 
 interface AnswerOptionsProps {
@@ -224,6 +224,34 @@ export function AnswerOptions({
               ))}
             </select>
           </div>
+        </div>
+        {notSureToggle(draft.notSure, (next) => onDraftChange({ ...draft, notSure: next }))}
+      </div>
+    );
+  }
+
+  if (draft.kind === 'date') {
+    const inactive = disabled || draft.notSure;
+    const { earliest, latest } = dateBounds(schema);
+    return (
+      <div role="group" aria-labelledby={groupLabelId} aria-describedby={describedBy}>
+        <div className="max-w-[16rem]">
+          <label htmlFor={`${id}-date`} className="mb-1 block text-sm font-medium text-ink-secondary">
+            Date
+          </label>
+          <input
+            id={`${id}-date`}
+            type="date"
+            autoComplete="off"
+            value={draft.text}
+            min={earliest}
+            max={latest}
+            disabled={inactive}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy}
+            onChange={(event) => onDraftChange({ ...draft, text: event.target.value })}
+            className="field-control"
+          />
         </div>
         {notSureToggle(draft.notSure, (next) => onDraftChange({ ...draft, notSure: next }))}
       </div>

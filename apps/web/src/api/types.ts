@@ -77,6 +77,7 @@ export const ANSWER_TYPES = [
   'multiple_choice',
   'number',
   'duration',
+  'date',
   'free_text',
 ] as const;
 
@@ -95,11 +96,16 @@ export interface AnswerSchema {
   units?: string[];
   min?: number;
   max?: number;
+  /** For a date question: the first and last day that can be answered, as YYYY-MM-DD or the word "today". */
+  earliest?: string;
+  latest?: string;
   /** Backend-provided copy for the "Why this question?" disclosure. */
   help_text?: string;
 }
 
 export const NOT_SURE = 'not_sure';
+/** A bound of a date question that means the day of whoever answers. */
+export const TODAY = 'today';
 
 export const DURATION_UNITS = ['hours', 'days', 'weeks', 'months'] as const;
 export type DurationUnit = (typeof DURATION_UNITS)[number];
@@ -113,9 +119,22 @@ export interface DurationAnswer {
   value: number;
   unit: DurationUnit;
 }
+/** A calendar date, written YYYY-MM-DD. An object, so that it is never taken for an option or for free text. */
+export interface DateAnswer {
+  date: string;
+}
 
-/** Every value the UI can put in `AnswerSubmit.answer`. */
-export type AnswerValue = string | string[] | NumberAnswer | DurationAnswer;
+/** Every value the UI can put in `AnswerSubmit.answer`. "Not sure" is the string `not_sure` for every type. */
+export type AnswerValue = string | string[] | NumberAnswer | DurationAnswer | DateAnswer;
+
+/** True for a date written YYYY-MM-DD that exists in the calendar. */
+export function isCalendarDate(text: unknown): text is string {
+  if (typeof text !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return false;
+  }
+  const parsed = new Date(`${text}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -172,6 +191,15 @@ export function parseAnswerSchema(raw: unknown): AnswerSchema | null {
   const max = optionalNumber(raw.max);
   if (max !== undefined) {
     schema.max = max;
+  }
+  for (const bound of ['earliest', 'latest'] as const) {
+    const value = raw[bound];
+    if (value === undefined) continue;
+    // A bound this build cannot read would let a date through that the service refuses.
+    if (value !== TODAY && !isCalendarDate(value)) {
+      return null;
+    }
+    schema[bound] = value;
   }
   if (typeof raw.help_text === 'string' && raw.help_text.trim().length > 0) {
     schema.help_text = raw.help_text;

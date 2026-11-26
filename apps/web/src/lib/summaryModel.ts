@@ -50,6 +50,8 @@ export interface SummaryInput {
   summary: Summary | null;
   transcript: readonly TranscriptEntry[];
   generatedAt: Date;
+  /** The words of the options of the questions seen in this visit, by their internal value. */
+  optionLabels?: Readonly<Record<string, string>>;
 }
 
 function answeredQuestions(transcript: readonly TranscriptEntry[]): string[] {
@@ -79,7 +81,7 @@ export function buildSummaryModel(input: SummaryInput): SummaryModel {
     timing.push(`Gender identity: ${demographics.gender_identity}`);
   }
   for (const observation of observations) {
-    const details = observationDetails(observation);
+    const details = observationDetails(observation, input.optionLabels);
     if (details.length > 0) {
       timing.push(`${observationLabel(observation)}: ${details.join(', ')}`);
     }

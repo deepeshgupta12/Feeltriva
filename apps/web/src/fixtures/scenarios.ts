@@ -59,7 +59,11 @@ export const MOCK_SCENARIO_PROFILES: Record<ScenarioId, MockScenarioProfile> = {
   out_of_scope: { afterIntake: 'out_of_scope', questionIds: [], result: 'out_of_scope' },
   insufficient: {
     afterIntake: 'clarifying',
-    questionIds: [SAMPLE_QUESTIONS.measurement.question_id, SAMPLE_QUESTIONS.freeText.question_id],
+    questionIds: [
+      SAMPLE_QUESTIONS.measurement.question_id,
+      SAMPLE_QUESTIONS.startDate.question_id,
+      SAMPLE_QUESTIONS.freeText.question_id,
+    ],
     result: 'insufficient',
   },
   unavailable: {

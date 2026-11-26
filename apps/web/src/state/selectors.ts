@@ -3,6 +3,7 @@
  * returned; none of them derives urgency, ranks explanations or adds clinical meaning.
  */
 import type { Assessment, Candidate, Evidence, ObservationRecord, Session, Urgency } from '@/api/types';
+import { formatCalendarDate } from '@/lib/answers';
 import { humanizeIdentifier } from '@/lib/format';
 
 /** Latest non-superseded observations (corrections are append-only revisions). */
@@ -62,23 +63,38 @@ export function observationLabel(observation: Pick<ObservationRecord, 'feature_i
   return 'Unlabelled detail';
 }
 
-/** Formats an observation's free-form `value` for display, or null when there is none. */
-export function formatObservationValue(value: unknown): string | null {
+/**
+ * Formats an observation's free-form `value` for display, or null when there is nothing to show.
+ *
+ * `optionLabels` holds the words of the options of the questions seen in this visit, by their internal
+ * value. A value that is such an internal value is shown in the option's own words, never as stored
+ * (BUG-009); one that two questions use for different words is not shown at all.
+ */
+export function formatObservationValue(
+  value: unknown,
+  optionLabels: Readonly<Record<string, string>> = {},
+): string | null {
   if (value === undefined || value === null || value === '') {
     return null;
   }
   if (typeof value === 'string') {
-    return value;
+    const label = optionLabels[value];
+    return label === undefined ? value : label || null;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
   if (Array.isArray(value)) {
-    const parts = value.map((item) => formatObservationValue(item)).filter((item): item is string => item !== null);
+    const parts = value
+      .map((item) => formatObservationValue(item, optionLabels))
+      .filter((item): item is string => item !== null);
     return parts.length > 0 ? parts.join(', ') : null;
   }
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>;
+    if (typeof record.date === 'string') {
+      return formatCalendarDate(record.date);
+    }
     if (typeof record.value === 'number' || typeof record.value === 'string') {
       return typeof record.unit === 'string' && record.unit ? `${record.value} ${record.unit}` : String(record.value);
     }
@@ -86,14 +102,19 @@ export function formatObservationValue(value: unknown): string | null {
   return null;
 }
 
-/** Onset, duration, severity and value, in that order, skipping what is absent. */
-export function observationDetails(observation: ObservationRecord): string[] {
+/** Onset, duration, severity and value, in that order, skipping what is absent or already said. */
+export function observationDetails(
+  observation: ObservationRecord,
+  optionLabels: Readonly<Record<string, string>> = {},
+): string[] {
   const details: string[] = [];
   if (observation.onset) details.push(observation.onset);
   if (observation.duration) details.push(observation.duration);
   if (observation.severity) details.push(observation.severity);
-  const value = formatObservationValue(observation.value);
-  if (value) details.push(value);
+  const value = formatObservationValue(observation.value, optionLabels);
+  // A duration answer comes back both as the duration and as the value it was given in: said once (BUG-008).
+  const said = (text: string) => text.trim().toLowerCase().replace(/s$/, '');
+  if (value && !details.some((detail) => said(detail) === said(value))) details.push(value);
   return details;
 }
 

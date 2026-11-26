@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M2.20 (2026-11-26).
+Last updated after sub-step M3.14 (2026-11-26).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -276,7 +276,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | 3 | Ten routes; reviewer preview is not authorisation | Done | | M3.6 |
 | 4 | Landing page, draft footer pages, no invented claims | Done | | M3.6 |
 | 5 | Start and consent in three steps; no guessed age; unsupported scope state | Done | | M3.6 |
-| 6 | Conversation workspace, answer types, "Why this question?", editable observations, version conflict | Partial | No **date** answer type; BUG-008, BUG-009 | M3.14 |
+| 6 | Conversation workspace, answer types, "Why this question?", editable observations, version conflict | Partial | All the answer types of the handoff are there since M3.14, the date type included; BUG-008 fixed; BUG-009 fixed for the visit in which the question was asked. Missing: the words of a stored option after a reload, which need the contract | M3.12 |
 | 7 | Results hierarchy, possibility cards, sources drawer, stale result | Done | | M3.6, M3.7 |
 | 8 | Ten urgent/incomplete/unsupported states | Done | | M3.6 |
 | 9 | Print-friendly summary, review acknowledgement, no auto-share | Done | | M3.6 |

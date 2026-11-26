@@ -15,10 +15,10 @@ command output, not estimated.
 | BUG-004 | M1.6 | Ingestion load test failed on the persistent test database (43 sources, expected 13) | Fixed |
 | BUG-005 | M1.7 / M1.8 | PostgreSQL restarted itself during bulk loads (twice) | Fixed in M1.8 — root cause found: the health check orphaned a probe that PostgreSQL, as process 1, treated as a crashed child |
 | BUG-006 | M1.7 | Formatter re-wrapped two already-applied migrations | Fixed — reverted before commit |
-| BUG-007 | M3.6 | Web: keyboard focus is not returned to the footer button after its dialog closes | Open |
-| BUG-008 | M3.6 | Web: a duration answer is displayed twice ("3 days · 3 days") | Open |
-| BUG-009 | M3.6 | Web: an explicit "None of these" answer shows the raw option value "none" under the detail | Open |
-| BUG-010 | M3.6 / M3.3 | "Not sure" on multiple-choice and free-text questions is sent in a form the API does not treat as uncertain (latent: no such question in the fixture) | Open |
+| BUG-007 | M3.6 | Web: keyboard focus is not returned to the footer button after its dialog closes | Fixed since `e9dfbc8` (the dialog remembers what had focus, `useRestoreFocus`); the index said "Open" from the first run of that day and was never corrected. Checked in M3.14: the smoke check passes |
+| BUG-008 | M3.6 | Web: a duration answer is displayed twice ("3 days · 3 days") | Fixed in M3.14: what is already said under a detail is not said again |
+| BUG-009 | M3.6 | Web: an explicit "None of these" answer shows the raw option value "none" under the detail | Fixed in M3.14 for the visit in which the question was asked: the web keeps the words of the options it has shown and shows those. After a reload the web no longer has them (the contract gives no words with a stored answer: M3.12) |
+| BUG-010 | M3.6 / M3.3 | "Not sure" on multiple-choice and free-text questions is sent in a form the API does not treat as uncertain (latent: no such question in the fixture) | Fixed in M3.14 on both sides: "not sure" is the one string `not_sure` for every type of question, sent so by the web and read so by the service |
 | BUG-011 | M1.8 | Feature loader refused any file that contains a malformed row | Fixed |
 | BUG-012 | M1.11 | Large aggregate failed: PostgreSQL could not resize a shared memory segment | Fixed |
 | BUG-013 | M0.3 / M1.12 | The Compose `objectstore` service named an image that cannot be pulled | Fixed |
@@ -6117,3 +6117,77 @@ both jobs, run 45766935698), `42a8578` (pull request 7 merged: prettier 3.10.1; 
 45769476948), `10c3146` (M2.20; passed, run 45781312859). All verified with `gh run view`.
 GitNexus index at `10c3146`, up to date. Running for the owner: the API on port 8000 with the code
 of `10c3146` and migration 0020 applied, and the review workspace on port 5173.
+
+### M3.14 — Open web defects, and the date answer type
+
+**What it is for.** The first sub-step of step 3 in the order of work, started on the owner's
+word of 2026-11-26 ("let's proceed with the next step now") after every sub-step of step 2 was
+done. The plan row names four defects of the web app, the date answer type the handoff asks for
+(`docs/06`, the conversation workspace: "date/duration") and an old dependency alert.
+
+**Impact analysis before editing.** The graph gave 0 callers, marked partial, for all five
+symbols asked: it does not follow a call from one package into another (a limit recorded in
+`CLAUDE.md` for the service; it holds for `packages/clinical` as well). By search:
+
+| Changed | Real callers | What was done |
+|---|---|---|
+| `answers.interpret_answer` (shared package) | `service_intake` (the answer route of the service; the MCP tool `submit_answer` goes through the same method) and the unit tests | Additive only: every answer accepted before is read as before. Treated as shared code of the highest care whatever the tool printed; `tests/mcp` run with the suites |
+| `answers.validate_answer_schema` | `bundle.py`, at every load of a rule bundle | A date question's bounds are checked; nothing changes for the other types |
+| Web: `resolveDraft`, `draftFromValue`, `emptyDraft`, `parseAnswerSchema`, `formatObservationValue`, `observationDetails`, `AnswerOptions`, the mock service's `applyAnswer`, the controller's `setQuestion` | The answer form, the chip of a detail, the summary, the demo | Listed below |
+
+**Implemented** (decision E106).
+
+- **BUG-010, "not sure".** The service reads the string `not_sure` as "not sure" for
+  multiple-choice, free-text and date questions that allow it, as it already did for the other
+  types; the web sends that one string for every type (it sent `["not_sure"]` for multiple choice,
+  which the service refused). On a free-text question that does not offer "not sure" the words
+  stay the person's own, as before.
+- **Date answers.** A new type `date` in the shared package, the web and the demo. The answer is
+  `{"date": "YYYY-MM-DD"}`; a question may bound it with `earliest` and `latest`, each a date or
+  the word `today`. The web shows a date field with nothing filled in, the bounds on the field, "I'm
+  not sure" when allowed, and the date in words ("15 January 2026") in the transcript and under
+  the detail. The demo's "Insufficient information" scenario asks a sample date question.
+- **BUG-008.** Under a detail, a value that says what the duration already says is not shown again.
+- **BUG-009.** The controller keeps the words of every option of the questions it has shown; a
+  stored value that is such an internal value is shown in those words. A value two questions use
+  for different words is shown as neither.
+- **Free text.** The web accepted 10,000 characters where the service accepts 2,000; the web now
+  stops at 2,000 with its own message. Found while reading the two sides; not in the bug index.
+- **Review screens.** The kinds of answer "several of the choices", "a date" and "free text" are
+  put into words (the service's `multiple_choice` had no words and was shown as stored).
+- **BUG-007** and the **`minimatch` alert**: nothing to change. The focus check of the smoke test
+  passes; the hook that restores focus is in the commit that introduced the web app. GitHub's
+  alert 1 is `fixed` since 2026-11-18 (read with `gh api`; the fix is in the log under that date).
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 79 files |
+| `uv run pytest` (SQLite, archives included) | 299 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, real archives, object store and `tests/mcp` included; full output saved | 378 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format:check` | clean; all files formatted |
+| `pnpm test` | 159 passed (10 files); 144 before. Two existing tests held the old form `["not_sure"]` and were changed on purpose |
+| `pnpm e2e:live` (web through the real service, `pnpm dev:api` on port 5173) | 45 passed, 0 failed; 43 before, plus "None of these" in its own words and the duration once |
+| `pnpm smoke` (design demo, `pnpm dev` on port 5173) | 378 passed, 0 failed; 375 before, plus three checks of the date question |
+| `detect_changes` before commit | critical by its own count (88 symbols, 34 flows: the conversation, the results and the summary pages). In the shared package, compared with the last commit function by function: `interpret_answer` and `validate_answer_schema` changed, `_calendar_date` added, nothing else; in the mock service only the handling of answers |
+
+New tests: two unit tests of the shared package (one form of "not sure" for every type; a date
+answer, its bounds, "today", a bundle with senseless bounds refused); web: date drafts and bounds,
+the free-text limit, the words of options, the detail line, the date field, the chip, and three
+flows through the demo.
+
+**Limits, stated plainly.**
+
+- No question of the synthetic fixture is a date, a multiple-choice or a free-text question, so
+  these three types are tested in the shared package, in the web's own tests and in the demo, not
+  through the live service in a browser. Adding one to the fixture changes the fixture version
+  and every test that walks its questions; it is not done here.
+- BUG-009 is fixed for the visit in which the question was asked. The service returns the stored
+  internal value and no words; a page opened later cannot show the words. That needs the contract
+  (M3.12, where it is now named).
+- The service's own summary text still writes a stored value as it is stored (`value: "none"`,
+  `value: {"date": "2026-01-15"}`). It is the same defect on the service's side and had no
+  sub-step; added as M3.14a.
+- "Today" is the day of the person who answers. The service does not know their time zone, so a
+  bound of "today" allows one day either way; a bound written as a date is exact.

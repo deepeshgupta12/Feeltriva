@@ -31,6 +31,7 @@ const SCRIPTED_ANSWERS: Record<string, { value: AnswerValue; label: string }> = 
     value: { value: 42, unit: 'sample unit A' },
     label: '42 sample unit A',
   },
+  [SAMPLE_QUESTIONS.startDate.question_id]: { value: { date: '2026-01-15' }, label: '15 January 2026' },
   [SAMPLE_QUESTIONS.freeText.question_id]: { value: 'Sample note', label: 'Sample note' },
 };
 

@@ -5,6 +5,8 @@
 import {
   DURATION_UNITS,
   NOT_SURE,
+  TODAY,
+  isCalendarDate,
   type AnswerOption,
   type AnswerSchema,
   type AnswerValue,
@@ -12,13 +14,15 @@ import {
 } from '@/api/types';
 
 export const NOT_SURE_LABEL = 'I’m not sure';
-export const MAX_FREE_TEXT_LENGTH = 10_000;
+/** The service accepts a free-text answer of up to 2,000 characters; a longer one would be refused there. */
+export const MAX_FREE_TEXT_LENGTH = 2_000;
 
 export type AnswerDraft =
   | { kind: 'choice'; value: string | null }
   | { kind: 'multi'; values: string[]; notSure: boolean }
   | { kind: 'number'; text: string; unit: string; notSure: boolean }
   | { kind: 'duration'; text: string; unit: DurationUnit | ''; notSure: boolean }
+  | { kind: 'date'; text: string; notSure: boolean }
   | { kind: 'text'; text: string; notSure: boolean };
 
 export type DraftResult = { ok: true; value: AnswerValue; label: string } | { ok: false; message: string };
@@ -70,6 +74,8 @@ export function emptyDraft(schema: AnswerSchema): AnswerDraft {
     }
     case 'duration':
       return { kind: 'duration', text: '', unit: '', notSure: false };
+    case 'date':
+      return { kind: 'date', text: '', notSure: false };
     case 'free_text':
       return { kind: 'text', text: '', notSure: false };
   }
@@ -82,7 +88,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Rebuilds a draft from a value the user already chose (kept after a failed or conflicting send). */
 export function draftFromValue(schema: AnswerSchema, value: AnswerValue): AnswerDraft {
   const draft = emptyDraft(schema);
-  const notSure = value === NOT_SURE || (Array.isArray(value) && value.length === 1 && value[0] === NOT_SURE);
+  const notSure = value === NOT_SURE;
   switch (draft.kind) {
     case 'choice':
       return typeof value === 'string' ? { kind: 'choice', value } : draft;
@@ -99,10 +105,51 @@ export function draftFromValue(schema: AnswerSchema, value: AnswerValue): Answer
       return isRecord(value) && typeof value.value === 'number' && typeof value.unit === 'string'
         ? { ...draft, text: String(value.value), unit: value.unit as DurationUnit }
         : draft;
+    case 'date':
+      if (notSure) return { ...draft, notSure: true };
+      return isRecord(value) && isCalendarDate(value.date) ? { ...draft, text: value.date } : draft;
     case 'text':
       if (notSure) return { ...draft, notSure: true };
       return typeof value === 'string' ? { ...draft, text: value } : draft;
   }
+}
+
+const calendarFormatter = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeZone: 'UTC' });
+
+/** A calendar date in words, "20 November 2026". The date is a day, not a moment: no time zone moves it. */
+export function formatCalendarDate(iso: string): string {
+  return isCalendarDate(iso) ? calendarFormatter.format(new Date(`${iso}T00:00:00Z`)) : iso;
+}
+
+/** The day it is for the person at this device, as YYYY-MM-DD. */
+export function localToday(now: Date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** The first and last day a date question accepts, with "today" read as the day at this device. */
+export function dateBounds(schema: AnswerSchema, now: Date = new Date()): { earliest?: string; latest?: string } {
+  const resolve = (bound: string | undefined) => (bound === TODAY ? localToday(now) : bound);
+  const earliest = resolve(schema.earliest);
+  const latest = resolve(schema.latest);
+  return { ...(earliest ? { earliest } : {}), ...(latest ? { latest } : {}) };
+}
+
+/**
+ * The words of each option of the questions seen in this visit, by the option's internal value (BUG-009).
+ * The service stores the internal value of a chosen option; it is shown to the person in the option's own
+ * words. A value that two questions use for different words is kept as '' and shown as neither.
+ */
+export function withOptionLabels(
+  known: Readonly<Record<string, string>>,
+  schema: AnswerSchema,
+): Record<string, string> {
+  const next = { ...known };
+  for (const option of schema.options ?? []) {
+    const seen = next[option.value];
+    next[option.value] = seen === undefined || seen === option.label ? option.label : '';
+  }
+  return next;
 }
 
 function parseNumber(text: string): number | null {
@@ -131,8 +178,8 @@ function singularUnit(value: number, unit: string): string {
 /**
  * Validates a draft and produces the wire value plus a readable label for the transcript.
  *
- * "Not sure" is sent as the string `not_sure` (as a one-item array for multiple choice, so
- * the value keeps its array type). Only offered when the schema allows it.
+ * "Not sure" is sent as the string `not_sure` for every type of question: the service reads no
+ * other form as "not sure" (BUG-010). Only offered when the schema allows it.
  */
 export function resolveDraft(schema: AnswerSchema, draft: AnswerDraft): DraftResult {
   const notSureAllowed = schema.allow_not_sure === true;
@@ -147,7 +194,7 @@ export function resolveDraft(schema: AnswerSchema, draft: AnswerDraft): DraftRes
     }
     case 'multi': {
       if (draft.notSure && notSureAllowed) {
-        return { ok: true, value: [NOT_SURE], label: NOT_SURE_LABEL };
+        return { ok: true, value: NOT_SURE, label: NOT_SURE_LABEL };
       }
       const selected = (schema.options ?? []).filter((option) => draft.values.includes(option.value));
       if (selected.length === 0) {
@@ -198,6 +245,34 @@ export function resolveDraft(schema: AnswerSchema, draft: AnswerDraft): DraftRes
         value: { value: parsed, unit: draft.unit },
         label: `${parsed} ${singularUnit(parsed, draft.unit)}`,
       };
+    }
+    case 'date': {
+      if (draft.notSure && notSureAllowed) {
+        return { ok: true, value: NOT_SURE, label: NOT_SURE_LABEL };
+      }
+      if (!isCalendarDate(draft.text)) {
+        return { ok: false, message: 'Choose a date to continue.' };
+      }
+      const { earliest, latest } = dateBounds(schema);
+      if (earliest && draft.text < earliest) {
+        return {
+          ok: false,
+          message:
+            schema.earliest === TODAY
+              ? 'Choose a date that is today or later.'
+              : `Choose a date on or after ${formatCalendarDate(earliest)}.`,
+        };
+      }
+      if (latest && draft.text > latest) {
+        return {
+          ok: false,
+          message:
+            schema.latest === TODAY
+              ? 'Choose a date that is today or earlier.'
+              : `Choose a date on or before ${formatCalendarDate(latest)}.`,
+        };
+      }
+      return { ok: true, value: { date: draft.text }, label: formatCalendarDate(draft.text) };
     }
     case 'text': {
       if (draft.notSure && notSureAllowed) {

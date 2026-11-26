@@ -8,6 +8,7 @@ import {
   currentObservations,
   formatObservationValue,
   groupObservations,
+  observationDetails,
   isAssessmentStale,
   observationLabel,
   urgencyPresentation,
@@ -96,6 +97,37 @@ describe('formatObservationValue', () => {
     expect(formatObservationValue(['a', 'b'])).toBe('a, b');
     expect(formatObservationValue(undefined)).toBeNull();
     expect(formatObservationValue({ unexpected: true })).toBeNull();
+  });
+});
+
+describe('what is shown under a detail', () => {
+  it('says a duration once, although the service returns it twice (BUG-008)', () => {
+    const answered = observation({ duration: '3 days', value: { value: 3, unit: 'days' } });
+    expect(observationDetails(answered)).toEqual(['3 days']);
+    // Singular and plural of the same length of time are the same thing said twice.
+    expect(observationDetails(observation({ duration: '1 day', value: { value: 1, unit: 'days' } }))).toEqual([
+      '1 day',
+    ]);
+    // A different value is still shown beside the duration.
+    expect(observationDetails(observation({ duration: '3 days', value: { value: 38, unit: 'u' } }))).toEqual([
+      '3 days',
+      '38 u',
+    ]);
+  });
+
+  it('shows a chosen option in its own words, never as the internal value (BUG-009)', () => {
+    const labels = { none: 'None of these', level_2: 'A moderate amount', both: '' };
+    expect(observationDetails(observation({ presence: 'absent', value: 'none' }), labels)).toEqual(['None of these']);
+    expect(formatObservationValue(['level_2', 'none'], labels)).toBe('A moderate amount, None of these');
+    // An internal value that two questions use for different words is not shown at all.
+    expect(formatObservationValue('both', labels)).toBeNull();
+    // Words that are not an internal value of any question seen are shown as they are.
+    expect(formatObservationValue('Sample situation 1', labels)).toBe('Sample situation 1');
+  });
+
+  it('shows a date answer in words', () => {
+    expect(formatObservationValue({ date: '2026-01-15' })).toBe('15 January 2026');
+    expect(observationDetails(observation({ value: { date: '2026-11-20' } }))).toEqual(['20 November 2026']);
   });
 });
 
