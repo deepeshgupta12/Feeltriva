@@ -332,3 +332,91 @@ def test_the_database_lets_nobody_change_the_texts_of_a_decided_set(db, owner_db
     ):
         with pytest.raises(DBAPIError, match="cannot be changed"), owner_db.transaction(None, role="migration") as tx:
             tx.execute(text(statement), one)
+
+
+def test_a_question_keeps_what_the_reviewer_gave_it_on_the_way_to_a_published_rule_set(owner_db):
+    # BUG-036: which option means "not present", the reviewer's order and the mark "essential" were dropped
+    # between the rule file and a published rule set, so "None of these" would have been read as present.
+    import uuid
+
+    from feeltriva_api import releases
+    from feeltriva_api.models import ClinicalRule, Feature, FollowupQuestion, RuleBundle
+    from feeltriva_api.serving_bundle import question_of
+
+    with owner_db.transaction(None, role="migration") as tx:
+        # The synthetic rule set is stored by the test setup, through the same function as on any installation.
+        stored = tx.get(FollowupQuestion, "fx.q.gamma").branch_rules
+        assert stored == {"option_presence": {"none": "absent"}, "priority": 20, "essential": False}
+
+        tag = uuid.uuid4().hex[:8]
+        tx.add(
+            Feature(
+                feature_id=f"feat_{tag}", preferred_name=f"pretend sign {tag}", kind="symptom", value_type="boolean"
+            )
+        )
+        tx.add(RuleBundle(bundle_id=f"qp-{tag}", version=f"qp-{tag}-1", status="pending", manifest_uri=f"test://{tag}"))
+        tx.flush()
+        schema = {
+            "type": "single_choice",
+            "options": [{"value": "a", "label": "A"}, {"value": "none", "label": "None"}],
+        }
+        for key, more in (
+            ("kept", {"option_presence": {"none": "absent"}, "priority": 7, "essential": True}),
+            ("old", {}),
+        ):
+            tx.add(
+                FollowupQuestion(
+                    question_id=f"q.{tag}.{key}",
+                    bundle_id=f"qp-{tag}",
+                    feature_id=f"feat_{tag}",
+                    wording="An invented question?",
+                    answer_schema=schema,
+                    applicability={},
+                    branch_rules=more,
+                    evidence_ids=[],
+                    status="approved",
+                )
+            )
+        tx.add(
+            ClinicalRule(
+                rule_id=f"urg.{tag}",
+                bundle_id=f"qp-{tag}",
+                rule_type="urgency",
+                applicability={},
+                condition_ast={"op": "present", "feature": f"feat_{tag}"},
+                action={"type": "escalate", "urgency": "urgent", "text": "Sample text (invented)."},
+                evidence_ids=[],
+                priority=10,
+                status="approved",
+            )
+        )
+        tx.flush()
+        content, _problems = releases._content(tx, tx.get(RuleBundle, f"qp-{tag}"))
+        published = {entry["question_id"].rsplit(".", 1)[1]: entry for entry in content["questions"]}
+        assert (
+            published["kept"]["option_presence"],
+            published["kept"]["priority"],
+            published["kept"]["essential"],
+        ) == (
+            {"none": "absent"},
+            7,
+            True,
+        )
+        # A question stored before the fix has none of the three: it is published as it always was.
+        assert (published["old"]["option_presence"], published["old"]["priority"], published["old"]["essential"]) == (
+            {},
+            100,
+            False,
+        )
+        asked = question_of(published["kept"])
+        assert (asked.option_presence, asked.priority, asked.essential, asked.status) == (
+            {"none": "absent"},
+            7,
+            True,
+            "approved",
+        )
+        # A rule set published before the fix holds none of the keys and is read as before.
+        bare = {k: v for k, v in published["kept"].items() if k not in ("option_presence", "priority", "essential")}
+        before = question_of(bare)
+        assert (before.option_presence, before.priority, before.essential) == ({}, 100, False)
+        tx.rollback()  # nothing of this test stays in the database

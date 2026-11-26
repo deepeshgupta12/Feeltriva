@@ -102,18 +102,7 @@ def _assemble(tx: Any) -> tuple[ReleaseBundle | None, dict[str, Any], list[str]]
         for entry in mapping.content["features"]
     ]
     rules = [Rule(**entry, status="approved") for entry in rule.content["rules"]]
-    questions = [
-        Question(
-            question_id=entry["question_id"],
-            feature_id=entry["feature_id"],
-            wording=entry["wording"],
-            answer_schema=entry["answer_schema"],
-            applicability=entry.get("applicability") or None,
-            evidence_ids=list(entry.get("evidence_ids") or []),
-            status="approved",
-        )
-        for entry in rule.content["questions"]
-    ]
+    questions = [question_of(entry) for entry in rule.content["questions"]]
     named = {feature for entry in rules for feature in referenced_features(entry.condition_ast)}
     named |= {question.feature_id for question in questions}
     missing = sorted(named - {feature.feature_id for feature in features})
@@ -237,3 +226,21 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def question_of(entry: dict[str, Any]) -> Question:
+    """A question of a published rule set as the service asks it. Which option means "not present", the
+    reviewer's order and the mark "essential" are absent from a rule set published before BUG-036 was fixed;
+    the defaults are what such a rule set had then."""
+    return Question(
+        question_id=entry["question_id"],
+        feature_id=entry["feature_id"],
+        wording=entry["wording"],
+        answer_schema=entry["answer_schema"],
+        applicability=entry.get("applicability") or None,
+        evidence_ids=list(entry.get("evidence_ids") or []),
+        option_presence=dict(entry.get("option_presence") or {}),
+        priority=int(entry.get("priority", 100)),
+        essential=bool(entry.get("essential", False)),
+        status="approved",
+    )

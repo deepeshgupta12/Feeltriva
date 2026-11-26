@@ -8,13 +8,14 @@ fixture bundle is synthetic, nonmedical and can never be served in clinical mode
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .answers import AnswerValidationError, validate_answer_schema
-from .rules import RuleValidationError, validate_ast
+from .rules import Facts, RuleValidationError, evaluate, validate_ast
 
 ReviewState = Literal["pending", "approved", "rejected", "retired"]
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "fixture_release.json"
@@ -58,6 +59,9 @@ class Question(_Strict):
     applicability: dict[str, Any] | None = None
     evidence_ids: list[str] = []
     priority: int = 100
+    # The reviewer's mark that the assessment needs this answer whatever else is known (M3.8): such a question is
+    # asked before the ones that only tell possible explanations apart.
+    essential: bool = False
     status: ReviewState = "pending"
 
 
@@ -143,6 +147,14 @@ def validate_bundle(bundle: ReleaseBundle, *, clinical_mode: bool) -> None:
             validate_ast(c.condition_ast, features)
     except (RuleValidationError, AnswerValidationError) as exc:
         raise BundleError(str(exc)) from exc
+    named = given_by_its_own_name(bundle)
+    if named:
+        candidate, feature = named[0]
+        raise BundleError(
+            f'"{candidate.name}" would be given from "{feature.preferred_name}" alone. A complaint that is also the '
+            "everyday name of a condition leads to follow-up questions, never to that condition by itself "
+            f"(decision E65); {len(named)} such pairs in this bundle"
+        )
     if (bundle.knowledge_release_id is None) != (bundle.knowledge_version is None):
         raise BundleError("a knowledge release is named by its ID and its version, or not at all")
     if bundle.knowledge_version is None and (bundle.candidates or bundle.evidence):
@@ -160,6 +172,25 @@ def validate_bundle(bundle: ReleaseBundle, *, clinical_mode: bool) -> None:
         ]
         if pending:
             raise BundleError(f"{len(pending)} bundle items are not approved")
+
+
+def _words(name: str) -> list[str]:
+    return re.sub(r"[^a-z0-9]+", " ", name.lower()).split()
+
+
+def given_by_its_own_name(bundle: ReleaseBundle) -> list[tuple[CandidateDef, Feature]]:
+    """The possible explanations that one reported detail would give by itself, where that detail carries the
+    explanation's own name or a word sequence of it ("cold" and "common cold"). Owner's rule E65: the word a
+    person uses for a complaint is not the condition; the conditions it could be are told apart by questions."""
+    found = []
+    for candidate in bundle.candidates:
+        name = _words(candidate.name)
+        for feature in bundle.features:
+            words = _words(feature.preferred_name)
+            inside = words and any(name[i : i + len(words)] == words for i in range(len(name) - len(words) + 1))
+            if inside and evaluate(candidate.condition_ast, Facts({feature.feature_id: "present"})) is True:
+                found.append((candidate, feature))
+    return found
 
 
 def load_bundle(path: Path, *, clinical_mode: bool) -> ReleaseBundle:

@@ -99,6 +99,10 @@ def _content(tx: Any, bundle: RuleBundle) -> tuple[dict[str, Any], list[str]]:
                 "answer_schema": question.answer_schema,
                 "applicability": question.applicability,
                 "evidence_ids": question.evidence_ids,
+                # Kept with the question since BUG-036; a question stored before that has none of them.
+                "option_presence": dict((question.branch_rules or {}).get("option_presence") or {}),
+                "priority": int((question.branch_rules or {}).get("priority", 100)),
+                "essential": bool((question.branch_rules or {}).get("essential", False)),
             }
             for question in questions
             if question.status == "approved"

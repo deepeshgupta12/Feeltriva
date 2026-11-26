@@ -50,7 +50,15 @@ def seed_release(db: Database, bundle: ReleaseBundle) -> None:
             row_q = tx.get(FollowupQuestion, q.question_id) or FollowupQuestion(question_id=q.question_id)
             row_q.bundle_id, row_q.feature_id, row_q.wording = bundle.bundle_id, q.feature_id, q.wording
             row_q.answer_schema, row_q.applicability = q.answer_schema, q.applicability or {}
-            row_q.branch_rules, row_q.evidence_ids, row_q.status = {}, list(q.evidence_ids), q.status
+            # What the reviewer gave the question beyond its wording: which option means "not present", where it
+            # stands in the reviewer's own order, and whether it is essential. Without these a published rule
+            # set read "None of these" as present and had no order at all (BUG-036).
+            row_q.branch_rules = {
+                "option_presence": dict(q.option_presence),
+                "priority": q.priority,
+                "essential": q.essential,
+            }
+            row_q.evidence_ids, row_q.status = list(q.evidence_ids), q.status
             tx.add(row_q)
 
 

@@ -44,6 +44,7 @@ command output, not estimated.
 | BUG-033 | M2.20 | The same slip as BUG-029, a second time: a new test of M2.20 wrote a fact straight into the test database as approved, under a real kind of fact. The loaders' own tests count every fact of that kind in the whole table and found 7 "changed by no reviewer" (one per run of the new test). Found by the full PostgreSQL run before commit | Fixed in M2.20: the test's fact is approved through the review path, as a reviewer's decision; the stray rows were removed from the test database |
 | BUG-034 | M2.5c2 / M2.20 | The lists of published versions read the whole content of every version on every request, and the list of knowledge versions read, for each of them, the whole list of names it was published against. With one version this is nothing; in the test database, where test runs had left 480 lists of names and 287 knowledge versions, the two requests took 5 and 8 seconds, the page "Published versions" about 14, and the browser test of that page ran out of time. Found by `pnpm e2e:review` | Fixed in M2.20: a published version never changes, so it is counted once; the list reads no content after that. Measured on the test database: 0.02 s a request after the first (6.7 s and 3.2 s for the first after a start) |
 | BUG-035 | M3.2 / M3.14a | Observations written in one request (two details confirmed together) had no order: they are read back by version and time, and the database gives every row of one transaction the same time. The same flow could return them in either order. Seen three times as the REST and MCP parity test failing in a full PostgreSQL run and passing on the next; each time the output had not been kept. Caught in M3.14a with the output saved | Fixed in M3.14a: each row of a request gets its own time, in the order given; a test checks the times themselves, because the wrong order is too rare to wait for |
+| BUG-036 | M2.5a / M3.8 | A follow-up question lost three things on its way from the rule file through the database into a published rule set: which option means "not present" (so "None of these" would have been read as present), the reviewer's order, and now the mark "essential". The table had no place for them and the published content did not list them. No effect so far: the only published rule set holds rules and no questions. Found while reading the path for M3.8 | Fixed in M3.8: kept with the question (`branch_rules`), listed in the published content, read by the serving bundle; a rule set published before the fix is read as before |
 
 ## Entries
 
@@ -6245,3 +6246,62 @@ The web app is not touched: it shows the service's summary text as it comes.
 
 **Limits.** A question removed from the rule set leaves its old answers without words; they are
 listed as recorded. The summary is in English only, like every text of the service.
+
+### M3.8 — How the next follow-up question is chosen
+
+**What it is for.** Handoff FR06 ("select approved questions by safety priority, missing
+essentials, information value and burden; one at a time; avoid repeats") and the section on the
+question selector ("urgency questions outrank information gain; estimate information gain only
+from reviewed rules …, do not manufacture it from unvalidated counts"). Owner's rule E65. Until
+now the service asked in the order of one number the reviewer gave each question.
+
+**Impact analysis before editing.** One HIGH result, reported to the owner in a message with the
+plan before any edit.
+
+| Changed | Risk | Callers, and what was done |
+|---|---|---|
+| `serving_bundle._assemble` | HIGH: `assemble`, reached from the API's start-up check, the command and the review preview | Reads three more values of a question, each with a default when a published rule set does not have them; rule sets published before are read as before |
+| `engine.next_question` (shared package) | 0 in the graph, which does not follow calls across packages; by search: the service's `get_next_question`, `submit_answer` and the next step of an assessment, for REST and MCP | Same signature. For the synthetic rule set the order works out the same, so every existing flow is unchanged (checked by the suites) |
+| `bundle.validate_bundle` | by search: `load_bundle` and `_assemble` | One more refusal (E65); neither the synthetic nor the real rule set has such a condition |
+| `releases._content`, `seed.seed_release` | LOW | The three values are stored and listed |
+
+**Implemented** (decision E107).
+
+- `feeltriva_clinical.question_order(bundle, facts)`: the questions that can be asked now, in
+  order, each with why it stands there (safety, essential, informative, other), the earliest
+  undecided rule it could decide and the number of undecided explanations it bears on.
+  `next_question` returns the first.
+- `Question.essential`, the reviewer's mark. `given_by_its_own_name` and the refusal in
+  `validate_bundle` (E65).
+- BUG-036: `seed_release` stores option meanings, order and the mark with the question;
+  `releases._content` lists them; `serving_bundle.question_of` reads them.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 79 files |
+| `uv run pytest` (SQLite, archives included) | 306 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, archives, object store and `tests/mcp` included; full output saved | 385 passed, 1 skipped |
+| `detect_changes` before commit | high (`_assemble` and its three flows). Compared with the last commit function by function: `Question`, `validate_bundle`, `next_question`, `_content`, `seed_release`, `_assemble` changed; `question_order`, `RankedQuestion`, `given_by_its_own_name`, `_words`, `question_of` added; `CandidateDef` and the two `main` functions are listed and only moved |
+
+New tests, on invented bundles (`tests/unit/test_question_policy.py`, 4): a safety question
+comes before every other, whatever the reviewer's order or the kind of answer, and is not asked
+twice; essentials, then what tells most apart, then the easier answer, then the reviewer's order;
+the same explanations are decided after 2 questions where the fixed order needed 5; a person who
+reports only "cold" is asked a telling question and given nothing, and a rule set that would give
+"common cold" from the word alone does not load. One test of the path from rule file to published
+rule set (`tests/api/test_serving_bundle.py`).
+
+**Limits, stated plainly.**
+
+- The policy is tested on invented bundles. The real approved rule set has 20 urgency rules and
+  no follow-up question, and no possible explanations are served yet (M5.7), so on real content
+  the policy has nothing to order today.
+- It orders and does not stop: D-Q1.
+- "Answerability", which the handoff names beside burden, is not a separate measure; the kind of
+  answer stands for both.
+- The handoff asks that a question policy be evaluated offline and with clinicians before a
+  supervised trial. That has not happened.
+- The four invented questions of the test rule set stored in the real database were written
+  before the fix; `python -m feeltriva_api.seed` writes them again with their option meanings.
