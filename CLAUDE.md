@@ -156,6 +156,7 @@ uv run python -m feeltriva_ingestion extract-claims            # statements spli
 uv run python -m feeltriva_api.rule_drafts                     # the draft urgency rules, checked against the feature vocabulary and stored pending
 uv run python -m feeltriva_api.response_text_sets              # the four response texts stored as the file has them, for a reviewer's decision
 uv run python -m feeltriva_api.serving_bundle                  # the serving bundle assembled from the current releases (data/derived/, outside Git)
+uv run python -m feeltriva_api.duplicates                      # duplicates counted by kind; changes nothing (with --merge --reviewer --note: merges the condition names that are one condition by rule)
 ```
 
 Run the PostgreSQL suite **without** `-m "not archives"` at least once per sub-step when the

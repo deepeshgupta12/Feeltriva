@@ -37,6 +37,8 @@ command output, not estimated.
 | BUG-026 | M1.10 / M2.5f | A test of the chunk loader searched the shared test database for words every run stores, with a limit of 50, and expected its own row among the results; once more than 50 runs had left their rows it failed depending on the order | Fixed in M2.5f: the test searches for its own run's word |
 | BUG-027 | M2.1 / M2.4a | Two notes recorded on one item within a second came back in either order on SQLite, and every note of one transaction carried the same time on PostgreSQL, because the database filled the time in | Fixed in M2.4a: a note's time is set by the code, to the microsecond |
 | BUG-028 | M2.16 / M2.4e | An answer "not found" from the WHO ICD API was neither saved nor counted. Every run of `import-identifiers` therefore asked WHO again for the same three ICD-11 entities (four requests, one entity being reached from two labels) and reported them as none; the request for an access token was not counted either. Found when the command was first run without permission to ask WHO and four entities had no saved answer | Fixed in M2.4e: "not found" is saved like any answer; every request sent is counted |
+| BUG-029 | M2.18 | A new test retired every word-for-word copy of a text in the test database, not only its own invented rows. One text of the real archives, loaded there by the archive tests, was retired with it, and the archive test that expects every loaded text to be pending then failed on the next full PostgreSQL run. Found by that run, before commit | Fixed in M2.18: the retiring step takes the conditions it may touch, the test gives its own; the one row of the test database was put back |
+| BUG-030 | M2.4j / M2.18 | In the panel that decides all rows shown at once, the line that says what was recorded stood in two places, one for a list with rows and one for a list without. The list has no row for a moment while it is read again after a decision, so the line was taken away and put back as a new element. A screen reader could announce it twice or not at all, and the component test failed about one run in three (it held the element that had just been taken away). Seen three times since M2.4j and put down to a busy machine until the failing output was saved | Fixed in M2.18: the line is one element outside both cases; 8 runs of 8 pass (before: 2 of 6 failed) |
 
 ## Entries
 
@@ -5656,3 +5658,111 @@ check that name them.
 table's columns and of the detail's fields are the plain ones of E97, by the owner's later
 instruction. If the owner wants the handoff's own names back on the design demo, that is one
 list of words to turn round.
+
+### M2.18 — Duplicates in the data: counted, shown for what they are, merged where a rule can settle it
+
+**What it is for.** The owner on 2026-11-25: "I am finding duplicacy in many parts, do the sanity
+of the data and fix the same as well."
+
+**Measured first, on the real data, reading only.**
+
+| What looks like a duplicate | Found | What it is |
+|---|---|---|
+| The same condition name on several rows of "Condition names" | 3,117 rows for 960 conditions; a name stands in 1 to 12 files | One row per data file. Not a duplicate; the list did not show the file |
+| The same condition and item in several facts | 5,630 pairs in 14,177 rows | One counted fact per data file, or one mention per text. Not a duplicate; the list did not show the file |
+| Condition names equal but for an underscore or punctuation | 17 pairs | Real duplicates |
+| Two condition names matched to one entry of a reference list | 44 suggestions of 61 for conditions | Two names for one condition, with two doubtful pairs |
+| The same text stored twice for one condition | 1 set before the merges, 3 after | Real duplicates |
+| Item names equal but for punctuation; pairs of item names suggested as the same | 8 pairs; 67 suggestions | Real duplicates the service cannot merge yet |
+| The same match, the same part of a text file, or the same sentence stored twice | 0, 0, 0 | None |
+
+**Impact analysis before editing** (LOW). `list_disease_mappings`: one caller, its route. The
+merge, the split and the decision path of the service are used and not changed. `BulkDecision`
+(for BUG-030): LOW; the graph traces no user of a screen component, by search it is used in one
+place, the list page.
+
+**Implemented** (decision E101).
+
+- `feeltriva_api/duplicates.py`: `report` (the counts above), `condition_groups` (which names are
+  one condition by rule, the name to keep, and what is left for a person with the reason),
+  `merge_groups` (the service's own merge for every member, and the suggestions recorded as
+  approved), `duplicate_texts` and `retire_duplicate_texts`. A command:
+  `python -m feeltriva_api.duplicates` counts and changes nothing; `--merge --reviewer --note`
+  merges.
+- `specs/merge_exceptions.json`: the pairs not merged by rule, each with the reason.
+- `GET /internal/v1/review/disease-mappings` gives `source_name`. The lists "Condition names" and
+  "Facts from the data files" show the data file, name it in what a row is called, and say on the
+  page that one name on several rows is that name in several files.
+
+**Done on the real data.** A restore point of every review status was written first to
+`data/derived/backups/2026-11-25_before_duplicates_and_approval/` (outside Git).
+
+| | Before | After |
+|---|---:|---:|
+| Conditions in use | 960 | 917 |
+| Names kept as another name of a condition | 0 | 43 |
+| Groups merged / merges refused | | 37 / 0 |
+| Suggestions for conditions recorded as approved | 0 | 49 |
+| Pairs left for the doctor's explicit decision | | 2 |
+| Texts retired as word-for-word copies | 0 | 3 |
+
+Examples: "influenza" keeps "flu"; "myocardial infarction" keeps "heart attack"; "crohn disease"
+keeps "crohn_disease" and "crohn's disease"; "polycystic ovary syndrome" (so spelled now) keeps
+"pcos"; "common cold" keeps "common_cold". The merges are recorded under the reviewer name of the
+doctor the owner named, with a note that says the approval was given for the whole list of pairs
+and was entered by the assistant. The doctor's name is in the private database only: this
+repository is public.
+
+**Two flaws of my first rule, seen in the dry run before anything was changed.** (1) It gave a
+merged condition the title of the reference entry even when none of our names carries it: "common
+cold" would have become "Acute nasopharyngitis". It now keeps one of our own names. (2) It set
+aside every group whose pairs share an entry in two different lists (MONDO and ICD-11), among them
+"heart attack / myocardial infarction", as if the lists disagreed. They agree; only one list
+matching the names to two of its own entries is a doubt.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 76 files |
+| `uv run pytest` (SQLite, archives included) | 289 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | first run: 366 passed, 1 failed (BUG-029), 1 skipped; after the fix: 367 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm build` | clean; built |
+| `pnpm test` | 143 passed (10 files); before the fix of BUG-030 it failed in 2 runs of 6, after it 8 runs of 8 pass |
+| `pnpm e2e:review` (test database, invented rows) / `pnpm e2e:lists` (real data, reading only) | 26 passed, 0 failed / 13 passed, 0 failed, no request that changes data |
+| `python -m feeltriva_api.duplicates` after the merge | 0 groups left to merge; the 2 pairs listed for a person |
+| `detect_changes` before commit | medium; flows of the two lists of names. `list_feature_mappings` is listed and is not changed: compared with the last commit function by function, only `list_disease_mappings` differs (lines moved) |
+
+New tests: `tests/api/test_duplicates.py` (4: names compared as plain words, an unclear exception
+refused, the repository's file well formed; the groups, the name kept, and what is left for a
+person; merging deletes nothing, records who and why, makes a second run find nothing, and the
+copied text is retired with a note naming the copy kept; the list gives the data file).
+
+**Bugs.**
+
+- **BUG-029 — a new test changed a row of the real archives in the test database.** *Found* by the
+  first full PostgreSQL run of this sub-step: `test_reference_load_is_idempotent_and_everything_is_pending`
+  failed with one text not pending. *Cause:* my test called the retiring step for the whole
+  database. The test database is kept between runs and holds the real archives; one condition there
+  has the same text twice, and the test retired the copy. *Resolution:* `retire_duplicate_texts`
+  takes `conditions`, the test gives its own invented condition and now asserts exactly one set and
+  one copy; the row was put back to pending by hand and the test's note on it removed. The real
+  database was not affected: there the retiring was meant and is recorded.
+- **BUG-030 — what was recorded for a whole page stood in two places.** *Found* when `pnpm test`
+  failed once and passed on the next run; repeated four times with the output saved, it failed in
+  the first: the element was found and was gone from the page 76 ms into the test, so no time limit
+  was involved. *Cause:* the panel wrote the line once in the case "no row can take a decision" and
+  once in the other; after a decision the list is read again, is empty for a moment, and the line
+  was removed and written anew. I had seen the failure twice before and put it down to a busy
+  machine without the output to show it. *Resolution:* one line outside both cases. Component
+  tests: 8 runs of 8 pass.
+
+**Limits, stated plainly.**
+
+- Whether two names are one condition is a medical question. The rule merges on two narrow
+  grounds and I held back two pairs on my own doubt; a clinician may see more to merge or to split.
+- Symptom and item names are not merged (M2.20): "cross eyed" and "cross-eyed" are still two items.
+- The 349 suggestions that one name is a kind of another change nothing in the data whatever is
+  decided on them: the service has no way yet to store "is a kind of".
+- 74 repeated columns still disagree with each other in some rows. That is a fault of the source
+  file, shown on its own screen; it is not settled by any merge.

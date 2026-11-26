@@ -351,9 +351,10 @@ const FACTS: ListScreen = {
   title: 'Facts from the data files',
   intro: (
     <p>
-      Each row links one condition with one symptom or other item, as a data file or a source text gives it. A count
-      says how often the two stood together in that data file. It is not how common the symptom is among real patients,
-      and several of the data files are of unknown origin or were made by a computer.
+      Each row links one condition with one symptom or other item, as a data file or a source text gives it. The same
+      pair stands here once for every data file that gives it, so the same pair on several rows is not a mistake. A
+      count says how often the two stood together in that data file. It is not how common the symptom is among real
+      patients, and several of the data files are of unknown origin or were made by a computer.
     </p>
   ),
   path: '/evidence',
@@ -369,11 +370,13 @@ const FACTS: ListScreen = {
       ),
     },
   ],
-  titleOf: (item) => `${field(part(item, 'disease'), 'term')} and ${field(part(item, 'feature'), 'term')}`,
+  titleOf: (item) =>
+    `${field(part(item, 'disease'), 'term')} and ${field(part(item, 'feature'), 'term')}${field(part(item, 'context'), 'source') ? ` (${field(part(item, 'context'), 'source')})` : ''}`,
   columns: [
     { heading: 'Condition', cell: (item) => field(part(item, 'disease'), 'term') },
     { heading: 'Symptom or other item', cell: (item) => field(part(item, 'feature'), 'term') },
     { heading: 'Where it comes from', cell: (item) => factKind(field(item, 'evidence_type')) },
+    { heading: 'Data file', cell: (item) => field(part(item, 'context'), 'source') || 'Not recorded' },
     { heading: 'How often in that data file', cell: howOften },
   ],
   details: (item) => {
