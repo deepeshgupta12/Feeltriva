@@ -39,6 +39,7 @@ command output, not estimated.
 | BUG-028 | M2.16 / M2.4e | An answer "not found" from the WHO ICD API was neither saved nor counted. Every run of `import-identifiers` therefore asked WHO again for the same three ICD-11 entities (four requests, one entity being reached from two labels) and reported them as none; the request for an access token was not counted either. Found when the command was first run without permission to ask WHO and four entities had no saved answer | Fixed in M2.4e: "not found" is saved like any answer; every request sent is counted |
 | BUG-029 | M2.18 | A new test retired every word-for-word copy of a text in the test database, not only its own invented rows. One text of the real archives, loaded there by the archive tests, was retired with it, and the archive test that expects every loaded text to be pending then failed on the next full PostgreSQL run. Found by that run, before commit | Fixed in M2.18: the retiring step takes the conditions it may touch, the test gives its own; the one row of the test database was put back |
 | BUG-030 | M2.4j / M2.18 | In the panel that decides all rows shown at once, the line that says what was recorded stood in two places, one for a list with rows and one for a list without. The list has no row for a moment while it is read again after a decision, so the line was taken away and put back as a new element. A screen reader could announce it twice or not at all, and the component test failed about one run in three (it held the element that had just been taken away). Seen three times since M2.4j and put down to a busy machine until the failing output was saved | Fixed in M2.18: the line is one element outside both cases; 8 runs of 8 pass (before: 2 of 6 failed) |
+| BUG-031 | M2.19 | Started as a command, the new approval command stopped at its first row with "Unknown review target type": the review service learns most kinds of row from the modules that hold their rules, and the command had loaded none of them. The tests did not show it, because the test service loads them all. Found on the first run on the real data; nothing was changed by that run | Fixed in M2.19: the command names the modules it needs; a test starts it as a fresh process and checks that the service knows every list |
 
 ## Entries
 
@@ -5766,3 +5767,118 @@ copied text is retired with a note naming the copy kept; the list gives the data
   decided on them: the service has no way yet to store "is a kind of".
 - 74 repeated columns still disagree with each other in some rows. That is a fault of the source
   file, shown on its own screen; it is not settled by any merge.
+
+### M2.19 — The doctor's approval of the pending lists, entered
+
+**What it is for.** The owner on 2026-11-25: the pending review decisions "are approved from my
+end and a doctor", then: "It is approved by the doctor only", with the doctor's name. About
+52,800 rows were pending. The doctor's name is in the private database only (this repository is
+public); here it is "the doctor named by the owner".
+
+**Looked at first, on the real data, reading only.** An approval for a whole list cannot settle a
+row that the data itself calls a guess, or two rows that cannot both be right. What I found:
+
+| List | What a look showed | So |
+|---|---|---|
+| Suggested matches (2,103 that name an entry) | Close search results, the best of them, include "retinal detachment" for "Serous retinal detachment", "sepsis" for "Sepsis without septic shock", "bipolar disorder" for "Bipolar type I disorder, unspecified" | None entered: each is to be looked at |
+| Pairs "a kind of" (348) | Made only because one name adds words to the other: "multiple sclerosis" a kind of "sclerosis", "problem during pregnancy" a kind of "pregnancy"; 14 pairs name two names that are one condition since M2.18 | None entered. An approval would change nothing in the data in any case |
+| Pairs of item names "the same" (67) | 37 share only a code: "bladder mass" and "kidney mass", "swollen tongue" and "lip swelling", "frequent nosebleeds" and "nosebleed"; 30 are the same words | The 30 entered (one of them names a repeated heading and is set aside: 29) |
+| Facts from a mention in a text (575) | Each row records "a mention is not an assertion"; among them "The absence of a paroxysmal cough" as a mention of cough | None entered |
+| Matches of an exact name (2,531) | 121 names have two ICD-11 entries, in every case one under the other | The general one entered, as the rule of the service has it; the narrower stays |
+| Item names (883) | 2 are a repeated column heading ("regurgitation.1") | Those 2 not entered |
+| Sentences (8,742) | 34 belong to the 3 texts retired as copies in M2.18 | Those 34 not entered |
+| A column given two items | The count of 2 was my query: those rows have no column number, they are values of one cell | Nothing to do |
+
+No user-facing code reads an approved row from these tables directly; it reads the published
+versions, which this sub-step does not touch (checked by search before entering anything).
+
+**Impact analysis before editing** (LOW). New code only. It calls `review_bulk.decide_each` (no
+caller in the graph, which does not trace calls through a module name; by search: the duplicates
+command) and `review._lies_under` (one caller, the rule for matches). Neither is changed.
+
+**Implemented** (decision E102).
+
+- `feeltriva_api/list_approval.py`: `plan` (for each list, the rows the approval is entered on and
+  the rows set aside with the reason; reads only), `enter` (each row through the review service's
+  own decision, 200 at a time, a refused row counted under the rule's code). A command:
+  `python -m feeltriva_api.list_approval` counts and changes nothing; `--approve --reviewer --note`
+  enters; `--only` takes one list.
+
+**Done on the real data.** A restore point of every review status was written first to
+`data/derived/backups/2026-11-26_before_list_approval/` (outside Git). Every row carries the
+doctor as reviewer and one note: approved for the whole list at once, as told to the assistant by
+the owner on 2026-11-25; entered by the assistant on 2026-11-26; the rows were not shown to the
+doctor one by one in this system.
+
+| List | Pending before | Approved | Refused by the service | Set aside, still pending |
+|---|---:|---:|---:|---|
+| Condition names | 917 | 917 | 0 | |
+| Symptom and item names | 883 | 881 | 0 | 2 repeated column headings |
+| Names as each data file writes them (conditions) | 3,117 | 3,117 | 0 | |
+| Names as each data file writes them (items) | 1,962 | 1,962 | 0 | |
+| Texts | 2,949 | 2,949 | 0 | |
+| Parts of text files | 3,651 | 3,528 | 123 reference lists | the 123 |
+| Sentences and list items | 8,742 | 8,708 | 0 | 34 of retired texts |
+| Facts | 22,947 | 22,372 | 0 | 575 from a mention in a text |
+| Matches of an exact name | 2,531 | 2,410 | 0 | 121 narrower entries |
+| Pairs of names | 417 | 29 | 0 | 348 "a kind of", 37 sharing only a code, 2 doubtful, 1 naming a repeated heading |
+| Suggested matches | 4,587 | 0 | | 2,103 that name an entry, 2,484 that record "no match" and take notes only |
+| Follow-up questions, rule sets | 4, 1 | 0 | | all: invented samples of the test rule set, and decided one at a time |
+| **Total** | **52,708** | **46,873** | **123** | **5,835** |
+
+Two kinds of row are made by an approval, as the service has done since M2.5e: 3,528 texts from
+the approved parts of text files (texts now: 6,477 approved, 3 retired) and 106 facts from the
+approved list items that name an item (facts now: 22,478 approved). Checked afterwards in the
+database: the states per table agree with the table above; 50,507 decisions were recorded, each
+with its note; no event other than a review decision was recorded in that hour; the published
+versions are as before (rule set `urgency-draft.r1`, list of names `mapping-lexical-0.r1`, no
+knowledge version); `readyz` reports clinical mode off. A second run of the command finds no row
+to enter.
+
+**Bugs.**
+
+- **BUG-031 — the command did not know the lists when started as a command.** *Found* on the first
+  run on the real data: it stopped at the first row with "Unknown review target type". Nothing was
+  changed: the run enters row by row and the first row was refused. *Cause:* the review service
+  holds condition names, item names, facts, sentences, parts of text, rules and suggested matches
+  in a table that each module fills when it is loaded; the command had loaded only the module of
+  the service itself. In the tests the whole service is loaded, so all three tests passed.
+  *Resolution:* the command names the modules whose rules it needs; a new test starts it as a
+  fresh process and checks that every list of the plan is known.
+- Three times my invented test rows passed on SQLite and broke a rule of the PostgreSQL schema (a
+  fact and a part of a text must rest on a text or a record; a list item must have a sentence).
+  Corrected in the test data. No bug of the product; noted because new tests are to be run on
+  PostgreSQL before anything else is built on them.
+- **The CI run of `ff99df0` (M2.4h) had failed**, on the component test of BUG-030 (run
+  45602572726, web job; backend job passed). I had not checked CI after that commit. The cause is
+  the one fixed in M2.18; the commits after it passed by chance of timing.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 77 files |
+| `uv run pytest` (SQLite, archives included) | 292 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 370 passed, 1 skipped |
+| `python -m feeltriva_api.list_approval` before / after the entry (real data) | 46,996 rows to enter / 0, with the rows set aside listed by reason |
+| `detect_changes` before commit | low; no existing symbol changed and no flow affected: documents and two new files (`apps/web/README.md` is listed with `README.md` and is not changed) |
+
+New tests: `tests/api/test_list_approval.py` (3: the plan takes the rows that stand on their own
+and sets the others aside with the reason, one invented row for each case; entering records the
+reviewer and the note on each row, counts a refused row under the rule's code, leaves the rows set
+aside as they were, and a second plan has nothing left; started as a fresh process the service
+knows every list). The web app is not touched.
+
+**Limits, stated plainly.**
+
+- The approval is a list approval and is recorded as one. Nobody looked at the 46,873 rows one by
+  one in this system. The note on every row says so.
+- The reviewer's name was typed on the command line by the assistant. The doctor has no sign-in
+  yet (M6.4a); until then the record shows who the owner says approved, not who operated the system.
+- Which rows are "a guess" is a rule I set from what the data says about itself (E102). A row I
+  set aside may be perfectly right, and a row I entered may be wrong: for example a fact counted in
+  a data file is as good as the file.
+- 5,835 rows stay pending. Of these 2,484 can never take a decision (they record that a name has
+  no match) and should not be counted as work to do; the screen still shows them as pending.
+- Nothing is published. The approved rows are not used by the service until a version of a list
+  is made and put in use, which is the owner's step.
