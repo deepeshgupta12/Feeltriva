@@ -5893,3 +5893,66 @@ verified with `gh run view`. GitNexus index at `d58c587`, up to date. After the 
 `pnpm e2e:lists` against the real data, reading only: 13 passed, 0 failed, no request that changes
 data. A pull request opened by the dependency robot (prettier 3.9.10 to 3.10.1) fails its own CI
 run 45605271889; it is not merged and not part of this work.
+
+### M2.19a — The doctor's approval entered on the suggested matches
+
+**What it is for.** The owner on 2026-11-26, after the report of M2.19: "Mark them approved by
+doctor", for the screen of suggested matches. The owner also confirmed that the doctor's name
+stays out of this public repository and decided that the doctor needs no separate sign-in
+(decision E104).
+
+**Looked at first, on the real data, reading only.** 2,103 pending suggested matches name an
+entry. For 1,201 names in a list there is one suggested entry; for 351 there are several (902
+rows). 47 of the single ones are for a name that already has a match in that list. A sample of the
+weaker kinds, read before entering: "fluid in ear" with "Cerebrospinal fluid otorrhoea" (search
+score below zero), "chest pain" with "intermediate coronary syndrome", "fungal infection" with
+"Fungal infection of joint", "polycythemia vera" with "Polycythemia". The owner had the first
+examples in the report of M2.19 and decided; these are recorded in E103 and reported again.
+
+**Impact analysis before editing** (LOW). `list_approval.plan`: one caller, the command's `main`.
+
+**Implemented** (decision E103). `plan(..., suggested_matches=True)` and the switch
+`--suggested-matches`: the approval is entered on a suggested match whose name has no other
+suggested entry in the same list and no match there yet. Several entries for one name, and an
+entry for a name that already has a match, are set aside with the reason. Without the switch
+nothing changes (E102).
+
+**Done on the real data.** Restore point first:
+`data/derived/backups/2026-11-26_before_suggested_matches/` (outside Git).
+
+| | Rows |
+|---|---:|
+| Suggested matches approved, each making its match through the service's own rule | 1,154 |
+| Refused by the service | 0 |
+| Left pending: several entries suggested for one name in one list | 898 |
+| Left pending: the name already has a match in that list | 51 |
+| No decision needed: the row records that a name has no match | 2,484 |
+
+Of the 1,154, read from the database after the entry: 470 entries found by shared words, 390
+close search results, 234 weak search results, 57 looser synonyms and 3 identifiers marked
+equivalent. Matches now: 3,569 approved (2,415 by exact name, 1,154 confirmed suggestions),
+121 pending, 6 rejected. The note on every row says the approval was given for the whole list, as
+told to the assistant by the owner, and that the assistant entered it without checking the rows
+one by one. Nothing was published.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 77 files |
+| `uv run pytest` (SQLite, archives included) | 293 passed, 79 skipped |
+| `uv run pytest` on PostgreSQL, real archives and object store included; full output saved | 371 passed, 1 skipped |
+| `python -m feeltriva_api.list_approval --suggested-matches --only link_proposal` after the entry | 0 rows to enter; 898, 51 and 2,484 set aside with the reasons |
+| `detect_changes` before commit | medium; `plan` and the three flows of the command through it. `enter` is listed and is not changed (compared with the last commit function by function: `plan` and `main` changed, `_suggested` added) |
+
+New test: suggested matches are entered only with the switch, only where a name has one and no
+match yet, and confirming makes the match (run on PostgreSQL first, then SQLite).
+
+**Limits, stated plainly.**
+
+- Weak and shared-word suggestions are now recorded as approved by a doctor. Some are plainly not
+  the same thing as the name. They are internal (never shown to a user, E63) and can be taken
+  back; E103 says they are to be looked at before they are used for anything more.
+- The first version of this entry gave the split by kind from the count made before the entry; it
+  was wrong (it did not allow for the names already matched) and is replaced by the count read
+  from the database afterwards.

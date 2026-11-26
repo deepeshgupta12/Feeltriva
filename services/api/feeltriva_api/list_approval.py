@@ -11,6 +11,8 @@ Set aside, and left pending (decision E102):
 - a row that the stored data itself calls a guess to be looked at: a suggested match that is not an exact
   name, a pair suggested as "a kind of", a pair of item names that share only a code, a fact taken from a
   mention in a text (a mention is not an assertion);
+  (a suggested match is entered only when the reviewer's approval names that list, with `--suggested-matches`,
+  and then only where a name has one suggested entry in a list and no match there yet: decision E103);
 - rows that exclude each other: two entries of one list for one name, where the rule "the general entry is
   the default" does not leave exactly one;
 - a row that goes against a decision already recorded: a pair listed in `specs/merge_exceptions.json`, a
@@ -31,7 +33,7 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from . import published_knowledge, published_mappings, review_bulk, review_claims, review_proposals, review_rules
 from .auth import Principal
@@ -66,6 +68,8 @@ KIND_OF = "a pair suggested as 'a kind of' only because one name adds words to t
 CODE_ONLY = "a pair of names that share only a code of a reference list, which can cover different things"
 EXCEPTION = "a pair listed as doubtful in specs/merge_exceptions.json"
 SUGGESTED = "a suggested match that is not an exact name: each is to be looked at"
+SEVERAL_SUGGESTED = "several entries are suggested for one name in one list: a person picks one"
+ALREADY_MATCHED = "the name already has a match in this list; a second entry for it is for a person"
 NOTES_ONLY = "a record that a name has no match: it takes notes, not a decision"
 ONE_AT_A_TIME = "a rule, a question or a rule set acts on a person's answers and is decided one at a time"
 
@@ -182,7 +186,40 @@ def _pairs(tx: Any, exceptions: list[dict[str, Any]], repeated: set[str]) -> tup
     return ids, aside
 
 
-def plan(tx: Any, exceptions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _suggested(tx: Any, confirmable: Any, entered: bool) -> tuple[list[str], dict[str, list[str]]]:
+    """Suggested matches. By the rule of E102 none is entered for a list. When the reviewer's approval names this
+    list too (E103), it is entered where a name has one suggested entry in a list and no match there yet: two
+    entries for one name exclude each other, and choosing between them is not for a rule."""
+    notes_only = _pending(tx, LinkProposal.proposal_id, ~confirmable)
+    rows = tx.scalars(
+        select(LinkProposal).where(LinkProposal.status == "pending", confirmable).order_by(LinkProposal.proposal_id)
+    ).all()
+    if not entered:
+        return [], {SUGGESTED: [row.proposal_id for row in rows], NOTES_ONLY: notes_only}
+    matched = {
+        (subject, system)
+        for subject, system in tx.execute(
+            select(func.coalesce(TerminologyLink.disease_id, TerminologyLink.feature_id), TerminologyLink.system).where(
+                TerminologyLink.status.in_(("pending", "approved"))
+            )
+        ).all()
+    }
+    groups: dict[tuple[str, str], list[str]] = {}
+    for row in rows:
+        groups.setdefault((row.disease_id or row.feature_id or "", row.system), []).append(row.proposal_id)
+    ids: list[str] = []
+    aside: dict[str, list[str]] = {SEVERAL_SUGGESTED: [], ALREADY_MATCHED: [], NOTES_ONLY: notes_only}
+    for key, found in groups.items():
+        if key in matched:
+            aside[ALREADY_MATCHED].extend(found)
+        elif len(found) > 1:
+            aside[SEVERAL_SUGGESTED].extend(found)
+        else:
+            ids.extend(found)
+    return sorted(ids), aside
+
+
+def plan(tx: Any, exceptions: list[dict[str, Any]], *, suggested_matches: bool = False) -> list[dict[str, Any]]:
     """For each list, in the order the approval is entered: the rows it is entered on, and the rows set aside
     with the reason. Reads only."""
     retired_text = select(Statement.statement_id).where(Statement.status == "retired")
@@ -191,6 +228,7 @@ def plan(tx: Any, exceptions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     chunks, chunks_aside = _chunks(tx)
     links, links_aside = _links(tx)
     pairs, pairs_aside = _pairs(tx, exceptions, set(features_aside[REPEATED_HEADING]))
+    suggested, suggested_aside = _suggested(tx, confirmable, suggested_matches)
     lists: list[tuple[str, list[str], dict[str, list[str]]]] = [
         ("disease", _pending(tx, Disease.disease_id, Disease.redirected_to.is_(None)), {}),
         ("feature", features, features_aside),
@@ -214,14 +252,7 @@ def plan(tx: Any, exceptions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         ),
         ("terminology_link", links, links_aside),
         ("relation_suggestion", pairs, pairs_aside),
-        (
-            "link_proposal",
-            [],
-            {
-                SUGGESTED: _pending(tx, LinkProposal.proposal_id, confirmable),
-                NOTES_ONLY: _pending(tx, LinkProposal.proposal_id, ~confirmable),
-            },
-        ),
+        ("link_proposal", suggested, suggested_aside),
         ("followup_question", [], {ONE_AT_A_TIME: _pending(tx, FollowupQuestion.question_id)}),
         ("rule_bundle", [], {ONE_AT_A_TIME: _pending(tx, RuleBundle.bundle_id)}),
     ]
@@ -280,11 +311,16 @@ def main() -> int:
     parser.add_argument("--reviewer", help="the name of the reviewer who gave the approval (with --approve)")
     parser.add_argument("--note", help="the note recorded on every row: who approved, how, and who entered it")
     parser.add_argument("--only", action="append", help="one list by its target type; may be given more than once")
+    parser.add_argument(
+        "--suggested-matches",
+        action="store_true",
+        help="the approval names the suggested matches too: enter it where a name has one suggested entry in a list",
+    )
     args = parser.parse_args()
     settings = get_settings()
     owner = Database(settings.migration_database_url or settings.database_url)
     with owner.transaction(None, role="migration") as tx:
-        planned = plan(tx, load_exceptions())
+        planned = plan(tx, load_exceptions(), suggested_matches=args.suggested_matches)
     if args.only:
         planned = [entry for entry in planned if entry["target_type"] in args.only]
     for entry in planned:

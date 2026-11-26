@@ -16,6 +16,7 @@ from feeltriva_api.models import (
     EvidenceChunk,
     Feature,
     KnowledgeRelease,
+    LinkProposal,
     MappingRelease,
     RelationSuggestion,
     ReviewNote,
@@ -303,3 +304,82 @@ def test_run_as_a_command_the_review_service_knows_every_list_and_the_plan_names
     tag, exceptions = rows
     with owner_db.transaction(None, role="migration") as tx:
         assert tuple(entry["target_type"] for entry in list_approval.plan(tx, exceptions)) == list_approval.TARGETS
+
+
+def _suggest(tx, tag, key, subject, system, basis="close_search_result", term=True):
+    tx.add(
+        LinkProposal(
+            proposal_id=f"lp_{tag}_{key}",
+            feature_id=f"feat_{tag}_{subject}",
+            system=system,
+            system_version="t",
+            basis=basis,
+            reason="test",
+            code=f"C{tag}{key}" if term else None,
+            title=f"Pretend entry {key} {tag}" if term else None,
+            uri="u" if term else None,
+            link_id=f"tl_{tag}_made_{key}" if term else None,
+            detail={},
+        )
+    )
+
+
+def test_suggested_matches_are_entered_only_when_asked_and_only_where_a_name_has_one_and_no_match_yet(
+    rows, owner_db, container
+):
+    tag, exceptions = rows
+    with owner_db.transaction(None, role="migration") as tx:
+        _suggest(tx, tag, "one", "item", "HPO", basis="weak_search_result")
+        _suggest(tx, tag, "two_a", "other", "HPO")
+        _suggest(tx, tag, "two_b", "other", "HPO", basis="nearest_by_shared_words")
+        _suggest(tx, tag, "second", "far", "MONDO")  # "far" gets a match in MONDO below
+        _suggest(tx, tag, "none", "far", "HPO", basis="no_term_near", term=False)
+        tx.add(
+            TerminologyLink(
+                link_id=f"tl_{tag}_far",
+                feature_id=f"feat_{tag}_far",
+                system="MONDO",
+                system_version="t",
+                code=f"MONDO:far{tag}",
+                title=f"Pretend far {tag}",
+                uri="u",
+                match_method="exact_label",
+                detail={},
+            )
+        )
+    with owner_db.transaction(None, role="migration") as tx:
+        usual = {entry["target_type"]: entry for entry in _mine(list_approval.plan(tx, exceptions), tag)}
+        asked = _mine(list_approval.plan(tx, exceptions, suggested_matches=True), tag)
+    # Without the switch no suggested match is entered, as decision E102 has it.
+    assert _short(usual["link_proposal"], tag) == (
+        [],
+        {list_approval.SUGGESTED: ["one", "second", "two_a", "two_b"], list_approval.NOTES_ONLY: ["none"]},
+    )
+    named = {entry["target_type"]: entry for entry in asked}
+    assert _short(named["link_proposal"], tag) == (
+        ["one"],
+        {
+            list_approval.SEVERAL_SUGGESTED: ["two_a", "two_b"],
+            list_approval.ALREADY_MATCHED: ["second"],
+            list_approval.NOTES_ONLY: ["none"],
+        },
+    )
+    only = [entry for entry in asked if entry["target_type"] == "link_proposal"]
+    done = list_approval.enter(container.db, WHO, NOTE, only)[0]
+    assert (done["planned"], done["approved"], done["refused"]) == (1, 1, {})
+    with owner_db.transaction(None, role="migration") as tx:
+        states = {
+            row.proposal_id.split(f"{tag}_", 1)[1]: (row.status, row.reviewer)
+            for row in tx.scalars(select(LinkProposal).where(LinkProposal.proposal_id.like(f"lp_{tag}_%")))
+        }
+        assert states == {
+            "one": ("approved", WHO.subject),
+            "two_a": ("pending", None),
+            "two_b": ("pending", None),
+            "second": ("pending", None),
+            "none": ("pending", None),
+        }
+        # Confirming is what makes the match, through the service's own rule for it.
+        made = tx.get(TerminologyLink, f"tl_{tag}_made_one")
+        assert (made.status, made.reviewer, made.match_method) == ("approved", WHO.subject, "reviewer_confirmed")
+        assert tx.get(TerminologyLink, f"tl_{tag}_made_two_a") is None
