@@ -230,6 +230,7 @@ export class AssessmentController {
       const session = await this.service.getSession(this.sessionId);
       this.patch({ load: 'ready' });
       this.applySession(session);
+      await this.recallAssessment(session);
     } catch (error) {
       const apiError = toApiError(error);
       if (!this.handleAccessError(apiError)) {
@@ -240,6 +241,25 @@ export class AssessmentController {
       this.end('load');
     }
     await this.syncAfterChange();
+  }
+
+  /**
+   * A result that was already made for these details is read back, not made again (M3.12). This is what
+   * shows a result when a conversation is opened that this page did not hold in memory. Best effort: when
+   * it cannot be read, the page goes on as it did before and asks for an assessment where one is due.
+   */
+  private async recallAssessment(session: Session): Promise<void> {
+    if (this.state.assessment?.observation_version === session.observation_version) {
+      return;
+    }
+    try {
+      const made = await this.service.getCurrentAssessment(this.sessionId);
+      if (made && made.observation_version === this.state.session?.observation_version) {
+        this.patch({ assessment: made });
+      }
+    } catch {
+      // Nothing is concluded from a failed read; the session itself was loaded.
+    }
   }
 
   /** Re-reads the authoritative session (used by "Reconnect" and "Try again"). */

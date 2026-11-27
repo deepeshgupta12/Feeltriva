@@ -14,7 +14,7 @@ import type {
  * The single boundary between the UI and the assessment backend.
  *
  * Two implementations exist: `MockAssessmentService` (in-memory demo scenarios) and
- * `HttpAssessmentService` (FastAPI, per specs/openapi.json). The UI renders what these
+ * `HttpAssessmentService` (FastAPI, per packages/contracts/openapi.json). The UI renders what these
  * methods return; it never derives urgency, candidates or question order itself.
  *
  * Contract shared by every implementation:
@@ -36,6 +36,11 @@ export interface AssessmentService {
   submitAnswer(sessionId: string, input: AnswerSubmit): Promise<Session>;
   /** POST /v1/sessions/{session_id}/assessments */
   assessSession(sessionId: string, input: AssessmentRequest): Promise<Assessment>;
+  /**
+   * GET /v1/sessions/{session_id}/assessment — the assessment already made for the details as they stand
+   * now; resolves `null` when there is none (HTTP 404 `no_current_assessment`).
+   */
+  getCurrentAssessment(sessionId: string): Promise<Assessment | null>;
   /** GET /v1/sessions/{session_id}/next-question — resolves `null` on HTTP 204 (no question). */
   getNextQuestion(sessionId: string, observationVersion: number): Promise<Question | null>;
   /** POST /v1/sessions/{session_id}/summary */

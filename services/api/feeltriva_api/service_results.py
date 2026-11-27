@@ -24,7 +24,7 @@ from .models import (
     SessionMessage,
     SessionObservation,
 )
-from .service_core import CONTEXT, ProviderFailure, ServiceCore
+from .service_core import ATTRIBUTES, CONTEXT, ProviderFailure, ServiceCore
 
 
 class ResultOperations(ServiceCore):
@@ -187,6 +187,60 @@ class ResultOperations(ServiceCore):
                 503, "assessment_unavailable", self._bundle.templates.system_unavailable, retryable=True
             ) from None
 
+    def get_current_assessment(self, principal: Principal, session_id: uuid.UUID) -> dict[str, Any]:
+        """The assessment made for the details as they stand now (M3.12), so that a result can be shown again
+        without making a new one. An assessment made for earlier details is not returned: it is not current."""
+        principal.require_scope("assessment:read")
+        with self._db.transaction(principal.subject) as tx:
+            session = self._load(tx, principal, session_id)
+            stored = tx.execute(
+                select(Assessment)
+                .where(
+                    Assessment.session_id == session_id,
+                    Assessment.observation_version == session.observation_version,
+                )
+                .order_by(Assessment.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if stored is None:
+                raise ApiError(
+                    404, "no_current_assessment", "There is no assessment for the details as they stand now."
+                )
+            found = self._evidence.get_many(sorted(stored.evidence_ids or []))
+            same_rules = stored.rule_bundle_id == self._bundle.bundle_id
+            same_knowledge = stored.knowledge_release_id == self._bundle.knowledge_release_id
+            return sc.dump(
+                sc.AssessmentOut(
+                    assessment_id=stored.assessment_id,
+                    session_id=session_id,
+                    observation_version=stored.observation_version,
+                    status=stored.status,  # type: ignore[arg-type]  # Literal membership is validated by the model
+                    urgency=stored.urgency,  # type: ignore[arg-type]
+                    candidates=[sc.Candidate(**candidate) for candidate in stored.candidates or []],
+                    unknowns=list(stored.unknowns or []),
+                    next_action=sc.NextAction(**stored.next_action),
+                    evidence_ids=list(stored.evidence_ids or []),
+                    # The versions it was made with. A rule set or knowledge that is no longer the one loaded is
+                    # named by what was stored with the assessment, not by today's version.
+                    versions=sc.Versions(
+                        knowledge=self._bundle.knowledge_version if same_knowledge else stored.knowledge_release_id,
+                        rules=self._bundle.rules_version if same_rules else stored.rule_bundle_id,
+                        model=stored.model_release_id,
+                        prompt=stored.prompt_version,
+                    ),
+                    evidence=[
+                        sc.Evidence(
+                            evidence_id=r.evidence_id,
+                            source_title=r.source_title,
+                            source_url=r.source_url,
+                            excerpt=r.excerpt,
+                            knowledge_release=r.knowledge_release,
+                        )
+                        for r in (found[e] for e in stored.evidence_ids or [] if e in found)
+                    ],
+                )
+            )
+
     def create_summary(
         self, principal: Principal, session_id: uuid.UUID, payload: sc.AssessmentRequest, idempotency_key: str
     ) -> dict[str, Any]:
@@ -236,12 +290,10 @@ class ResultOperations(ServiceCore):
                 parts.append(f'(in your words: "{phrase}")')
             mods = o.modifiers or {}
             parts += [f"{k}: {mods[k]}" for k in ("onset", "duration", "severity") if mods.get(k)]
+            parts += [f"{k.replace('_', ' ')}: {mods[k]}" for k in ATTRIBUTES if mods.get(k)]
             # What was answered, in the words of the question it was answered to: never a stored internal value,
             # and not a second time what the duration above already says (M3.14a).
-            asked: list[dict[str, Any] | None] = [
-                q.answer_schema for q in self._bundle.questions if q.feature_id == o.feature_id
-            ] or [None]
-            words = next((said for said in (answer_in_words(schema, o.value) for schema in asked) if said), None)
+            words = self._in_words(o)
             if words and words not in {str(mods.get(k)) for k in ("onset", "duration", "severity")}:
                 parts.append(f"answer: {words}")
             if not o.confirmed:

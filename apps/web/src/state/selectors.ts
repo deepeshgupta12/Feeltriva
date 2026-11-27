@@ -49,13 +49,20 @@ export function groupObservations(observations: ObservationRecord[]): Observatio
 }
 
 /**
- * Display name for an observation: the user's own phrase when the service kept it,
- * otherwise a readable form of the feature id. No clinical vocabulary is added here.
+ * Display name for an observation: the user's own phrase when the service kept it, otherwise the
+ * name the service gives the item (M3.12), otherwise a readable form of the feature id. No clinical
+ * vocabulary is added here.
  */
-export function observationLabel(observation: Pick<ObservationRecord, 'feature_id' | 'raw_phrase'>): string {
+export function observationLabel(
+  observation: Pick<ObservationRecord, 'feature_id' | 'raw_phrase' | 'display_name'>,
+): string {
   const phrase = observation.raw_phrase?.trim();
   if (phrase) {
     return phrase;
+  }
+  const named = observation.display_name?.trim();
+  if (named) {
+    return named;
   }
   if (observation.feature_id) {
     return humanizeIdentifier(observation.feature_id);
@@ -102,7 +109,7 @@ export function formatObservationValue(
   return null;
 }
 
-/** Onset, duration, severity and value, in that order, skipping what is absent or already said. */
+/** Onset, duration, severity, what else is known about the symptom, and the value, skipping what is absent or already said. */
 export function observationDetails(
   observation: ObservationRecord,
   optionLabels: Readonly<Record<string, string>> = {},
@@ -111,7 +118,13 @@ export function observationDetails(
   if (observation.onset) details.push(observation.onset);
   if (observation.duration) details.push(observation.duration);
   if (observation.severity) details.push(observation.severity);
-  const value = formatObservationValue(observation.value, optionLabels);
+  // What else is known about the symptom (M3.12), as it was given.
+  if (observation.location) details.push(observation.location);
+  if (observation.pattern) details.push(observation.pattern);
+  if (observation.triggers) details.push(`Triggers: ${observation.triggers}`);
+  if (observation.relieving_factors) details.push(`Eased by: ${observation.relieving_factors}`);
+  // The service's own words for the stored answer come first; without them, the words kept in this visit.
+  const value = observation.value_label?.trim() || formatObservationValue(observation.value, optionLabels);
   // A duration answer comes back both as the duration and as the value it was given in: said once (BUG-008).
   const said = (text: string) => text.trim().toLowerCase().replace(/s$/, '');
   if (value && !details.some((detail) => said(detail) === said(value))) details.push(value);

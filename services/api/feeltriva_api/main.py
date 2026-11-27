@@ -193,6 +193,10 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     def submit_answer(session_id: uuid.UUID, body: sc.AnswerSubmit, who: Who, key: Key) -> JSONResponse:
         return JSONResponse(svc.submit_answer(who, session_id, body, key))
 
+    @app.get("/v1/sessions/{session_id}/assessment", operation_id="getCurrentAssessment")
+    def get_current_assessment(session_id: uuid.UUID, who: Who) -> JSONResponse:
+        return JSONResponse(svc.get_current_assessment(who, session_id))
+
     @app.post("/v1/sessions/{session_id}/assessments", operation_id="assessSession")
     def assess_session(session_id: uuid.UUID, body: sc.AssessmentRequest, who: Who, key: Key) -> JSONResponse:
         return JSONResponse(svc.assess_session(who, session_id, body, key))

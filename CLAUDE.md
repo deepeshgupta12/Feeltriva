@@ -113,7 +113,8 @@ For every change, in this order:
 7. **Record it** in `docs/ENGINEERING_LOG.md`: the impact result, tests run with real numbers,
    bugs and resolutions, and the indexed commit.
 
-Changes to shared modules and contracts deserve the most care: `specs/openapi.json`,
+Changes to shared modules and contracts deserve the most care: `specs/openapi.json` (the supplied contract, never
+edited), `packages/contracts/openapi.json` (the product's contract: additions only, decision E110),
 `services/api/feeltriva_api/{service*,schemas,models,auth,db}.py`, anything in `packages/`,
 `migrations/`, and `apps/web/src/api`.
 
@@ -159,6 +160,7 @@ uv run python -m feeltriva_ingestion extract-claims            # statements spli
 uv run python -m feeltriva_api.rule_drafts                     # the draft urgency rules, checked against the feature vocabulary and stored pending
 uv run python -m feeltriva_api.response_text_sets              # the four response texts stored as the file has them, for a reviewer's decision
 uv run python -m feeltriva_api.serving_bundle                  # the serving bundle assembled from the current releases (data/derived/, outside Git)
+uv run python -m feeltriva_api.contract                        # the review workspace's routes written down from the running service (packages/contracts/openapi.internal.json); run after adding or changing an internal route
 uv run python -m feeltriva_api.duplicates                      # duplicates counted by kind; changes nothing (with --merge --reviewer --note: merges the condition names that are one condition by rule; with --items the names of symptoms and other items, with --items --headings the repeated column headings)
 uv run python -m feeltriva_api.list_approval                   # an approval given for whole lists: counts the rows it can be entered on and those set aside, and changes nothing (with --approve --reviewer --note: enters it row by row; publishes nothing; --suggested-matches only when the approval names that list)
 ```

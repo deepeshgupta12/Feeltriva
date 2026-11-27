@@ -298,6 +298,18 @@ describe('HttpAssessmentService responses', () => {
     expect(error.status).toBe(status);
   });
 
+  it('reads the current assessment, and takes "none for these details" as an answer, not a failure', async () => {
+    const none = vi.fn<typeof fetch>(() => Promise.resolve(json(errorBody('no_current_assessment'), 404)));
+    await expect(createService(none).getCurrentAssessment(SESSION_ID)).resolves.toBeNull();
+    const [url, init] = none.mock.calls[0]!;
+    expect(url).toBe(`http://api.test/v1/sessions/${SESSION_ID}/assessment`);
+    expect(init?.method).toBe('GET');
+    expect(headersOf(none, 0)['Idempotency-Key']).toBeUndefined();
+    // A session that is missing answers 404 as well, with another code: that stays a failure.
+    const gone = vi.fn<typeof fetch>(() => Promise.resolve(json(errorBody('session_not_found'), 404)));
+    expect((await rejection(createService(gone).getCurrentAssessment(SESSION_ID))).kind).toBe('not_found');
+  });
+
   it('reads Retry-After on 429', async () => {
     const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(json(errorBody('rate_limited', true), 429, { 'Retry-After': '12' })),

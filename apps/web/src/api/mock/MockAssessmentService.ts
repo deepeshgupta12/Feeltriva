@@ -62,6 +62,8 @@ interface MockSessionRecord {
   conflictArmed: boolean;
   expired: boolean;
   deletion: DeletionReceipt | null;
+  /** The last assessment made; current only while its version is the session's. */
+  assessment?: Assessment;
 }
 
 export interface MockRequestLogEntry {
@@ -287,8 +289,17 @@ export class MockAssessmentService implements AssessmentService {
         record.state = 'system_unavailable';
         throw this.error(503, 'assessment_unavailable', 'The assessment could not be completed.', true);
       }
-      return this.buildAssessment(record);
+      const made = this.buildAssessment(record);
+      record.assessment = made;
+      return made;
     });
+  }
+
+  async getCurrentAssessment(sessionId: string): Promise<Assessment | null> {
+    await this.transport('GET', `${sessionPath(sessionId)}/assessment`, null);
+    const record = this.requireSession(sessionId);
+    const made = record.assessment;
+    return made && made.observation_version === record.observation_version ? structuredClone(made) : null;
   }
 
   async getNextQuestion(sessionId: string, observationVersion: number): Promise<Question | null> {

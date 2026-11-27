@@ -14,6 +14,7 @@ from typing import Any, cast
 from feeltriva_clinical import (
     Facts,
     ReleaseBundle,
+    answer_in_words,
     screen,
 )
 from feeltriva_inference import CandidateProvider
@@ -39,6 +40,8 @@ from .settings import Settings
 log = logging.getLogger(__name__)
 REASSESS_STATES = {"result_ready", "insufficient_information", "system_unavailable", "assessing"}
 CONTEXT = "clinically_relevant_context"  # the part of a session's demographics that holds context answers
+# What is known about a symptom beside its presence: kept with the observation, returned as given (M3.12).
+ATTRIBUTES = ("location", "pattern", "triggers", "relieving_factors")
 PAUSED_STATES = {"urgent_handoff", "out_of_scope", "closed"}
 
 
@@ -187,6 +190,7 @@ class ServiceCore:
 
     def _record(self, o: SessionObservation) -> sc.ObservationRecord:
         mods = o.modifiers or {}
+        item = self._bundle.feature(o.feature_id) if o.feature_id else None
         return sc.ObservationRecord(
             feature_id=o.feature_id,
             presence=cast(sc.PresenceT, o.presence),
@@ -194,12 +198,24 @@ class ServiceCore:
             onset=mods.get("onset"),
             duration=mods.get("duration"),
             severity=mods.get("severity"),
+            **{name: mods.get(name) for name in ATTRIBUTES},
+            display_name=item.preferred_name if item else None,
+            value_label=self._in_words(o),
             confirmed=o.confirmed,
             supersedes=o.supersedes,
             observation_id=o.observation_id,
             observation_version=o.observation_version,
             raw_phrase=self._cipher.decrypt(o.raw_phrase_encrypted) if o.raw_phrase_encrypted else None,
         )
+
+    def _in_words(self, o: SessionObservation) -> str | None:
+        """The stored answer of an observation as a person reads it: the words of the option that was chosen, a
+        number with its unit, a date written out. None when there is nothing to say, and never a stored internal
+        value (M3.12; the same words the summary uses)."""
+        asked: list[dict[str, Any] | None] = [
+            q.answer_schema for q in self._bundle.questions if q.feature_id == o.feature_id
+        ] or [None]
+        return next((said for said in (answer_in_words(schema, o.value) for schema in asked) if said), None)
 
     def _session_out(self, session: Session, current: list[SessionObservation]) -> dict[str, Any]:
         demographics = sc.Demographics(**session.demographics) if session.demographics else None

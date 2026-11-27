@@ -137,12 +137,12 @@ async function answerCurrent(page, wording, act) {
     'questions: the context question is not asked when the detail its rule names was not reported (M3.9)',
     !/context factor zeta/i.test(text),
   );
-  check('questions: explicit "None of these" is recorded under Not present', /Not present .*Signal gamma/.test(text));
+  check('questions: explicit "None of these" is recorded under Not present', /Not present .*signal gamma/i.test(text));
   // M3.14: what the service stored is shown in the person's words, and once.
   check(
     'questions: "None of these" is shown in its own words, not as the stored value (BUG-009)',
-    /Signal gamma\s+None of these/.test(text) && !/Signal gamma\s+none\b/.test(text),
-    text.match(/Signal gamma[^\n]*\n?[^\n]*/)?.[0] ?? '',
+    /signal gamma \(sample\)\s+None of these/i.test(text) && !/signal gamma \(sample\)\s+none\b/.test(text),
+    text.match(/signal gamma[^\n]*\n?[^\n]*/i)?.[0] ?? '',
   );
   check('questions: a duration is shown once (BUG-008)', text.includes('3 days') && !/3 days\s*·\s*3 days/.test(text));
   await shot(page, 'live-assess-complete');
@@ -188,7 +188,7 @@ async function answerCurrent(page, wording, act) {
   await drawer.waitFor({ state: 'hidden', timeout: 10000 });
 
   // Correction: beta was wrong. The old result must become stale, then be recomputed.
-  await page.getByRole('button', { name: 'Remove or correct: Signal beta' }).click();
+  await page.getByRole('button', { name: 'Remove or correct: Fixture signal beta (sample)' }).click();
   const editor = page.getByRole('dialog');
   await editor.getByRole('radio', { name: /I don’t have this/ }).check();
   await editor.getByRole('button', { name: 'Save change' }).click();
@@ -207,7 +207,7 @@ async function answerCurrent(page, wording, act) {
     'correction: incomplete result is not reassurance',
     /not a sign that everything is fine/i.test(text) && !/Routine/.test(text),
   );
-  check('correction: beta now appears under Not present', /Not present .*Signal beta/.test(text));
+  check('correction: beta now appears under Not present', /Not present .*signal beta/i.test(text));
   await shot(page, 'live-result-refreshed');
 
   check('flow 1: no console errors or page errors', problems.length === 0, problems.join(' | '));
@@ -246,7 +246,7 @@ async function answerCurrent(page, wording, act) {
   const afterReload = api.filter((c) => c.phase === phase.now && c.method === 'GET');
   check(
     'reload: no health detail survives a page reload',
-    !/Signal beta|Illustrative possibility|alpha/.test(text),
+    !/signal beta|Illustrative possibility|alpha/i.test(text),
     text.slice(0, 160),
   );
   check(

@@ -206,4 +206,11 @@ def other(client: TestClient) -> Api:
 
 @pytest.fixture(scope="session")
 def openapi() -> dict[str, Any]:
+    """The product's contract: the supplied one with the product's additions (M3.12)."""
+    return json.loads((ROOT / "packages" / "contracts" / "openapi.json").read_text())
+
+
+@pytest.fixture(scope="session")
+def supplied_openapi() -> dict[str, Any]:
+    """The contract as the handoff supplied it. It is not edited."""
     return json.loads((ROOT / "specs" / "openapi.json").read_text())

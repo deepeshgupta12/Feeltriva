@@ -100,6 +100,40 @@ describe('formatObservationValue', () => {
   });
 });
 
+describe('the words the service gives (M3.12)', () => {
+  it('names a detail by the person’s own phrase, then by the service’s name for the item, then by its id', () => {
+    const named = observation({ display_name: 'Fixture signal alpha (sample)' });
+    expect(observationLabel(named)).toBe('Fixture signal alpha (sample)');
+    expect(observationLabel({ ...named, raw_phrase: 'my own words' })).toBe('my own words');
+    expect(observationLabel(observation({}))).toBe('Signal alpha');
+  });
+
+  it('shows the stored answer in the service’s words, and what else is known about the symptom', () => {
+    const answered = observation({ presence: 'absent', value: 'none', value_label: 'None of these' });
+    // The service's words are used as they are, without the words kept in this visit.
+    expect(observationDetails(answered)).toEqual(['None of these']);
+    expect(observationDetails(answered, { none: 'Another wording' })).toEqual(['None of these']);
+    const described = observation({
+      onset: 'Since yesterday',
+      location: 'left side',
+      pattern: 'comes and goes',
+      triggers: 'walking',
+      relieving_factors: 'rest',
+    });
+    expect(observationDetails(described)).toEqual([
+      'Since yesterday',
+      'left side',
+      'comes and goes',
+      'Triggers: walking',
+      'Eased by: rest',
+    ]);
+    // A duration the service also gives as the answer's words is still said once.
+    expect(
+      observationDetails(observation({ duration: '3 days', value: { value: 3, unit: 'days' }, value_label: '3 days' })),
+    ).toEqual(['3 days']);
+  });
+});
+
 describe('what is shown under a detail', () => {
   it('says a duration once, although the service returns it twice (BUG-008)', () => {
     const answered = observation({ duration: '3 days', value: { value: 3, unit: 'days' } });

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -26,6 +26,10 @@ class SessionCreate(_Strict):
     demographics: Demographics | None = None
 
 
+# What the handoff asks to be known about a symptom beside onset, duration and severity (M3.12).
+Attribute = Annotated[str | None, Field(default=None, min_length=1, max_length=200)]
+
+
 class Observation(_Strict):
     feature_id: str
     presence: PresenceT
@@ -33,6 +37,10 @@ class Observation(_Strict):
     onset: str | None = None
     duration: str | None = None
     severity: str | None = None
+    location: Attribute
+    pattern: Attribute
+    triggers: Attribute
+    relieving_factors: Attribute
     confirmed: bool
     supersedes: uuid.UUID | None = None
 
@@ -66,6 +74,14 @@ class ObservationRecord(_Strict):
     onset: str | None = None
     duration: str | None = None
     severity: str | None = None
+    location: str | None = None
+    pattern: str | None = None
+    triggers: str | None = None
+    relieving_factors: str | None = None
+    # In words, for a person to read (M3.12): the name of the item, and the stored answer as it was given.
+    # `feature_id` and `value` stay what they are, internal values.
+    display_name: str | None = None
+    value_label: str | None = None
     confirmed: bool
     supersedes: uuid.UUID | None = None
     observation_id: uuid.UUID

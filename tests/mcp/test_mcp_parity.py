@@ -17,6 +17,7 @@ from tests.conftest import DEFAULT_ANSWERS, Api
 EXPECTED_TOOLS = {
     "start_assessment",
     "get_assessment_session",
+    "get_current_assessment",
     "submit_observations",
     "submit_answer",
     "assess_session",
@@ -125,6 +126,9 @@ def test_full_flow_gives_identical_results_over_rest_and_mcp(container, api: Api
     ma = mcp.call("assess_session", session_id=msid, observation_version=version)
     assert ra["status"] == "provisional"
     assert _scrub(ra, rest_ids) == _scrub(ma, mcp_ids)
+    # The assessment that was made can be read again over either transport, and is the same one (M3.12).
+    assert api.client.get(f"/v1/sessions/{rsid}/assessment", headers=api.headers(None)).json() == ra
+    assert mcp.call("get_current_assessment", session_id=msid) == ma
     assert (
         api.summary(rsid, version).json()["summary_text"]
         == mcp.call("create_consultation_summary", session_id=msid, observation_version=version)["summary_text"]

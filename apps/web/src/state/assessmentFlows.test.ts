@@ -311,6 +311,35 @@ describe('answers the person can read back', () => {
   });
 });
 
+describe('a result that was already made', () => {
+  it('is read back when the conversation is opened again, not made a second time', async () => {
+    const { mock, controller, sessionId } = await startWithIntake('normal');
+    await answerStandardQuestions(controller);
+    await controller.assess();
+    const made = controller.getSnapshot().assessment!;
+    expect(made.status).toBe('provisional');
+    const before = mock.requestLog.filter((entry) => entry.path.endsWith('/assessments')).length;
+
+    // The same conversation opened by a page that holds nothing of it in memory.
+    const reopened = new AssessmentController(mock, sessionId);
+    await reopened.load();
+    expect(reopened.getSnapshot().assessment).toEqual(made);
+    expect(mock.requestLog.filter((entry) => entry.path.endsWith('/assessments'))).toHaveLength(before);
+    expect(mock.requestLog.some((entry) => entry.method === 'GET' && entry.path.endsWith('/assessment'))).toBe(true);
+  });
+
+  it('is not read back once a detail has changed since', async () => {
+    const { mock, controller, sessionId } = await startWithIntake('normal');
+    await answerStandardQuestions(controller);
+    await controller.assess();
+    await expect(mock.getCurrentAssessment(sessionId)).resolves.not.toBeNull();
+    const session = controller.getSnapshot().session!;
+    const first = currentObservations(session)[0]!;
+    expect(await controller.reviseObservation(first.observation_id, { presence: 'absent' })).toBe(true);
+    await expect(mock.getCurrentAssessment(sessionId)).resolves.toBeNull();
+  });
+});
+
 describe('out of scope', () => {
   it('pauses questioning and keeps the summary available', async () => {
     const { controller } = await startWithIntake('out_of_scope');

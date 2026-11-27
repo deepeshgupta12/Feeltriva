@@ -105,6 +105,14 @@ def build_server(container: Container, authenticated: Callable[[], Principal]) -
 
     @server.tool()
     @guarded
+    def get_current_assessment(session_id: str) -> dict[str, Any]:
+        """The assessment already made for the session's details as they stand now, with the same content
+        assess_session returned. Fails with no_current_assessment when the details have changed since or no
+        assessment has been made; call assess_session then."""
+        return svc.get_current_assessment(principal(), _session_id(session_id))
+
+    @server.tool()
+    @guarded
     def submit_observations(
         session_id: str,
         observation_version: int,

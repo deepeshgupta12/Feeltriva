@@ -119,6 +119,24 @@ export class HttpAssessmentService implements AssessmentService {
     });
   }
 
+  async getCurrentAssessment(sessionId: string): Promise<Assessment | null> {
+    try {
+      return await this.request({
+        method: 'GET',
+        path: `${sessionPath(sessionId)}/assessment`,
+        mutation: false,
+        parse: parseAssessment,
+      });
+    } catch (error) {
+      // "No assessment for the details as they stand" is a normal answer here, not a failure. A session that
+      // is missing answers 404 with another code and stays an error.
+      if (toApiError(error).code === 'no_current_assessment') {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   getNextQuestion(sessionId: string, observationVersion: number): Promise<Question | null> {
     return this.request<Question | null>({
       method: 'GET',

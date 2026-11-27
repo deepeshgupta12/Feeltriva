@@ -26,7 +26,7 @@ from .models import (
     SessionMessage,
     SessionObservation,
 )
-from .service_core import CONTEXT, PAUSED_STATES, ServiceCore
+from .service_core import ATTRIBUTES, CONTEXT, PAUSED_STATES, ServiceCore
 
 
 class IntakeOperations(ServiceCore):
@@ -156,6 +156,7 @@ class IntakeOperations(ServiceCore):
                             ("onset", given.onset),
                             ("duration", given.duration),
                             ("severity", given.severity),
+                            *((name, getattr(given, name)) for name in ATTRIBUTES),
                         )
                         if v is not None
                     }

@@ -18,7 +18,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:api": "openapi-typescript ../../specs/openapi.json -o src/api/generated/schema.ts",
+    "gen:api": "openapi-typescript ../../packages/contracts/openapi.json -o src/api/generated/schema.ts",
     "smoke": "node scripts/smoke.mjs",
     "e2e:live": "node scripts/e2e-live.mjs",
     "build:e2e-review": "VITE_SERVICE_MODE=http VITE_DEV_AUTH=true VITE_DEV_REVIEWER=e2e VITE_API_BASE_URL=http://localhost:8001 vite build --outDir node_modules/.cache/feeltriva-e2e-review --emptyOutDir --logLevel warn",

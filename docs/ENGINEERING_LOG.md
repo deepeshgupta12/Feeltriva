@@ -47,6 +47,7 @@ command output, not estimated.
 | BUG-036 | M2.5a / M3.8 | A follow-up question lost three things on its way from the rule file through the database into a published rule set: which option means "not present" (so "None of these" would have been read as present), the reviewer's order, and now the mark "essential". The table had no place for them and the published content did not list them. No effect so far: the only published rule set holds rules and no questions. Found while reading the path for M3.8 | Fixed in M3.8: kept with the question (`branch_rules`), listed in the published content, read by the serving bundle; a rule set published before the fix is read as before |
 | BUG-037 | M2.19 | The list approval of 2026-11-26 approved the seven invented items of the synthetic test rule set ("Fixture signal alpha (sample)" and six more) under the doctor's name. They are stored beside the real items, were pending, and nothing told them apart; the invented questions and the invented rule set had been set aside, the items not. They were in no published list, but a new version of the list of names would have carried them. Found on 2026-11-26 while reading the test rule set for M3.9 | Fixed: the seven are pending again, with a note under the assistant's name; the approval command sets such items aside; the review service refuses to approve one (`sample_item`). Corrects a figure of M2.20: the real items in use are 933, not 940 |
 | BUG-038 | M3.6 / M3.9 | The live browser test (`pnpm e2e:live`) counted, after a page reload, every answer of the service that arrived from then on. An answer to a request the page had sent just before the reload could arrive afterwards and was counted as the reloaded page's own; the check then failed (once in M2.4j, once in M3.9). A fault of the test, not of the product | Fixed in M3.9: each request is marked with the phase it was sent in and the check counts the reloaded page's own requests; 3 runs of 3 pass |
+| BUG-039 | M2.4a / M3.12 | Two component tests of the review workspace failed once with "unable to find" an element and passed in the next three runs. Each was the first test of its kind to render the whole app, on a machine busy with a type check; the test library gives up waiting after one second. No element was missing | Fixed in M3.12: the waits of the web tests give up after three seconds. A real absence still fails |
 
 ## Entries
 
@@ -6467,3 +6468,71 @@ for the owner: the API on port 8000 with the code of `7547c1d`, and the web app 
 **Owner's instruction of 2026-11-27, during this round:** commit messages name no assistant and
 carry no co-author line, from now on. Recorded in the working agreement of `CLAUDE.md`. This
 commit is the first written so. The commits before it keep the line they were pushed with.
+
+### M3.12 — Contract extensions
+
+**What it is for.** The plan row: additions the product needs and the supplied contract lacks: a
+display label for a concept and for the option a person chose (BUG-009 was fixed in M3.14 only for
+the visit in which the question was asked), the symptom attributes the handoff names (`docs/01`:
+"location, severity, pattern, triggers and relieving factors"), reading the current assessment,
+condition information and the review endpoints (E20: served, written nowhere), and the contract
+published from `packages/contracts`. First of five sub-steps the owner asked for on 2026-11-27.
+
+**Impact analysis before editing.** One HIGH result, reported to the owner in a message with the
+plan before any edit.
+
+| Changed | Risk | Callers, and what was done |
+|---|---|---|
+| `ServiceCore._record` | HIGH: every route and MCP tool that returns a session | Fields are added to what it returns; nothing is removed or renamed |
+| `schemas.Observation`, `ObservationRecord` | LOW in the graph (lower bound) | Optional fields added |
+| `_summary_text`, `submit_observations` | as before | The attributes are stored and listed; one function gives an answer's words to both the summary and the session |
+| `create_app`, MCP `build_server` | LOW | One route and one tool added |
+| Web: `observationLabel`, `observationDetails`, the service interface, the controller's `load` | LOW; the pages that show a detail | The service's name and words are used first; a stored result is read back |
+
+**Implemented** (decision E110).
+
+- `packages/contracts/openapi.json`, the product's contract, with a README; `specs/openapi.json`
+  untouched. `packages/contracts/openapi.internal.json`, written by
+  `python -m feeltriva_api.contract` from the running service: 41 operations of the review
+  workspace.
+- Service: `display_name` and `value_label` on every returned observation; `location`, `pattern`,
+  `triggers`, `relieving_factors` accepted (1 to 200 characters), stored and returned;
+  `get_current_assessment` with the route `GET /v1/sessions/{id}/assessment` and the MCP tool
+  `get_current_assessment`. The versions an assessment names are the ones it was made with.
+- Web: types generated from the product's contract; a detail is named by the person's own
+  phrase, then by the service's name, then by its ID; the stored answer is shown in the service's
+  words; the four attributes are shown; when a conversation is loaded its result is read back
+  instead of being made again.
+
+**Bugs.** BUG-039 (index above): a wait of one second in the web's tests, too short on a busy
+machine; three seconds now. Three failures of my own new tests in their first run (what
+`assess()` returns; the address of the test service) were mistakes in the tests and are corrected.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 81 files |
+| `uv run pytest` (SQLite, archives included) | 319 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, archives, object store and `tests/mcp` included; full output saved | 398 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format:check` / `pnpm build` | clean; built |
+| `pnpm test` | 166 passed (10 files), three runs in a row after one run with BUG-039 |
+| `pnpm e2e:live` (web through the real service, `pnpm dev:api` on port 5173) | 50 passed, 0 failed (50 checks), with the names the service now gives in the checks |
+| `detect_changes` before commit | critical by its own count (88 symbols, 50 flows: everything that returns a session, and the pages that show a detail). Compared with the last commit function by function: `Observation`, `ObservationRecord`, `_record`, `submit_observations`, the summary's `describe` changed; `_in_words`, `get_current_assessment` (service, route, tool) added; the other listed symbols only moved |
+
+New tests: the supplied contract is whole and unchanged inside the product's, and what was added
+to a supplied shape is optional; an observation carries its name, the answer in words and the
+four attributes, and an attribute of 201 characters is refused; the current assessment is read
+only while the details stand, by its owner only, and is the one that was made; the written list
+of review routes is what the service serves; REST and MCP give the same current assessment. Web:
+the service's names and words, the attributes, reading a stored result back, the HTTP call.
+
+**Limits, stated plainly.**
+
+- The answers of the review routes have no declared shape; the internal file lists operations,
+  parameters and bodies.
+- The web shows the four symptom attributes when they are there and has no fields to enter them
+  yet; the extraction of free text does not produce them either. They can be sent over the API
+  and MCP.
+- An assessment read back names the rule set and knowledge by what was stored with it; if those
+  have changed since, their version text is the stored ID, not a version name.
