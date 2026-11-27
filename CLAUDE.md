@@ -83,6 +83,9 @@ rather than replaces tests. Preserve these instructions if indexing generates fi
   run one with `--online` only when the owner has asked for that run, and report every request it sent. A new
   command that needs an outside service is built the same way: offline by default, an explicit switch, a count.
 - Never commit `data/`, `.env`, archives or model artifacts. Stage paths explicitly.
+- **Commit messages name no assistant and carry no co-author line** (owner's instruction, 2026-11-27). The same
+  holds for pull-request text and for any list of contributors or authors. Commits made before that day are left as
+  they are; history is not rewritten without the owner's word.
 
 ### GitNexus impact analysis before ANY code change (mandatory)
 

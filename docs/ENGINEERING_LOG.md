@@ -6455,3 +6455,15 @@ is served again when the window has moved; a tool call over MCP is refused at th
   product I could measure (the live browser test, three conversations, is about 60 requests).
 - The web app's handling of the answer existed and has its own test; no browser test drives the
   limit, because that needs a service started with a small limit.
+
+**Committed and indexed (M3.14a, M3.8, the correction of M2.19, M3.9, M3.13).** `8dadb43`
+(M3.14a and BUG-035; CI passed on both jobs, run 45795522442), `f7dc6bc` (M3.8 and BUG-036;
+passed, run 45808462473), `ece5f57` (correction of M2.19, BUG-037; passed, run 45811034361),
+`6f21dd7` (M3.9 and BUG-038; passed, run 45935215835), `7547c1d` (M3.13; passed, run
+45939032508). All verified with `gh run list`. GitNexus index at `7547c1d`, up to date. Running
+for the owner: the API on port 8000 with the code of `7547c1d`, and the web app in live mode
+(`pnpm dev:api`) on port 5173, because the changes of this round show through the service.
+
+**Owner's instruction of 2026-11-27, during this round:** commit messages name no assistant and
+carry no co-author line, from now on. Recorded in the working agreement of `CLAUDE.md`. This
+commit is the first written so. The commits before it keep the line they were pushed with.
