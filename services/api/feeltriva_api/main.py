@@ -29,6 +29,7 @@ from . import schemas as sc
 from .auth import Principal
 from .container import Container, build_container
 from .errors import ApiError
+from .rate_limit import RateLimited
 from .review import list_notes, list_terminology_links
 from .review_rules import list_rules
 from .service import AssessmentService
@@ -95,7 +96,8 @@ def create_app(settings: Settings | None = None, container: Container | None = N
             allow_credentials=False,
             allow_methods=["GET", "POST", "DELETE"],
             allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
-            expose_headers=["X-Request-ID"],
+            # Retry-After is read by the web app after a 429; a browser shows a script only the headers named here.
+            expose_headers=["X-Request-ID", "Retry-After"],
         )
 
     @app.middleware("http")
@@ -109,7 +111,10 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, exc: ApiError) -> JSONResponse:
-        return _error(request, exc.status, exc.code, exc.message, exc.retryable)
+        response = _error(request, exc.status, exc.code, exc.message, exc.retryable)
+        if isinstance(exc, RateLimited):
+            response.headers["Retry-After"] = str(exc.retry_after)
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -131,8 +136,13 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         )
         return _error(request, 500, "internal_error", "Something went wrong. Nothing has been concluded.", True)
 
-    def principal(authorization: Annotated[str | None, Header()] = None) -> Principal:
-        return container.authenticator.authenticate(authorization)
+    def principal(request: Request, authorization: Annotated[str | None, Header()] = None) -> Principal:
+        caller = container.authenticator.authenticate(authorization)
+        # The assessment routes are limited per verified caller (M3.13). The review routes are not: a reviewer's
+        # work is many requests by one person, behind its own role.
+        if request.url.path.startswith("/v1/"):
+            container.limiter.check(caller.subject)
+        return caller
 
     def idem(idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None) -> str:
         if not idempotency_key:

@@ -21,7 +21,7 @@ Status words:
 
 ## Summary
 
-Last updated after sub-step M3.14 (2026-11-26).
+Last updated after sub-step M3.13 (2026-11-27).
 
 | Area | Done | Partial | Missing | External | Decided |
 |---|---:|---:|---:|---:|---:|
@@ -162,7 +162,7 @@ Of 203 traced requirements, 91 are done and 4 were closed by an owner decision. 
 | A13 | Delivery: Compose locally; containers and managed services for pilot | Partial | Compose for PostgreSQL only; API and web are not containerised | **M0.10 new**, M6 |
 | A14 | GitNexus developer index | Done | Version noted, not pinned in the repository | G; **G6 new** |
 | P1 | Pipeline 1: authenticate, owner from token | Done | | M3.3 |
-| P2 | Pipeline 2: consent, **rate limits**, idempotency, version | Partial | No rate limiting | M3.3; **M3.13 new** |
+| P2 | Pipeline 2: consent, **rate limits**, idempotency, version | Partial | Rate limits per verified caller since M3.13. Consent is taken as a version string and not yet as the full consent step | M3.16 |
 | P3 | Pipeline 3: complaint screening and extraction; failure is incomplete, not negative | Done (fixture) | | M3.3 |
 | P4 | Pipeline 4: confirm, apply transactionally, invalidate stale results | Done | | M3.3 |
 | P5 | Pipeline 5: urgency and scope rules; urgent bypasses ranking | Done (fixture) | | M3.3 |

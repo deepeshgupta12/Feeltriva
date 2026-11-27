@@ -11,6 +11,7 @@ from feeltriva_retrieval import BundleEvidenceProvider
 from .auth import Authenticator
 from .crypto import FieldCipher
 from .db import Database
+from .rate_limit import RateLimiter
 from .review import KnowledgeService, ReviewService
 from .service import AssessmentService
 from .settings import Settings
@@ -25,6 +26,7 @@ class Container:
     review: ReviewService
     knowledge: KnowledgeService
     authenticator: Authenticator
+    limiter: RateLimiter
 
 
 def load_release(settings: Settings) -> ReleaseBundle:
@@ -61,5 +63,12 @@ def build_container(settings: Settings, db: Database | None = None) -> Container
         evidence=BundleEvidenceProvider(bundle, clinical_mode=clinical),
     )
     return Container(
-        settings, db, bundle, assessments, ReviewService(db), KnowledgeService(db), Authenticator(settings)
+        settings,
+        db,
+        bundle,
+        assessments,
+        ReviewService(db),
+        KnowledgeService(db),
+        Authenticator(settings),
+        RateLimiter(settings.rate_limit_requests, settings.rate_limit_window_seconds),
     )

@@ -57,8 +57,15 @@ def _parse[T: BaseModel](model: type[T], data: dict[str, Any]) -> T:
         raise _fail("validation_error", f"Arguments are not valid. {details}") from None
 
 
-def build_server(container: Container, principal: Callable[[], Principal]) -> MCPServer:
+def build_server(container: Container, authenticated: Callable[[], Principal]) -> MCPServer:
     server = MCPServer("feeltriva", instructions=INSTRUCTIONS, version="0.1.0")
+
+    def principal() -> Principal:
+        """The verified caller of this tool call, counted against the same limit as a REST request (M3.13)."""
+        caller = authenticated()
+        container.limiter.check(caller.subject)
+        return caller
+
     svc: AssessmentService = container.assessments
     knowledge: KnowledgeService = container.knowledge
 

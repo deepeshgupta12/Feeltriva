@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     session_encryption_key: str = ""
     session_ttl_minutes: int = 1440
     idempotency_ttl_minutes: int = 1440
+    # How many requests one caller may make to the assessment routes in a window (M3.13); 0 switches the limit off.
+    rate_limit_requests: int = 300
+    rate_limit_window_seconds: int = 60
     cors_allowed_origins: str = ""
     llm_provider: Literal["mock"] = "mock"
     embedding_provider: Literal["mock"] = "mock"

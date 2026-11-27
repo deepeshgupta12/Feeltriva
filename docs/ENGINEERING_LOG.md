@@ -6407,3 +6407,51 @@ ordinary flow.
   conversation and in the summary.
 - A context question is yes / no or one choice. A number (a week of pregnancy, say) would need
   its own way to decline.
+
+### M3.13 — A limit on requests per caller
+
+**What it is for.** Handoff, pipeline 2: "enforce consent, rate limits, idempotency and
+observation version", and the test table: "rate limit". The contract declares a 429 answer on
+all eight assessment operations and the web app reads it with its waiting time; the service never
+sent one.
+
+**Impact analysis before editing** (LOW). `build_container` (one caller, the app factory),
+`create_app` (the app factory), MCP `build_server` (one caller). `ApiError` is not changed; the
+new error is a kind of it.
+
+**Implemented** (decision E109).
+
+- `feeltriva_api/rate_limit.py`: `RateLimiter`, a sliding window per caller behind a lock, and
+  `RateLimited` (429, `rate_limited`, retryable, `retry_after`).
+- Settings `rate_limit_requests` (300) and `rate_limit_window_seconds` (60), in `.env.example`.
+- REST: the dependency that verifies the caller counts the request when the path is an
+  assessment route; the error handler adds `Retry-After`; the CORS settings let a browser's
+  script read it.
+- MCP: every tool call counts against the same limiter.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 80 files |
+| `uv run pytest` (SQLite, archives included) | 315 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, archives, object store and `tests/mcp` included; full output saved | 394 passed, 1 skipped |
+| `pnpm e2e:live` and `pnpm smoke` after the whole round, with the limit on at its default; `pnpm typecheck`, `lint`, `format:check`, `test`, `build` | 50 passed, 0 failed (50 checks); 378 passed, 0 failed (378 checks); clean, 161 passed, built |
+| `detect_changes` before commit | medium; the four flows of the app factory. Compared with the last commit function by function: `Container`, `build_container`, `Settings`, `create_app` with its `api_error` and `principal`, and MCP `build_server` changed; the MCP `principal` was added; `load_release`, `validation_error`, `idem` and the MCP `guarded` are listed and only moved |
+
+New tests (`tests/api/test_rate_limit.py`, 3), with a clock the test moves: the limiter refuses
+at the limit and says how long until the oldest request leaves, and a refused request is not
+counted; over REST the fourth request of a caller gets 429 with the standard body, `Retry-After`
+and the header named for a browser, a request that would change something is refused before
+anything is done, another caller, the review routes and the health check go on, and the caller
+is served again when the window has moved; a tool call over MCP is refused at the same limit.
+
+**Limits, stated plainly.**
+
+- Held in the process: two processes give twice the limit. One runs today.
+- Requests without a verified caller are not limited; that needs a limit per network address and
+  belongs with deployment.
+- The default of 300 a minute is not from the handoff; it is a number above any use of the
+  product I could measure (the live browser test, three conversations, is about 60 requests).
+- The web app's handling of the answer existed and has its own test; no browser test drives the
+  limit, because that needs a service started with a small limit.
