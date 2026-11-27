@@ -23,6 +23,8 @@ class Demographics(_Strict):
 
 class SessionCreate(_Strict):
     consent_version: str = Field(min_length=1)
+    # A separate choice from the agreement to use the service; false unless the person makes it (M3.16).
+    training_consent: bool = False
     demographics: Demographics | None = None
 
 
@@ -96,6 +98,10 @@ class SessionOut(_Strict):
     expires_at: datetime
     observations: list[ObservationRecord]
     demographics: Demographics | None = None
+    # What the person agreed to, and when (M3.16).
+    consent_version: str | None = None
+    consent_accepted_at: datetime | None = None
+    training_consent: bool | None = None
 
 
 class Candidate(_Strict):

@@ -13,6 +13,7 @@ Additions so far:
 | M3.12 | `location`, `pattern`, `triggers`, `relieving_factors` on an observation, sent and returned |
 | M3.12 | `GET /v1/sessions/{session_id}/assessment` (`getCurrentAssessment`) |
 | M3.12 | `GET /v1/conditions/{disease_id}` (`getConditionInformation`), served since M2.9 and now in the contract |
+| M3.16 | `GET /v1/consent` (`getConsent`); `SessionCreate.training_consent`; `consent_version`, `consent_accepted_at` and `training_consent` on a session; a session is started only with the current consent version (409 `consent_version_not_current`) |
 
 `openapi.internal.json` lists the routes of the review workspace (`/internal/v1/review/…`) as the service itself
 describes them. It is written by `uv run python -m feeltriva_api.contract` and a test checks that it is current.

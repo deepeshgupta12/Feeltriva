@@ -12,6 +12,7 @@ import type {
   AnswerSubmit,
   Assessment,
   AssessmentRequest,
+  Consent,
   DeletionReceipt,
   ObservationSubmit,
   Question,
@@ -19,7 +20,14 @@ import type {
   SessionCreate,
   Summary,
 } from '../types';
-import { parseAssessment, parseDeletionReceipt, parseQuestion, parseSession, parseSummary } from '../validate';
+import {
+  parseAssessment,
+  parseConsent,
+  parseDeletionReceipt,
+  parseQuestion,
+  parseSession,
+  parseSummary,
+} from '../validate';
 import type { AuthTokenProvider } from './auth';
 
 export interface HttpAssessmentServiceOptions {
@@ -261,6 +269,15 @@ export class HttpAssessmentService implements AssessmentService {
       });
     }
     return options.parse(payload);
+  }
+
+  getConsent(): Promise<Consent> {
+    return this.request({
+      method: 'GET',
+      path: '/v1/consent',
+      mutation: false,
+      parse: parseConsent,
+    });
   }
 }
 

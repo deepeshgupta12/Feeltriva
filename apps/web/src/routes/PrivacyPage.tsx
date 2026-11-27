@@ -143,8 +143,9 @@ export function PrivacyPage() {
             memory. Reloading or closing the page clears them. Health details are not written to browser storage.
           </p>
           <p>
-            <strong className="font-semibold text-ink">In the live service:</strong> retention periods have not been
-            decided. They will be published here before real assessments are offered.
+            <strong className="font-semibold text-ink">In the live service:</strong> what is kept, and for how long, is
+            written in the terms you agree to before a check starts. Those terms are a draft until they have been
+            reviewed.
           </p>
         </SettingsSection>
 
@@ -166,6 +167,7 @@ export function PrivacyPage() {
             queued and may take time. Copies in backups may be kept for a limited period under the retention policy;
             immediate removal from every backup is not promised.
           </p>
+          <p>Deleting an assessment is also how you take back your agreement to the terms for it.</p>
           <Button
             variant="danger"
             size="sm"
@@ -199,8 +201,9 @@ export function PrivacyPage() {
             onCheckedChange={setTrainingConsent}
           />
           <p>
-            This setting has no effect in the demo: nothing you enter is used for training or analysis, whichever way it
-            is set, and the choice is not stored.
+            The choice is recorded with each check you start from now on, and you are asked again on the first step of a
+            new check. It does not change a check you have already started. In the demo it has no effect: nothing you
+            enter is used for training or analysis, whichever way it is set.
           </p>
         </SettingsSection>
       </div>

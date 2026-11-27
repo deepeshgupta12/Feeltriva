@@ -241,15 +241,21 @@ These are the places where the frontend had to choose. Please confirm or correct
    cannot be confirmed or corrected structurally, so they are shown as “Saved as a note”
    without edit actions.
 4. **`conflicting_observation_ids`** are displayed under “Details that need clarification”.
-5. **There is no “get assessment” endpoint**, so a result is obtained with
-   `POST …/assessments` when the results page opens without one in memory, and after each
-   successful assessment the session is re-read to pick up its new `state`.
+5. **Reading a result back.** Since M3.12 the service has `GET …/assessment`; when a
+   conversation is loaded its result is read back from there, and `POST …/assessments` is used
+   only when there is none for the details as they stand. After each successful assessment the
+   session is re-read to pick up its new `state`.
 6. **`urgent_handoff` and `out_of_scope`.** When a session reports either state, the UI
    requests one assessment for that version to obtain the service’s `next_action.text`. It
    never writes its own urgent instructions.
 7. **`next_action.question_id`** is not fetched by id; “Answer the next question” returns to
    the conversation, which asks `next-question` for the current version.
-8. **`consent_version`** is sent as `demo-consent-0` (`src/config/consent.ts`).
+8. **`consent_version`** is the `version` of the terms the service returned (`GET /v1/consent`)
+   and the page showed; the choice about improving the product is sent as `training_consent`,
+   `false` unless the person ticked its own box. If the service answers
+   `consent_version_not_current`, the page reads the terms again, clears the tick and asks
+   again, keeping what was typed. The design demo has its own terms (`src/fixtures/demoConsent.ts`,
+   version `demo-consent-0`).
 9. **Deletion status** cannot be polled (no endpoint), so the receipt shows exactly the status
    returned by `DELETE`. “Deletion scheduled” is never upgraded to “completed” by the client.
 10. **History.** There is no endpoint that lists a user’s sessions, so “Saved summaries” only

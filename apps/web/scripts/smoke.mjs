@@ -837,10 +837,15 @@ async function run() {
     );
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
-    check(
-      'keyboard: focus returns to the footer button',
-      (await page.evaluate(() => document.activeElement?.textContent ?? '')).trim() === 'About',
-    );
+    // Focus is put back a moment after the dialog has gone (measured: on the page body at once, on the button
+    // 50 ms later), so the check waits for it instead of reading it at once (BUG-040).
+    const returned = await page
+      .waitForFunction(() => (document.activeElement?.textContent ?? '').trim() === 'About', null, { timeout: 3000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    check('keyboard: focus returns to the footer button', returned);
   });
 
   await browser.close();

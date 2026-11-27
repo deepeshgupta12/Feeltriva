@@ -5,7 +5,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ApiError } from '@/api/errors';
 import { DEMO_BANNER_TEXT } from '@/components/DemoBanner';
+import { DEMO_CONSENT } from '@/fixtures/demoConsent';
 import { SAMPLE_INTAKE_TEXT } from '@/fixtures/sampleContent';
 import { ALLOWED_STORAGE_KEYS, NAV_COLLAPSED_KEY } from '@/state/preferences';
 import { currentObservations } from '@/state/selectors';
@@ -240,8 +242,12 @@ describe('start screen', () => {
   it('requires an explicit acknowledgement and never preselects context answers', async () => {
     const { user, services } = renderApp('/start');
 
-    const acknowledgement = screen.getByRole('checkbox', { name: /I understand that this is a demo/ });
+    // The terms are read from the service; until they are on screen there is nothing to agree to.
+    const acknowledgement = await screen.findByRole('checkbox', { name: /I understand that this is a demo/ });
     expect(acknowledgement).not.toBeChecked();
+    expect(screen.getByRole('heading', { level: 2, name: 'Before you start' })).toBeInTheDocument();
+    // The choice about improving the product is a separate box, and it is not ticked for the person.
+    expect(screen.getByRole('checkbox', { name: /You may also use my conversation/ })).not.toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Tick the box to confirm');
     expect(screen.getByRole('heading', { level: 1, name: 'About this check' })).toBeInTheDocument();
@@ -261,12 +267,13 @@ describe('start screen', () => {
       screen.getByRole('heading', { name: 'This check isn’t available for this situation yet' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
-    expect(services.mock.requestLog).toHaveLength(0);
+    // Reading the terms is the only request: no session was created and nothing the person entered was sent.
+    expect(services.mock.requestLog.map((entry) => `${entry.method} ${entry.path}`)).toEqual(['GET /v1/consent']);
   });
 
   it('loads the example without submitting it, and keeps the text when the request fails', async () => {
     const { user, services } = renderApp('/start');
-    await user.click(screen.getByRole('checkbox', { name: /I understand that this is a demo/ }));
+    await user.click(await screen.findByRole('checkbox', { name: /I understand that this is a demo/ }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('radio', { name: /Me, and I’m an adult/ }));
     await user.click(screen.getByRole('checkbox', { name: 'Prefer not to answer' }));
@@ -276,8 +283,8 @@ describe('start screen', () => {
     const textarea = screen.getByLabelText('What have you been feeling?');
     expect(textarea).toHaveValue(SAMPLE_INTAKE_TEXT);
     expect(screen.getByText(/Sample text loaded/)).toBeInTheDocument();
-    // Loading the chip created no session and sent nothing.
-    expect(services.mock.requestLog).toHaveLength(0);
+    // Loading the chip created no session and sent nothing: the only request so far read the terms.
+    expect(services.mock.requestLog.map((entry) => `${entry.method} ${entry.path}`)).toEqual(['GET /v1/consent']);
     expect(screen.getByRole('heading', { level: 1, name: 'Your symptoms' })).toBeInTheDocument();
 
     services.mock.setOffline(true);
@@ -299,7 +306,7 @@ describe('browser storage', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem');
     const { user } = renderApp('/start');
 
-    await user.click(screen.getByRole('checkbox', { name: /I understand that this is a demo/ }));
+    await user.click(await screen.findByRole('checkbox', { name: /I understand that this is a demo/ }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('radio', { name: /Me, and I’m an adult/ }));
     await user.type(screen.getByLabelText('Age in years'), '41');
@@ -529,5 +536,97 @@ describe('condition information', () => {
   it('shows nothing rather than a guess for an unknown condition', async () => {
     renderApp('/conditions/not-a-real-id');
     expect(await screen.findByRole('heading', { name: 'No reviewed information is available' })).toBeInTheDocument();
+  });
+});
+
+describe('agreement to the terms', () => {
+  async function agreeAndDescribe(user: ReturnType<typeof renderApp>['user'], { improve }: { improve: boolean }) {
+    await user.click(await screen.findByRole('checkbox', { name: /I understand that this is a demo/ }));
+    if (improve) {
+      await user.click(screen.getByRole('checkbox', { name: /You may also use my conversation/ }));
+    }
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('radio', { name: /Me, and I’m an adult/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Prefer not to answer' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.type(screen.getByLabelText('What have you been feeling?'), 'sample words');
+  }
+
+  it('shows the terms word for word and starts with the version that was on screen', async () => {
+    const { user, services } = renderApp('/start');
+    await screen.findByRole('checkbox', { name: /I understand that this is a demo/ });
+    for (const section of DEMO_CONSENT.sections) {
+      expect(screen.getByRole('heading', { level: 3, name: section.heading })).toBeInTheDocument();
+      for (const paragraph of section.paragraphs) {
+        expect(screen.getByText(paragraph)).toBeInTheDocument();
+      }
+    }
+    expect(screen.getByText(DEMO_CONSENT.training.explanation)).toBeInTheDocument();
+    expect(
+      screen.getByText('These terms are a draft. The final wording has not been reviewed yet.'),
+    ).toBeInTheDocument();
+
+    const started = vi.spyOn(services.mock, 'startSession');
+    await agreeAndDescribe(user, { improve: false });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: /have you also noticed sample symptom C/ });
+    // Not ticking the second box is sent as "no", never left for the service to guess.
+    expect(started).toHaveBeenCalledWith({ consent_version: DEMO_CONSENT.version, training_consent: false });
+    const session = services.registry.getSnapshot()[0]?.controller.getSnapshot().session;
+    expect(session).toMatchObject({ consent_version: DEMO_CONSENT.version, training_consent: false });
+    expect(session?.consent_accepted_at).toEqual(expect.any(String));
+  });
+
+  it('sends the separate choice only when the person ticked it', async () => {
+    const { user, services } = renderApp('/start');
+    const started = vi.spyOn(services.mock, 'startSession');
+    await agreeAndDescribe(user, { improve: true });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: /have you also noticed sample symptom C/ });
+    expect(started).toHaveBeenCalledWith({ consent_version: DEMO_CONSENT.version, training_consent: true });
+  });
+
+  it('starts nothing when the terms cannot be read', async () => {
+    const services = createTestServices();
+    services.mock.setOffline(true);
+    const { user } = renderApp('/start', services);
+
+    expect(await screen.findByRole('heading', { name: 'We couldn’t load the terms' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+
+    services.mock.setOffline(false);
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('checkbox', { name: /I understand that this is a demo/ })).not.toBeChecked();
+  });
+
+  it('asks again when the terms changed while the form was being filled in, and keeps what was typed', async () => {
+    const { user, services } = renderApp('/start');
+    const started = vi.spyOn(services.mock, 'startSession').mockRejectedValueOnce(
+      new ApiError({
+        kind: 'conflict',
+        status: 409,
+        code: 'consent_version_not_current',
+        message: 'The terms shown were not the current ones.',
+        retryable: false,
+      }),
+    );
+    await agreeAndDescribe(user, { improve: false });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByRole('heading', { name: 'The terms have changed' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'About this check' })).toBeInTheDocument();
+    // The earlier tick does not carry over to terms the person has not read.
+    const acknowledgement = await screen.findByRole('checkbox', { name: /I understand that this is a demo/ });
+    expect(acknowledgement).not.toBeChecked();
+    expect(services.registry.getSnapshot()).toHaveLength(0);
+
+    await user.click(acknowledgement);
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.getByLabelText('What have you been feeling?')).toHaveValue('sample words');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: /have you also noticed sample symptom C/ });
+    expect(started).toHaveBeenCalledTimes(2);
   });
 });

@@ -217,6 +217,7 @@ class Session(Base):
     state: Mapped[str] = mapped_column(Text)
     observation_version: Mapped[int] = mapped_column(BigInt, default=0)
     consent_version: Mapped[str] = mapped_column(Text)
+    training_consent: Mapped[bool] = mapped_column(Boolean, default=False)  # a separate choice (M3.16)
     demographics: Mapped[Any] = mapped_column(Json, default=dict)
     created_at: Mapped[datetime] = mapped_column(TZ, server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(TZ)

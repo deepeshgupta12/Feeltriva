@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (
+    consent,
     disease_merges,
     feature_merges,
     published_knowledge,
@@ -172,6 +173,10 @@ def create_app(settings: Settings | None = None, container: Container | None = N
                 "synthetic_release": container.bundle.synthetic,
             }
         )
+
+    @app.get("/v1/consent", operation_id="getConsent")
+    def get_consent(who: Who) -> JSONResponse:
+        return JSONResponse(consent.current().shown())
 
     @app.post("/v1/sessions", status_code=201, operation_id="startAssessment")
     def start_assessment(body: sc.SessionCreate, who: Who, key: Key) -> JSONResponse:

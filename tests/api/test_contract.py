@@ -130,6 +130,7 @@ def test_the_supplied_contract_is_whole_and_unchanged_inside_the_products_contra
     assert added == {
         ("/v1/sessions/{session_id}/assessment", "get"): "getCurrentAssessment",
         ("/v1/conditions/{disease_id}", "get"): "getConditionInformation",
+        ("/v1/consent", "get"): "getConsent",
     }
 
 

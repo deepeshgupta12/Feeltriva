@@ -3,17 +3,16 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { toApiError, type ApiError } from '@/api/errors';
-import type { Demographics } from '@/api/types';
+import type { Consent, Demographics } from '@/api/types';
 import { InfoDialog } from '@/components/InfoDialog';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { LINK_CLASSES } from '@/components/ui/buttonStyles';
-import { SampleTag } from '@/components/ui/StatusBadge';
-import { INTENDED_USE_STATEMENT } from '@/components/UncertaintyPanel';
-import { CONSENT_VERSION } from '@/config/consent';
+import { SampleTag, StatusBadge } from '@/components/ui/StatusBadge';
 import { SAMPLE_INTAKE_TEXT } from '@/fixtures/sampleContent';
 import { cn } from '@/lib/cn';
 import { errorCopy, errorReference } from '@/lib/errorCopy';
+import { useAsync } from '@/lib/useAsync';
 import type { AssessmentController } from '@/state/AssessmentController';
 import { usePageMeta } from '@/state/hooks';
 import { usePreferences } from '@/state/preferencesContext';
@@ -82,24 +81,29 @@ function FieldError({ id, message }: { id: string; message: string | null }) {
 }
 
 /**
- * Intended use, consent and basic context, then the first description of symptoms.
- * Nothing is sent until the final step is submitted, and every answer is kept when moving
- * back or when a request fails.
+ * The terms and the agreement to them, basic context, then the first description of symptoms.
+ * The terms are read from the service and shown word for word; a check cannot start without them.
+ * Nothing the person enters is sent until the final step is submitted, and every answer is kept when
+ * moving back or when a request fails.
  */
 export function StartPage() {
   usePageMeta('Start a symptom check', { noindex: true });
   const id = useId();
   const navigate = useNavigate();
   const { assessment, registry, mock } = useServices();
-  const { historyEnabled } = usePreferences();
+  const { historyEnabled, trainingConsent, setTrainingConsent } = usePreferences();
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const [step, setStep] = useState(1);
   const [privacyOpen, setPrivacyOpen] = useState(false);
 
   // Step 1
+  const terms = useAsync<Consent>('terms', () => assessment.getConsent());
+  const currentTerms = terms.state.status === 'loaded' ? terms.state.data : null;
   const [acknowledged, setAcknowledged] = useState(false);
   const [acknowledgeError, setAcknowledgeError] = useState<string | null>(null);
+  // The service refused the start because the terms had changed since they were shown.
+  const [termsChanged, setTermsChanged] = useState(false);
 
   // Step 2
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -133,11 +137,15 @@ export function StartPage() {
 
   const submitStepOne = (event: FormEvent) => {
     event.preventDefault();
+    if (!currentTerms) {
+      return;
+    }
     if (!acknowledged) {
       setAcknowledgeError('Tick the box to confirm you’ve read this before continuing.');
       return;
     }
     setAcknowledgeError(null);
+    setTermsChanged(false);
     setStep(2);
   };
 
@@ -199,6 +207,11 @@ export function StartPage() {
       setTextError(`Shorten your description to ${MAX_TEXT_LENGTH.toLocaleString('en-US')} characters or fewer.`);
       return;
     }
+    if (!currentTerms) {
+      // No agreement without the terms on screen.
+      setStep(1);
+      return;
+    }
     setTextError(null);
     setSubmitError(null);
     setSubmitting(true);
@@ -207,7 +220,9 @@ export function StartPage() {
       if (!controller) {
         const demographics = buildDemographics();
         const session = await assessment.startSession({
-          consent_version: CONSENT_VERSION,
+          // The version of the terms that were on screen when the box was ticked, and the separate choice.
+          consent_version: currentTerms.version,
+          training_consent: trainingConsent,
           ...(demographics ? { demographics } : {}),
         });
         controller = registry.create(session, { listed: historyEnabled });
@@ -228,7 +243,17 @@ export function StartPage() {
         state.failure?.error ?? toApiError(new Error('Your description could not be sent. Please try again.')),
       );
     } catch (error) {
-      setSubmitError(toApiError(error));
+      const failed = toApiError(error);
+      if (failed.code === 'consent_version_not_current') {
+        // The terms changed while the form was being filled in. Nothing was started: the current terms are
+        // read again and the agreement is asked for again. What was typed stays where it is.
+        setAcknowledged(false);
+        setTermsChanged(true);
+        terms.reload();
+        setStep(1);
+      } else {
+        setSubmitError(failed);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -251,52 +276,85 @@ export function StartPage() {
 
         {step === 1 ? (
           <form onSubmit={submitStepOne} noValidate className="mt-4 space-y-4">
-            <p className="text-ink-secondary">
-              Feeltriva helps you describe your symptoms, check what was understood, answer follow-up questions and
-              prepare a summary for a consultation.
-            </p>
-            <p className="text-ink-secondary">{INTENDED_USE_STATEMENT}</p>
-            <div className="rounded-control border border-attention/30 bg-attention-soft p-4 text-attention">
-              <p className="font-semibold">This is a design demo.</p>
-              <p className="mt-1">
-                It uses sample scenarios and does not assess real symptoms. Sample sessions reset when the page reloads,
-                and no real account is created. Please don’t enter private health information into a shared preview.
-              </p>
-            </div>
-            <p className="text-ink-secondary">
-              What you enter is used only to run this check. Using your information to improve the service is a separate
-              choice. It is off by default and is not part of this acknowledgement.
-            </p>
-            <p>
-              <button
-                type="button"
-                onClick={() => setPrivacyOpen(true)}
-                className={`min-h-11 text-left ${LINK_CLASSES}`}
-              >
-                Read the privacy details (draft)
-              </button>
-            </p>
+            {termsChanged ? (
+              <StatusPanel tone="attention" title="The terms have changed" announce="alert" headingLevel="h2">
+                <p>
+                  They changed while you were filling this in. Please read them again and tick the box to continue. What
+                  you typed has been kept.
+                </p>
+              </StatusPanel>
+            ) : null}
 
-            <div>
-              <label className="flex cursor-pointer items-start gap-3 rounded-control border border-line p-4 hover:border-ink-muted">
-                <input
-                  type="checkbox"
-                  checked={acknowledged}
-                  aria-invalid={acknowledgeError ? true : undefined}
-                  aria-describedby={acknowledgeError ? `${id}-ack-error` : undefined}
-                  onChange={(event) => {
-                    setAcknowledged(event.target.checked);
-                    setAcknowledgeError(null);
-                  }}
-                  className="mt-0.5 size-5 shrink-0 accent-primary"
-                />
-                <span className="font-medium text-ink">
-                  I understand that this is a demo, that it is not a medical assessment, and that Feeltriva does not
-                  confirm a diagnosis.
-                </span>
-              </label>
-              <FieldError id={`${id}-ack-error`} message={acknowledgeError} />
-            </div>
+            {terms.state.status === 'loading' ? (
+              <p role="status" className="text-ink-secondary">
+                Loading the terms…
+              </p>
+            ) : null}
+
+            {terms.state.status === 'failed' ? (
+              <StatusPanel tone="attention" title="We couldn’t load the terms" announce="alert" headingLevel="h2">
+                <p>A check can’t start until you have seen them. Nothing was sent.</p>
+                <p>
+                  <Button variant="secondary" size="sm" onClick={terms.reload}>
+                    Try again
+                  </Button>
+                </p>
+              </StatusPanel>
+            ) : null}
+
+            {currentTerms ? (
+              <>
+                <TermsText terms={currentTerms} />
+                <p>
+                  <button
+                    type="button"
+                    onClick={() => setPrivacyOpen(true)}
+                    className={`min-h-11 text-left ${LINK_CLASSES}`}
+                  >
+                    Read the privacy details (draft)
+                  </button>
+                </p>
+
+                <div>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-control border border-line p-4 hover:border-ink-muted">
+                    <input
+                      type="checkbox"
+                      checked={acknowledged}
+                      aria-invalid={acknowledgeError ? true : undefined}
+                      aria-describedby={acknowledgeError ? `${id}-ack-error` : undefined}
+                      onChange={(event) => {
+                        setAcknowledged(event.target.checked);
+                        setAcknowledgeError(null);
+                      }}
+                      className="mt-0.5 size-5 shrink-0 accent-primary"
+                    />
+                    <span className="font-medium text-ink">{currentTerms.acknowledgement}</span>
+                  </label>
+                  <FieldError id={`${id}-ack-error`} message={acknowledgeError} />
+                </div>
+
+                {/* A separate choice, never ticked for the person and never needed to continue. */}
+                <div>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-control border border-line p-4 hover:border-ink-muted">
+                    <input
+                      type="checkbox"
+                      checked={trainingConsent}
+                      aria-describedby={`${id}-training-hint`}
+                      onChange={(event) => setTrainingConsent(event.target.checked)}
+                      className="mt-0.5 size-5 shrink-0 accent-primary"
+                    />
+                    <span>
+                      <span className="font-medium text-ink">
+                        {currentTerms.training.label} <span className="font-normal text-ink-secondary">(optional)</span>
+                      </span>
+                      <span id={`${id}-training-hint`} className="mt-1 block text-[0.9375rem] text-ink-secondary">
+                        {currentTerms.training.explanation}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </>
+            ) : null}
 
             <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-between">
               <ButtonLink
@@ -306,7 +364,7 @@ export function StartPage() {
               >
                 Back to introduction
               </ButtonLink>
-              <Button type="submit">Continue</Button>
+              {currentTerms ? <Button type="submit">Continue</Button> : null}
             </div>
           </form>
         ) : null}
@@ -544,6 +602,33 @@ export function StartPage() {
         ) : null}
       </div>
       <InfoDialog page={privacyOpen ? 'privacy' : null} onClose={() => setPrivacyOpen(false)} />
+    </div>
+  );
+}
+
+/** The terms as the service gave them: every heading and paragraph, in order, with nothing added or left out. */
+function TermsText({ terms }: { terms: Consent }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-display text-xl font-bold text-ink">{terms.title}</h2>
+        {terms.status === 'draft' ? <StatusBadge tone="attention">Draft</StatusBadge> : null}
+      </div>
+      {terms.status === 'draft' ? (
+        <p className="text-[0.9375rem] text-ink-secondary">
+          These terms are a draft. The final wording has not been reviewed yet.
+        </p>
+      ) : null}
+      {terms.sections.map((section) => (
+        <section key={section.heading}>
+          <h3 className="font-semibold text-ink">{section.heading}</h3>
+          {section.paragraphs.map((paragraph) => (
+            <p key={paragraph} className="mt-1 text-ink-secondary">
+              {paragraph}
+            </p>
+          ))}
+        </section>
+      ))}
     </div>
   );
 }

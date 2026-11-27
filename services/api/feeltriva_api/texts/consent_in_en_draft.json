@@ -1,0 +1,40 @@
+{
+  "consent_id": "consent-in-en",
+  "version": "consent-in-en-draft-1",
+  "status": "draft",
+  "note": "Draft wording for the owner's review. It is not legal advice; neither the owner nor a lawyer has reviewed it. Change `version` whenever the wording changes: a session can be started only with the current version.",
+  "language": "en",
+  "region": "IN",
+  "title": "Before you start",
+  "sections": [
+    {
+      "heading": "What this is",
+      "paragraphs": [
+        "Feeltriva asks about your symptoms, tells you what it understood, and suggests what you could do next. It does not give a diagnosis and it is not a doctor.",
+        "If you think you may be seriously ill or in danger, do not wait for this check: contact a doctor or your local emergency service now."
+      ]
+    },
+    {
+      "heading": "Who it is for",
+      "paragraphs": ["Adults aged 18 or over, in India, answering about themselves."]
+    },
+    {
+      "heading": "What we keep, and for how long",
+      "paragraphs": [
+        "We keep what you write, the answers you give, the age and other details you choose to tell us, and the result shown to you.",
+        "We keep a conversation for 30 days and then delete it. You can delete it yourself at any time before that."
+      ]
+    },
+    {
+      "heading": "Taking back your agreement",
+      "paragraphs": [
+        "You can take back your agreement at any time by deleting the conversation. It is then removed and cannot be opened again."
+      ]
+    }
+  ],
+  "acknowledgement": "I have read this and agree to use Feeltriva on these terms.",
+  "training": {
+    "label": "You may also use my conversation to improve Feeltriva.",
+    "explanation": "This is a separate choice. It is off unless you tick it, you can use Feeltriva without it, and it changes nothing about the check you get."
+  }
+}

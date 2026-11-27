@@ -12,10 +12,11 @@ from feeltriva_api.auth import ASSESSMENT_SCOPES, Principal
 from feeltriva_mcp.server import build_server
 from mcp.server.mcpserver.exceptions import ToolError
 
-from tests.conftest import DEFAULT_ANSWERS, Api
+from tests.conftest import CONSENT, DEFAULT_ANSWERS, Api
 
 EXPECTED_TOOLS = {
     "start_assessment",
+    "get_consent",
     "get_assessment_session",
     "get_current_assessment",
     "submit_observations",
@@ -50,7 +51,8 @@ class Mcp:
 def _scrub(value: Any, ids: dict[str, str]) -> Any:
     """Replace per-session identifiers and timestamps so two independent runs can be compared."""
     if isinstance(value, dict):
-        return {k: ("<time>" if k == "expires_at" else _scrub(v, ids)) for k, v in value.items()}
+        times = ("expires_at", "consent_accepted_at")
+        return {k: ("<time>" if k in times else _scrub(v, ids)) for k, v in value.items()}
     if isinstance(value, list):
         return [_scrub(v, ids) for v in value]
     if isinstance(value, str):
@@ -79,7 +81,7 @@ def test_full_flow_gives_identical_results_over_rest_and_mcp(container, api: Api
     demographics = {"age_years": 41}
 
     r = api.start(demographics).json()
-    m = mcp.call("start_assessment", consent_version="test-consent-1", demographics=demographics)
+    m = mcp.call("start_assessment", consent_version=CONSENT, demographics=demographics)
     assert _scrub(r, rest_ids) == _scrub(m, mcp_ids)
     rsid, msid = r["session_id"], m["session_id"]
 
@@ -203,7 +205,7 @@ def test_mcp_cannot_bypass_ownership_versions_question_validation_or_scopes(cont
 
 def test_urgent_state_is_identical_and_pauses_questions_over_mcp(container):
     mcp = Mcp(container)
-    sid = mcp.call("start_assessment", consent_version="c")["session_id"]
+    sid = mcp.call("start_assessment", consent_version=CONSENT)["session_id"]
     session = mcp.call("submit_observations", session_id=sid, observation_version=0, text="escalation marker")
     assert session["state"] == "urgent_handoff"
     assert mcp.call("get_next_question", session_id=sid, observation_version=1) == {"question": None}

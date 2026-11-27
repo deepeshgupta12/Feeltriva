@@ -17,6 +17,7 @@ from feeltriva_clinical import (
 from feeltriva_llm import ExtractionError
 from sqlalchemy.orm import Session as Tx
 
+from . import consent
 from . import schemas as sc
 from .auth import Principal
 from .errors import ApiError, stale_version
@@ -32,6 +33,8 @@ from .service_core import ATTRIBUTES, CONTEXT, PAUSED_STATES, ServiceCore
 class IntakeOperations(ServiceCore):
     def start_session(self, principal: Principal, payload: sc.SessionCreate, idempotency_key: str) -> dict[str, Any]:
         principal.require_scope("assessment:write")
+        # No session without an agreement to the current terms (M3.16).
+        consent.require_current(payload.consent_version)
 
         def fn(tx: Tx) -> tuple[dict[str, Any], uuid.UUID]:
             demographics = payload.demographics.model_dump(exclude_none=True) if payload.demographics else {}
@@ -43,7 +46,9 @@ class IntakeOperations(ServiceCore):
                 state=state,
                 observation_version=0,
                 consent_version=payload.consent_version,
+                training_consent=payload.training_consent,
                 demographics=demographics,
+                created_at=self._now(),  # the time of the agreement
                 expires_at=self._now() + timedelta(minutes=self._settings.session_ttl_minutes),
             )
             tx.add(session)
@@ -54,6 +59,7 @@ class IntakeOperations(ServiceCore):
                 session.session_id,
                 "session_started",
                 consent_version=payload.consent_version,
+                training_consent=payload.training_consent,
                 state=state,
             )
             return self._session_out(session, []), session.session_id

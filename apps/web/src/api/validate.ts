@@ -3,7 +3,7 @@
  * contract; anything else becomes an `invalid_response` error instead of a partial result.
  */
 import { ApiError } from './errors';
-import type { Assessment, DeletionReceipt, Question, Session, Summary } from './types';
+import type { Assessment, Consent, DeletionReceipt, Question, Session, Summary } from './types';
 
 const PRESENCE = ['present', 'absent', 'uncertain', 'not_asked'];
 const ASSESSMENT_STATUS = [
@@ -140,4 +140,21 @@ export function parseDeletionReceipt(value: unknown): DeletionReceipt {
   if (!isString(value.status) || !DELETION_STATUS.includes(value.status)) fail('deletion receipt', 'status');
   if (!isString(value.receipt_id)) fail('deletion receipt', 'receipt_id');
   return value as unknown as DeletionReceipt;
+}
+
+/** The terms are shown word for word, so a part that is missing means nothing is shown and nothing can be agreed to. */
+export function parseConsent(value: unknown): Consent {
+  if (!isRec(value)) fail('terms', 'not an object');
+  if (!isString(value.version) || value.version.length === 0) fail('terms', 'version');
+  if (value.status !== 'draft' && value.status !== 'approved') fail('terms', 'status');
+  if (!isString(value.title)) fail('terms', 'title');
+  if (!Array.isArray(value.sections) || value.sections.length === 0) fail('terms', 'sections');
+  for (const section of value.sections) {
+    if (!isRec(section) || !isString(section.heading) || !isStringArray(section.paragraphs)) fail('terms', 'section');
+  }
+  if (!isString(value.acknowledgement) || value.acknowledgement.length === 0) fail('terms', 'acknowledgement');
+  if (!isRec(value.training) || !isString(value.training.label) || !isString(value.training.explanation)) {
+    fail('terms', 'training');
+  }
+  return value as unknown as Consent;
 }

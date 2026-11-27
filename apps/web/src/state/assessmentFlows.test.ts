@@ -540,3 +540,28 @@ describe('mock answer validation', () => {
     ).rejects.toMatchObject({ kind: 'conflict', status: 409, code: 'question_not_current' });
   });
 });
+
+describe('the demo service and the terms', () => {
+  it('starts a session only for its current terms, and keeps the agreement with it', async () => {
+    const mock = new MockAssessmentService({ latencyMs: 0 });
+    const terms = await mock.getConsent();
+    expect(terms.version).toBe(CONSENT_VERSION);
+
+    await expect(mock.startSession({ consent_version: 'an-older-version' })).rejects.toMatchObject({
+      status: 409,
+      code: 'consent_version_not_current',
+    });
+
+    const plain = await mock.startSession({ consent_version: terms.version });
+    expect(plain).toMatchObject({ consent_version: terms.version, training_consent: false });
+    expect(Number.isNaN(Date.parse(plain.consent_accepted_at ?? ''))).toBe(false);
+    const allowed = await mock.startSession({ consent_version: terms.version, training_consent: true });
+    expect(allowed.training_consent).toBe(true);
+    // The agreement stays with the session however often it is read.
+    expect(await mock.getSession(allowed.session_id)).toMatchObject({
+      consent_version: terms.version,
+      training_consent: true,
+      consent_accepted_at: allowed.consent_accepted_at,
+    });
+  });
+});

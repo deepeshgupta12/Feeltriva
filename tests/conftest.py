@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from feeltriva_api.consent import current as current_consent
 from feeltriva_api.container import Container, build_container
 from feeltriva_api.db import Database
 from feeltriva_api.main import create_app
@@ -99,7 +100,7 @@ class Api:
         return headers
 
     def start(self, demographics: dict[str, Any] | None = None, key: str = "auto") -> Any:
-        body: dict[str, Any] = {"consent_version": "test-consent-1"}
+        body: dict[str, Any] = {"consent_version": CONSENT}
         if demographics is not None:
             body["demographics"] = demographics
         return self.client.post("/v1/sessions", json=body, headers=self.headers(key))
@@ -186,6 +187,9 @@ class Api:
             session = r.json()
 
 
+# A session can be started only with the current terms (M3.16).
+CONSENT = current_consent().version
+
 DEFAULT_ANSWERS = {
     "fx.q.beta": "yes",
     "fx.q.gamma": "none",
@@ -214,3 +218,25 @@ def openapi() -> dict[str, Any]:
 def supplied_openapi() -> dict[str, Any]:
     """The contract as the handoff supplied it. It is not edited."""
     return json.loads((ROOT / "specs" / "openapi.json").read_text())
+
+
+@pytest.fixture(scope="session")
+def validate_contract(openapi):
+    """Checks an answer of the service against a shape of the product's contract."""
+    from jsonschema import Draft202012Validator
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT202012
+
+    registry = Registry().with_resource("urn:feeltriva", Resource(contents=openapi, specification=DRAFT202012))
+
+    def check(schema_name: str, instance: Any) -> None:
+        schema = {"$ref": f"urn:feeltriva#/components/schemas/{schema_name}"}
+        errors = sorted(
+            Draft202012Validator(
+                schema, registry=registry, format_checker=Draft202012Validator.FORMAT_CHECKER
+            ).iter_errors(instance),
+            key=str,
+        )
+        assert not errors, f"{schema_name}: " + "; ".join(f"{list(e.path)} {e.message}" for e in errors[:5])
+
+    return check

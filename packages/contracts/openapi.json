@@ -1247,6 +1247,110 @@
         },
         "summary": "Reviewed, published information about one condition"
       }
+    },
+    "/v1/consent": {
+      "get": {
+        "operationId": "getConsent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Schema validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Assessment unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The terms a person agrees to before a session is started, with their version"
+      }
     }
   },
   "components": {
@@ -1281,6 +1385,11 @@
           },
           "demographics": {
             "$ref": "#/components/schemas/Demographics"
+          },
+          "training_consent": {
+            "type": "boolean",
+            "default": false,
+            "description": "The person's separate choice to let the conversation be used to improve the product. False unless they made it."
           }
         },
         "required": [
@@ -1314,6 +1423,17 @@
           },
           "demographics": {
             "$ref": "#/components/schemas/Demographics"
+          },
+          "consent_version": {
+            "type": "string",
+            "description": "The version of the terms the person agreed to."
+          },
+          "consent_accepted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "training_consent": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -1918,6 +2038,89 @@
           "statement_type",
           "text",
           "sources"
+        ]
+      },
+      "Consent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "consent_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "description": "Send this as SessionCreate.consent_version."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved"
+            ]
+          },
+          "language": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "heading": {
+                  "type": "string"
+                },
+                "paragraphs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "heading",
+                "paragraphs"
+              ]
+            }
+          },
+          "acknowledgement": {
+            "type": "string"
+          },
+          "training": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "explanation": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "explanation"
+            ]
+          }
+        },
+        "required": [
+          "consent_id",
+          "version",
+          "status",
+          "language",
+          "region",
+          "title",
+          "sections",
+          "acknowledgement",
+          "training"
         ]
       }
     },

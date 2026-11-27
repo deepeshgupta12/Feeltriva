@@ -2,6 +2,7 @@ import type {
   AnswerSubmit,
   Assessment,
   AssessmentRequest,
+  Consent,
   DeletionReceipt,
   ObservationSubmit,
   Question,
@@ -26,7 +27,9 @@ import type {
  *   version rejects with `ApiError.kind === 'conflict'`.
  */
 export interface AssessmentService {
-  /** POST /v1/sessions */
+  /** GET /v1/consent — the current terms. Their `version` is what `startSession` sends as `consent_version`. */
+  getConsent(): Promise<Consent>;
+  /** POST /v1/sessions — refused with `consent_version_not_current` unless it names the current terms. */
   startSession(input: SessionCreate): Promise<Session>;
   /** GET /v1/sessions/{session_id} */
   getSession(sessionId: string): Promise<Session>;

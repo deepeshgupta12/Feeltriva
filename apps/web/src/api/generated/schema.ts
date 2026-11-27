@@ -150,6 +150,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The terms a person agrees to before a session is started, with their version */
+        get: operations["getConsent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -164,6 +181,11 @@ export interface components {
         SessionCreate: {
             consent_version: string;
             demographics?: components["schemas"]["Demographics"];
+            /**
+             * @description The person's separate choice to let the conversation be used to improve the product. False unless they made it.
+             * @default false
+             */
+            training_consent: boolean;
         };
         Session: {
             /** Format: uuid */
@@ -174,6 +196,11 @@ export interface components {
             expires_at: string;
             observations: components["schemas"]["ObservationRecord"][];
             demographics?: components["schemas"]["Demographics"];
+            /** @description The version of the terms the person agreed to. */
+            consent_version?: string;
+            /** Format: date-time */
+            consent_accepted_at?: string;
+            training_consent?: boolean;
         };
         Observation: {
             feature_id: string;
@@ -312,6 +339,25 @@ export interface components {
                 record_id: string;
                 source_url?: string | null;
             }[];
+        };
+        Consent: {
+            consent_id: string;
+            /** @description Send this as SessionCreate.consent_version. */
+            version: string;
+            /** @enum {string} */
+            status: "draft" | "approved";
+            language: string;
+            region: string;
+            title: string;
+            sections: {
+                heading: string;
+                paragraphs: string[];
+            }[];
+            acknowledgement: string;
+            training: {
+                label: string;
+                explanation: string;
+            };
         };
     };
     responses: never;
@@ -1225,6 +1271,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConditionInformation"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Version or idempotency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Schema validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assessment unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Consent"];
                 };
             };
             /** @description Invalid input */

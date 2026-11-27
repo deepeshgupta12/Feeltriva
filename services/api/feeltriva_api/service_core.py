@@ -227,6 +227,10 @@ class ServiceCore:
                 expires_at=aware(session.expires_at),
                 observations=[self._record(o) for o in current],
                 demographics=demographics,
+                # What the person agreed to when the session was started, and when (M3.16).
+                consent_version=session.consent_version,
+                consent_accepted_at=aware(session.created_at) if session.created_at else None,
+                training_consent=bool(session.training_consent),
             )
         )
 

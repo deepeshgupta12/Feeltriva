@@ -400,6 +400,57 @@ async function answerCurrent(page, wording, act) {
   check('flow 4: no console errors or page errors', problems.length === 0, problems.join(' | '));
 }
 
+// ----------------------------------------------------------------------------
+// Flow 5: the terms come from the API and are agreed to before anything starts; the choice
+// about improving the product is a separate box that is never ticked for the person (M3.16)
+// ----------------------------------------------------------------------------
+{
+  const { context, page, problems, api } = await newPage();
+  await page.goto(`${BASE}/start`);
+  await page.getByRole('heading', { level: 2, name: 'Before you start' }).waitFor({ timeout: 15000 });
+  const text = await mainText(page);
+  check(
+    'terms: the text of the service is shown, with how long a conversation is kept and how to take the agreement back',
+    api.some((call) => call.method === 'GET' && call.path === '/v1/consent' && call.status === 200) &&
+      text.includes('We keep a conversation for 30 days and then delete it') &&
+      text.includes('Taking back your agreement') &&
+      text.includes('These terms are a draft'),
+  );
+  const agree = page.getByRole('checkbox', { name: /I have read this and agree/ });
+  const improve = page.getByRole('checkbox', { name: /You may also use my conversation/ });
+  check('terms: neither box is ticked for the person', !(await agree.isChecked()) && !(await improve.isChecked()));
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByText('Tick the box to confirm you’ve read this').waitFor({ timeout: 5000 });
+  check(
+    'terms: there is no step further without the agreement, and nothing was started',
+    !api.some((call) => call.method === 'POST'),
+  );
+  await agree.check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('radio', { name: /I’m an adult/ }).check();
+  await page.getByLabel('Age in years').fill('34');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.locator('textarea').first().fill('alpha for a while');
+  const starting = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/v1/sessions',
+  );
+  await page.getByRole('button', { name: 'Continue' }).click();
+  const response = await starting;
+  const sent = response.request().postDataJSON();
+  const session = await response.json();
+  check(
+    'terms: the session starts with the version that was shown, the time of the agreement and the separate choice as "no"',
+    response.status() === 201 &&
+      sent.consent_version === session.consent_version &&
+      sent.training_consent === false &&
+      session.training_consent === false &&
+      !Number.isNaN(Date.parse(session.consent_accepted_at)),
+  );
+  await page.waitForURL(/\/assess\/[0-9a-f-]{36}$/, { timeout: 15000 });
+  await context.close();
+  check('flow 5: no console errors or page errors', problems.length === 0, problems.join(' | '));
+}
+
 await browser.close();
 console.log(`\n${passed} passed, ${failures.length} failed (${passed + failures.length} checks)`);
 if (failures.length > 0) {

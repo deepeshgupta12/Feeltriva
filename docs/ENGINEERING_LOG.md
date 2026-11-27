@@ -48,6 +48,7 @@ command output, not estimated.
 | BUG-037 | M2.19 | The list approval of 2026-11-26 approved the seven invented items of the synthetic test rule set ("Fixture signal alpha (sample)" and six more) under the doctor's name. They are stored beside the real items, were pending, and nothing told them apart; the invented questions and the invented rule set had been set aside, the items not. They were in no published list, but a new version of the list of names would have carried them. Found on 2026-11-26 while reading the test rule set for M3.9 | Fixed: the seven are pending again, with a note under the assistant's name; the approval command sets such items aside; the review service refuses to approve one (`sample_item`). Corrects a figure of M2.20: the real items in use are 933, not 940 |
 | BUG-038 | M3.6 / M3.9 | The live browser test (`pnpm e2e:live`) counted, after a page reload, every answer of the service that arrived from then on. An answer to a request the page had sent just before the reload could arrive afterwards and was counted as the reloaded page's own; the check then failed (once in M2.4j, once in M3.9). A fault of the test, not of the product | Fixed in M3.9: each request is marked with the phase it was sent in and the check counts the reloaded page's own requests; 3 runs of 3 pass |
 | BUG-039 | M2.4a / M3.12 | Two component tests of the review workspace failed once with "unable to find" an element and passed in the next three runs. Each was the first test of its kind to render the whole app, on a machine busy with a type check; the test library gives up waiting after one second. No element was missing | Fixed in M3.12: the waits of the web tests give up after three seconds. A real absence still fails |
+| BUG-040 | M3.6 / M3.16 | The demo walk-through (`pnpm smoke`) read where the keyboard focus was at the instant the About dialog had gone. The focus is put back on the button that opened it a moment later (measured: on the page body at once, on the button 50 ms later, in 4 of 6 runs). The check failed twice in a row in M3.16 and had passed in every run before. A fault of the test, not of the product: the focus does return | Fixed in M3.16: the check waits up to three seconds for the focus to be on the button. A focus that never returns still fails |
 
 ## Entries
 
@@ -6536,3 +6537,94 @@ the service's names and words, the attributes, reading a stored result back, the
   and MCP.
 - An assessment read back names the rule set and knowledge by what was stored with it; if those
   have changed since, their version text is the stored ID, not a version name.
+
+### M3.16 — Consent before a session starts
+
+**What it is for.** The plan row and the owner's decisions E32 (consent is taken from every user)
+and E33 (conversations are kept for 30 days): a versioned text of the terms for adults in India in
+English, no session without an agreement to the current version, the agreement stored with the
+session, and taking it back removes the conversation. The handoff adds (FR01, FR11, `docs/06`
+section 5): an acknowledgement that is not ticked for the person, consent to training kept apart
+and off by default, and draft status shown until real policies exist. Second of the five sub-steps
+the owner asked for on 2026-11-27.
+
+**Impact analysis before editing.** One HIGH and one CRITICAL result, each reported to the owner
+in a message with the plan before the edit.
+
+| Changed | Risk | Callers, and what was done |
+|---|---|---|
+| `ServiceCore._session_out` | HIGH: every route and MCP tool that returns a session | Three fields are added to what it returns; nothing is removed or renamed |
+| `IntakeOperations.start_session` | LOW in the graph; read by the REST route and the MCP tool `start_assessment` (`services/mcp/feeltriva_mcp/server.py` read, `tests/mcp` run) | The version is checked before anything is stored; the separate choice is stored |
+| `schemas.SessionCreate`, `SessionOut`, `models.Session` | LOW (lower bound) | One optional field in, three out, one column (migration 0021) |
+| `create_app`, MCP `build_server` | LOW | One route and one tool added; `start_assessment` takes the separate choice |
+| Web: `MockAssessmentService.view` | CRITICAL: 4 direct callers, 15 flows (every session the demo returns) | Three optional fields are added, the ones the service returns; no caller reads them |
+| Web: `MockAssessmentService.startSession`, `StartPage`, `PrivacyPage`, the service interface | LOW (the interface's callers are not traced; found by search) | The start page reads the terms and sends their version; the mock refuses a version that is not its current one |
+
+**Implemented** (decision E111).
+
+- The terms: `services/api/feeltriva_api/texts/consent_in_en_draft.json`, version
+  `consent-in-en-draft-1`, status `draft`. `consent.py` reads and checks the file, gives a client
+  the text without the writers' note, and refuses any version but the current one.
+- Service: `GET /v1/consent` and the MCP tool `get_consent`; `start_session` refuses with 409
+  `consent_version_not_current` before anything is stored; a session carries `consent_version`,
+  `consent_accepted_at` (the time it was started) and `training_consent` (false unless given;
+  migration 0021, applied to the local database). The audit record of a start carries the
+  version and the choice.
+- Retention: `python -m feeltriva_api.retention` counts the conversations older than 30 days;
+  with `--delete` it deletes them with their messages, observations, answers, assessments and
+  replay records, by name and not by the database's cascade (the first version relied on the
+  cascade and left rows behind on SQLite; found by its test before it was committed).
+- Contract: `Consent`, `GET /v1/consent`, `SessionCreate.training_consent` and the three session
+  fields added to `packages/contracts/openapi.json`; the supplied contract is untouched and the
+  containment test holds.
+- Web: the first step of a check reads the terms from the service and shows every heading and
+  paragraph, with a "Draft" mark; the acknowledgement is the service's sentence; the choice about
+  improving the product is a second box, not ticked, marked optional, and the same choice as the
+  setting on the privacy page. While the terms cannot be read there is no box and no "Continue".
+  The session is started with the version that was on screen. If the service answers that the
+  terms have changed, the page reads them again, clears the tick and asks again, and keeps what
+  was typed. The design demo has its own short terms (`src/fixtures/demoConsent.ts`).
+- The terms file names no author; its note says the wording is a draft that neither the owner nor
+  a lawyer has reviewed.
+
+**Bugs.** BUG-040 (index above): a check of the demo walk-through read the keyboard focus too
+early; it waits for it now. Not caused by this sub-step (the page and the dialog are untouched),
+found by it. Four files outside this sub-step had been re-laid, as a formatter run over whole
+directories does (only touched files are to be formatted); they held no other change and were
+restored to the committed state before anything else was done.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 83 files |
+| `uv run pytest` (SQLite, archives included) | 324 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, archives, object store and `tests/mcp` included; full output saved | 403 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format:check` | clean |
+| `pnpm test` | 179 passed (10 files) |
+| `pnpm e2e:live` (web through the real service, `pnpm dev:api` on port 5173) | 55 passed, 0 failed (55 checks; 5 new, flow 5) |
+| `pnpm smoke` (design demo, `pnpm dev` on port 5173) | two runs 377 passed, 1 failed (BUG-040); after the fix of the check 378 passed, 0 failed |
+| `detect_changes` before commit | critical by its own count (64 symbols, 54 flows). Compared with the last commit function by function (Python by syntax tree, web by the positions of the changes): `create_app`, `Session`, `SessionCreate`, `SessionOut`, `_session_out`, `start_session`, MCP `start_assessment`, the mock's record, `startSession` and `view`, `StartPage` with its first and third step, `PrivacyPage`, the keyboard check changed; `get_consent` (route, tool), `getConsent` (HTTP, mock), `parseConsent`, `TermsText` added; the other listed symbols only moved |
+
+New tests (5 on the service, 13 on the web, 5 browser checks): the terms are served with their
+version and without the writers' note, and the wording of a version has not changed; no session
+without the current version, over REST and MCP; the agreement and its time are kept; the separate
+choice is false unless given; deleting removes the conversation; a conversation is deleted once it
+is older than 30 days and not an hour before, and a recent one is kept. Web: the terms are shown
+word for word; neither box is ticked; the version on screen and the choice are what is sent;
+nothing starts while the terms cannot be read; changed terms are asked for again with the typed
+text kept; incomplete terms from the service are not shown in part.
+
+**Limits, stated plainly.**
+
+- The wording is a draft. Neither the owner nor a lawyer has read it. Every change of it needs a
+  new version, or the fingerprint test fails.
+- Nothing schedules the 30-day deletion. It is a command to be run every day by the deployment
+  (M0.10, M6.4); until then the 30 days hold only as often as it is run. Backups are not covered
+  (E33 leaves their lifetime to be confirmed).
+- D-L2 is open: the choice about improving the product is optional here, as the handoff has it.
+  Nothing reads the choice yet (step L).
+- A person cannot change the choice for a conversation already started; it is recorded at the
+  start. Taking the whole agreement back is deleting the conversation.
+- The terms exist in English for India only. Another language or region is another file and
+  another version, and the service would have to choose between them; that is not built.

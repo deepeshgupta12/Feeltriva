@@ -387,3 +387,47 @@ describe('dev auth token provider', () => {
     expect(await createAuthTokenProvider({ devAuth: true })()).toMatch(/^dev:/);
   });
 });
+
+describe('the terms', () => {
+  const terms = {
+    consent_id: 'terms',
+    version: 'terms-1',
+    status: 'draft',
+    language: 'en',
+    region: 'IN',
+    title: 'Before you start',
+    sections: [{ heading: 'What this is', paragraphs: ['One paragraph.'] }],
+    acknowledgement: 'I agree.',
+    training: { label: 'You may also use it.', explanation: 'A separate choice.' },
+  };
+
+  it('are read from the service without an Idempotency-Key', async () => {
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(json(terms)));
+    await expect(createService(fetchMock).getConsent()).resolves.toEqual(terms);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('http://api.test/v1/consent');
+    expect(init?.method).toBe('GET');
+    expect(headersOf(fetchMock, 0)['Idempotency-Key']).toBeUndefined();
+  });
+
+  it.each([
+    ['no version', { ...terms, version: '' }],
+    ['no sections', { ...terms, sections: [] }],
+    ['a section without paragraphs', { ...terms, sections: [{ heading: 'What this is' }] }],
+    ['no acknowledgement', { ...terms, acknowledgement: undefined }],
+    ['no separate choice', { ...terms, training: undefined }],
+    ['an unknown status', { ...terms, status: 'final' }],
+  ])('are not shown in part: %s', async (_name, incomplete) => {
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(json(incomplete)));
+    expect((await rejection(createService(fetchMock).getConsent())).kind).toBe('invalid_response');
+  });
+
+  it('send the separate choice with the start only when the caller gives it', async () => {
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(json(session, 201)));
+    await createService(fetchMock).startSession({ consent_version: 'terms-1', training_consent: true });
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      consent_version: 'terms-1',
+      training_consent: true,
+    });
+  });
+});

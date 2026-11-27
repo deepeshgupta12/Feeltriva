@@ -18,6 +18,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+from feeltriva_api import consent
 from feeltriva_api import schemas as sc
 from feeltriva_api.auth import Principal
 from feeltriva_api.container import Container, build_container
@@ -84,18 +85,32 @@ def build_server(container: Container, authenticated: Callable[[], Principal]) -
     @server.tool()
     @guarded
     def start_assessment(
-        consent_version: str, idempotency_key: str, demographics: dict[str, Any] | None = None
+        consent_version: str,
+        idempotency_key: str,
+        demographics: dict[str, Any] | None = None,
+        training_consent: bool = False,
     ) -> dict[str, Any]:
-        """Start an assessment session after the user has accepted the stated consent version.
+        """Start an assessment session after the user has read the current terms (get_consent) and agreed to
+        them: consent_version must be the version get_consent returned. training_consent is the user's separate
+        choice to let the conversation be used to improve the product; leave it false unless they said so.
         Optional demographics: age_years, gender_identity, clinically_relevant_context."""
         body = _parse(
             sc.SessionCreate,
             {
                 "consent_version": consent_version,
+                "training_consent": training_consent,
                 **({"demographics": demographics} if demographics is not None else {}),
             },
         )
         return svc.start_session(principal(), body, idempotency_key)
+
+    @server.tool()
+    @guarded
+    def get_consent() -> dict[str, Any]:
+        """The terms a user must read and agree to before a session is started, with their version. Show them
+        to the user as they are; do not summarise them away."""
+        principal()
+        return consent.current().shown()
 
     @server.tool()
     @guarded

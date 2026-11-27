@@ -163,6 +163,7 @@ uv run python -m feeltriva_api.serving_bundle                  # the serving bun
 uv run python -m feeltriva_api.contract                        # the review workspace's routes written down from the running service (packages/contracts/openapi.internal.json); run after adding or changing an internal route
 uv run python -m feeltriva_api.duplicates                      # duplicates counted by kind; changes nothing (with --merge --reviewer --note: merges the condition names that are one condition by rule; with --items the names of symptoms and other items, with --items --headings the repeated column headings)
 uv run python -m feeltriva_api.list_approval                   # an approval given for whole lists: counts the rows it can be entered on and those set aside, and changes nothing (with --approve --reviewer --note: enters it row by row; publishes nothing; --suggested-matches only when the approval names that list)
+uv run python -m feeltriva_api.retention                       # conversations older than 30 days, counted; changes nothing (with --delete: deletes them with all that belongs to them; to be run daily by the deployment)
 ```
 
 Run the PostgreSQL suite **without** `-m "not archives"` at least once per sub-step when the

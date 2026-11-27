@@ -10,7 +10,14 @@ import type { components } from './generated/schema';
 type Schemas = components['schemas'];
 
 export type Demographics = Schemas['Demographics'];
-export type SessionCreate = Schemas['SessionCreate'];
+/**
+ * `training_consent` may be left out: the service then records that it was not given. (The generated type
+ * marks every field that has a default as always present, which holds for what the service stores, not for
+ * what a client has to send.)
+ */
+export type SessionCreate = Omit<Schemas['SessionCreate'], 'training_consent'> & { training_consent?: boolean };
+/** The terms a person agrees to before a check starts (`GET /v1/consent`). */
+export type Consent = Schemas['Consent'];
 export type Session = Schemas['Session'];
 export type ObservationRecord = Schemas['ObservationRecord'];
 export type ObservationInput = Schemas['Observation'];
