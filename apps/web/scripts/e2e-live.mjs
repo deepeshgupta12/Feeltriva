@@ -43,6 +43,11 @@ async function newPage() {
   const page = await context.newPage();
   const problems = [];
   const api = [];
+  // Each request is marked with the phase it was sent in, so that a check after a reload can count only what
+  // the reloaded page sent: an answer to a request of the page before can still arrive afterwards.
+  const phase = { now: 0 };
+  const sentIn = new WeakMap();
+  page.on('request', (request) => sentIn.set(request, phase.now));
   page.on('console', (m) => {
     if (m.type() === 'error') problems.push(`console: ${m.text().slice(0, 200)}`);
   });
@@ -56,10 +61,11 @@ async function newPage() {
         status: r.status(),
         idempotencyKey: r.request().headers()['idempotency-key'] ?? null,
         authorization: r.request().headers()['authorization'] ?? null,
+        phase: sentIn.get(r.request()) ?? phase.now,
       });
     }
   });
-  return { context, page, problems, api };
+  return { context, page, problems, api, phase };
 }
 
 const mainText = async (page) => (await page.locator('main').innerText()).replace(/\s+/g, ' ');
@@ -98,7 +104,7 @@ async function answerCurrent(page, wording, act) {
 //         -> correction -> stale -> refreshed result -> summary -> delete
 // ----------------------------------------------------------------------------
 {
-  const { context, page, problems, api } = await newPage();
+  const { context, page, problems, api, phase } = await newPage();
   await startCheck(page, 'I have alpha');
   await waitForInterpretation(page);
   let text = await mainText(page);
@@ -127,6 +133,10 @@ async function answerCurrent(page, wording, act) {
   await page.getByRole('heading', { name: /all the questions for now/ }).waitFor({ timeout: 15000 });
   text = await mainText(page);
   check('questions: asked one at a time and finished (yes/no, choice, number, duration)', true);
+  check(
+    'questions: the context question is not asked when the detail its rule names was not reported (M3.9)',
+    !/context factor zeta/i.test(text),
+  );
   check('questions: explicit "None of these" is recorded under Not present', /Not present .*Signal gamma/.test(text));
   // M3.14: what the service stored is shown in the person's words, and once.
   check(
@@ -229,11 +239,11 @@ async function answerCurrent(page, wording, act) {
 
   // Reload: identity and session state live in memory only, so a reload must not bring the
   // conversation back. The API answers 404 for the new identity (same as "does not exist").
-  const before = api.length;
+  phase.now += 1;
   await page.reload();
   await page.waitForTimeout(2500);
   text = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
-  const afterReload = api.slice(before).filter((c) => c.method === 'GET');
+  const afterReload = api.filter((c) => c.phase === phase.now && c.method === 'GET');
   check(
     'reload: no health detail survives a page reload',
     !/Signal beta|Illustrative possibility|alpha/.test(text),
@@ -344,6 +354,50 @@ async function answerCurrent(page, wording, act) {
   await shot(page, 'live-urgent');
   await context.close();
   check('flow 3: no console errors or page errors', problems.length === 0, problems.join(' | '));
+}
+
+// ----------------------------------------------------------------------------
+// Flow 4: a question about clinically relevant context is asked only because the detail its
+//         rule names was reported, and declining it is an answer (M3.9)
+// ----------------------------------------------------------------------------
+{
+  const { context, page, problems } = await newPage();
+  await startCheck(page, 'I have alpha and epsilon');
+  await waitForInterpretation(page);
+  // Two details were found in the text; each is confirmed before the questions start.
+  for (let done = 0; done < 2; done += 1) {
+    await page
+      .getByRole('button', { name: /^That’s right: / })
+      .first()
+      .click();
+    await page.getByText('You confirmed this').nth(done).waitFor({ timeout: 15000 });
+  }
+  await answerCurrent(page, /is fixture signal beta also present/, () =>
+    page.getByRole('radio', { name: 'Yes' }).check(),
+  );
+  await answerCurrent(page, /best describes fixture signal gamma/, () =>
+    page.getByRole('radio', { name: 'None of these' }).check(),
+  );
+  await page
+    .getByRole('heading', { name: /does fixture context factor zeta apply to you/ })
+    .waitFor({ timeout: 15000 });
+  check('context: the question is asked once the detail its rule names was reported', true);
+  check(
+    'context: "Prefer not to answer" is offered beside yes, no and not sure, and nothing is chosen',
+    (await page.getByRole('radio', { name: 'Prefer not to answer' }).count()) === 1 &&
+      (await page.getByRole('radio', { checked: true }).count()) === 0,
+  );
+  await page.getByRole('radio', { name: 'Prefer not to answer' }).check();
+  await page.getByRole('button', { name: 'Send answer' }).click();
+  await page.getByRole('heading', { name: /fixture measurement delta/ }).waitFor({ timeout: 15000 });
+  const text = await mainText(page);
+  check(
+    'context: declining is accepted, shown as the answer, and the conversation goes on',
+    text.includes('Prefer not to answer') && !/context factor zeta[^.]*Not present/i.test(text),
+  );
+  await shot(page, 'live-context');
+  await context.close();
+  check('flow 4: no console errors or page errors', problems.length === 0, problems.join(' | '));
 }
 
 await browser.close();

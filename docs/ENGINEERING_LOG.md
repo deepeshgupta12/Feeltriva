@@ -46,6 +46,7 @@ command output, not estimated.
 | BUG-035 | M3.2 / M3.14a | Observations written in one request (two details confirmed together) had no order: they are read back by version and time, and the database gives every row of one transaction the same time. The same flow could return them in either order. Seen three times as the REST and MCP parity test failing in a full PostgreSQL run and passing on the next; each time the output had not been kept. Caught in M3.14a with the output saved | Fixed in M3.14a: each row of a request gets its own time, in the order given; a test checks the times themselves, because the wrong order is too rare to wait for |
 | BUG-036 | M2.5a / M3.8 | A follow-up question lost three things on its way from the rule file through the database into a published rule set: which option means "not present" (so "None of these" would have been read as present), the reviewer's order, and now the mark "essential". The table had no place for them and the published content did not list them. No effect so far: the only published rule set holds rules and no questions. Found while reading the path for M3.8 | Fixed in M3.8: kept with the question (`branch_rules`), listed in the published content, read by the serving bundle; a rule set published before the fix is read as before |
 | BUG-037 | M2.19 | The list approval of 2026-11-26 approved the seven invented items of the synthetic test rule set ("Fixture signal alpha (sample)" and six more) under the doctor's name. They are stored beside the real items, were pending, and nothing told them apart; the invented questions and the invented rule set had been set aside, the items not. They were in no published list, but a new version of the list of names would have carried them. Found on 2026-11-26 while reading the test rule set for M3.9 | Fixed: the seven are pending again, with a note under the assistant's name; the approval command sets such items aside; the review service refuses to approve one (`sample_item`). Corrects a figure of M2.20: the real items in use are 933, not 940 |
+| BUG-038 | M3.6 / M3.9 | The live browser test (`pnpm e2e:live`) counted, after a page reload, every answer of the service that arrived from then on. An answer to a request the page had sent just before the reload could arrive afterwards and was counted as the reloaded page's own; the check then failed (once in M2.4j, once in M3.9). A fault of the test, not of the product | Fixed in M3.9: each request is marked with the phase it was sent in and the check counts the reloaded page's own requests; 3 runs of 3 pass |
 
 ## Entries
 
@@ -6345,3 +6346,64 @@ medium; compared with the last commit function by function, `_feature_guard` and
 **What I take from it.** Before a decision is entered on a whole table, every kind of row in it is
 named, the invented ones first. The check that would have caught it was one query for the IDs of
 the test rule set.
+
+### M3.9 — Clinically relevant context
+
+**What it is for.** Handoff FR05: "request clinically relevant sex-related factors only when
+applicable. Preserve self-described gender separately. Include unknown/prefer-not-to-answer", and
+the frontend prompt: "do not infer anatomy or pregnancy from gender". The contract already has
+`Demographics.clinically_relevant_context`; nothing wrote to it or read it.
+
+**Impact analysis before editing.** One HIGH result, reported to the owner in a message with the
+plan before any edit.
+
+| Changed | Risk | Callers, and what was done |
+|---|---|---|
+| `ServiceCore._facts` | HIGH: seven uses, at session creation, after text or details, on an answer (twice), for the next question, in the assessment (twice) | Also reads the answers to the rule set's context questions. A session without one gives the same result as before; called the same way everywhere |
+| `IntakeOperations.submit_answer`, `get_next_question` | LOW in the graph (the REST routes); the MCP tools by reading | A context answer is stored apart; a context question says that declining is offered |
+| `validate_bundle`, `answers`, the path through the database, `_summary_text` | as in M3.8 | The kind of question travels with it; two refusals at load; the summary lists the answer |
+| Web `choiceOptions` | LOW: the answer form and `resolveDraft` | One more choice when the question allows it |
+
+**Implemented** (decision E108).
+
+- Shared package: `Question.stores` ("observation" or "context"); `PREFER_NOT_TO_ANSWER`; at
+  load, a context question without a rule, or one that is not yes / no or one choice, is refused.
+- Service: `_facts` reads context answers of the rule set's context questions; `submit_answer`
+  writes a context answer to `demographics.clinically_relevant_context` (presence, value, whether
+  declined, the question, the version) and no observation; `get_next_question` adds
+  `allow_prefer_not_to_answer`; the summary lists it under "Context".
+- The synthetic rule set: two invented items and one invented context question, asked only when
+  the invented detail "epsilon" was reported. Registered in the real database with
+  `python -m feeltriva_api.seed`; the items are samples and cannot be approved (BUG-037).
+- Web: the choice "Prefer not to answer", last among the choices of such a question.
+
+**Tests run.**
+
+| Command | Result |
+|---|---|
+| `uv run ruff check .` / `uv run mypy packages services pipelines` | clean; no issues in 79 files |
+| `uv run pytest` (SQLite, archives included) | 312 passed, 80 skipped |
+| `uv run pytest` on PostgreSQL, archives, object store and `tests/mcp` included; full output saved | 391 passed, 1 skipped |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format:check` / `pnpm test` | clean; 161 passed (10 files) |
+| `pnpm e2e:live` (web through the real service, `pnpm dev:api` on port 5173) | first run: 49 passed, 1 failed (BUG-038, the test's own race); after the fix of the test: 50 passed, 0 failed, three runs in a row |
+| `detect_changes` before commit | high (47 symbols, 14 flows: the answer, the next question, the session read, the serving bundle). Compared with the last commit function by function: `_facts`, `submit_answer`, `get_next_question`, `_summary_text`, `Question`, `validate_bundle`, `validate_answer_schema`, `answer_in_words`, `seed_release`, `_content`, `question_of` changed and nothing was added; `_record`, `CandidateDef` and the web's `numberUnits` are listed and only moved |
+
+New tests (`tests/api/test_context.py`, 5): the context question is never asked without the
+detail its rule names, whatever the self-described gender, and is asked once, at the same place
+for everybody, with it; the answer is kept as context and is in neither the reported details nor
+the gender; "prefer not to answer" is accepted there and refused on an ordinary question; context
+sent by a caller for another item answers nothing; a context question without a rule, with a
+number as answer, or with a rule that names the gender does not load. Web: the choice is offered
+and sent. Browser: a new flow of three checks, and one check that the question is absent from the
+ordinary flow.
+
+**Limits, stated plainly.**
+
+- One invented question. No real context question exists; which facts are asked for, of whom
+  and in which words is for the doctor.
+- A context answer cannot be changed after it is given: the correction path of reported details
+  does not cover it. Not in the plan until now; named in E108 and reported.
+- The web does not show the context answers in "What you've shared"; they are in the
+  conversation and in the summary.
+- A context question is yes / no or one choice. A number (a week of pregnancy, say) would need
+  its own way to decline.

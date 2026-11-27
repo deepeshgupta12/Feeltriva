@@ -57,6 +57,7 @@ def seed_release(db: Database, bundle: ReleaseBundle) -> None:
                 "option_presence": dict(q.option_presence),
                 "priority": q.priority,
                 "essential": q.essential,
+                "stores": q.stores,
             }
             row_q.evidence_ids, row_q.status = list(q.evidence_ids), q.status
             tx.add(row_q)

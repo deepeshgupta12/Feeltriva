@@ -7,6 +7,8 @@ from datetime import timedelta
 from typing import Any
 
 from feeltriva_clinical import (
+    PREFER_NOT_TO_ANSWER,
+    AnswerOutcome,
     AnswerValidationError,
     interpret_answer,
     next_question,
@@ -24,7 +26,7 @@ from .models import (
     SessionMessage,
     SessionObservation,
 )
-from .service_core import PAUSED_STATES, ServiceCore
+from .service_core import CONTEXT, PAUSED_STATES, ServiceCore
 
 
 class IntakeOperations(ServiceCore):
@@ -226,8 +228,14 @@ class IntakeOperations(ServiceCore):
                     "question_not_current",
                     "This question is no longer current. Refresh and answer the current question.",
                 )
+            declined = question.stores == "context" and payload.answer == PREFER_NOT_TO_ANSWER
             try:
-                outcome = interpret_answer(question.answer_schema, payload.answer, question.option_presence)
+                # "Prefer not to answer" is always an answer to a context question. It leaves the fact unknown.
+                outcome = (
+                    AnswerOutcome("uncertain")
+                    if declined
+                    else interpret_answer(question.answer_schema, payload.answer, question.option_presence)
+                )
             except AnswerValidationError as exc:
                 raise ApiError(422, "invalid_answer", f"The answer is not valid for this question: {exc}.") from exc
             version = self._bump(tx, session, payload.observation_version)
@@ -240,21 +248,33 @@ class IntakeOperations(ServiceCore):
                     observation_version=version,
                 )
             )
-            prior = next((o for o in current if o.feature_id == question.feature_id), None)
-            tx.add(
-                SessionObservation(
-                    observation_id=uuid.uuid4(),
-                    session_id=session_id,
-                    feature_id=question.feature_id,
-                    presence=outcome.presence,
-                    value=outcome.value,
-                    modifiers={"duration": outcome.duration} if outcome.duration else {},
-                    raw_phrase_encrypted=self._cipher.encrypt(outcome.raw_phrase) if outcome.raw_phrase else None,
-                    confirmed=True,
-                    observation_version=version,
-                    supersedes=prior.observation_id if prior else None,
+            if question.stores == "context":
+                # Kept with the session's context, apart from the observations and from the self-described gender.
+                kept = dict((session.demographics or {}).get(CONTEXT) or {})
+                kept[question.feature_id] = {
+                    "presence": outcome.presence,
+                    "value": outcome.value,
+                    "prefer_not_to_answer": declined,
+                    "question_id": question.question_id,
+                    "observation_version": version,
+                }
+                session.demographics = {**(session.demographics or {}), CONTEXT: kept}
+            else:
+                prior = next((o for o in current if o.feature_id == question.feature_id), None)
+                tx.add(
+                    SessionObservation(
+                        observation_id=uuid.uuid4(),
+                        session_id=session_id,
+                        feature_id=question.feature_id,
+                        presence=outcome.presence,
+                        value=outcome.value,
+                        modifiers={"duration": outcome.duration} if outcome.duration else {},
+                        raw_phrase_encrypted=self._cipher.encrypt(outcome.raw_phrase) if outcome.raw_phrase else None,
+                        confirmed=True,
+                        observation_version=version,
+                        supersedes=prior.observation_id if prior else None,
+                    )
                 )
-            )
             tx.flush()
             current = self._current(tx, session_id)
             session.state = self._state_after_change(
@@ -294,7 +314,12 @@ class IntakeOperations(ServiceCore):
                 sc.QuestionOut(
                     question_id=question.question_id,
                     wording=question.wording,
-                    answer_schema=question.answer_schema,
+                    # A context question always offers "prefer not to answer"; the question says so itself.
+                    answer_schema=(
+                        {**question.answer_schema, "allow_prefer_not_to_answer": True}
+                        if question.stores == "context"
+                        else question.answer_schema
+                    ),
                     observation_version=session.observation_version,
                 )
             )

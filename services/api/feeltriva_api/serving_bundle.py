@@ -242,5 +242,6 @@ def question_of(entry: dict[str, Any]) -> Question:
         option_presence=dict(entry.get("option_presence") or {}),
         priority=int(entry.get("priority", 100)),
         essential=bool(entry.get("essential", False)),
+        stores=entry.get("stores", "observation"),
         status="approved",
     )

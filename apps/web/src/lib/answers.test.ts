@@ -275,3 +275,32 @@ describe('withOptionLabels', () => {
     expect(withOptionLabels(other, { type: 'date' })).toEqual(other);
   });
 });
+
+describe('a question about clinically relevant context', () => {
+  it('offers "Prefer not to answer" last, beside its own choices, and sends it as its own value', () => {
+    const context = parseAnswerSchema({ type: 'yes_no_unsure', allow_prefer_not_to_answer: true })!;
+    expect(choiceOptions(context).map((option) => option.label)).toEqual([
+      'Yes',
+      'No',
+      'I’m not sure',
+      'Prefer not to answer',
+    ]);
+    expect(resolveDraft(context, { kind: 'choice', value: 'prefer_not_to_answer' })).toEqual({
+      ok: true,
+      value: 'prefer_not_to_answer',
+      label: 'Prefer not to answer',
+    });
+    // An ordinary question does not offer it, and a value that is not offered is not an answer.
+    expect(choiceOptions(schemas.yesNo!).map((option) => option.value)).toEqual(['yes', 'no', 'not_sure']);
+    expect(resolveDraft(schemas.yesNo!, { kind: 'choice', value: 'prefer_not_to_answer' })).toMatchObject({
+      ok: false,
+    });
+    const single = parseAnswerSchema({
+      type: 'single_choice',
+      options: [{ value: 'a', label: 'Option A' }],
+      allow_not_sure: true,
+      allow_prefer_not_to_answer: true,
+    })!;
+    expect(choiceOptions(single).map((option) => option.value)).toEqual(['a', 'not_sure', 'prefer_not_to_answer']);
+  });
+});

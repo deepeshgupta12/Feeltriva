@@ -24,7 +24,7 @@ from .models import (
     SessionMessage,
     SessionObservation,
 )
-from .service_core import ProviderFailure, ServiceCore
+from .service_core import CONTEXT, ProviderFailure, ServiceCore
 
 
 class ResultOperations(ServiceCore):
@@ -261,6 +261,20 @@ class ResultOperations(ServiceCore):
         )
         if demo.get("gender_identity"):
             context.append(f"- Gender identity (self-described): {demo['gender_identity']}")
+        # Answers about clinically relevant context (M3.9), in words, apart from the self-described gender.
+        answered = demo.get(CONTEXT) or {}
+        for asked_about in self._bundle.questions:
+            entry = answered.get(asked_about.feature_id) if asked_about.stores == "context" else None
+            if not isinstance(entry, dict):
+                continue
+            item = self._bundle.feature(asked_about.feature_id)
+            in_words = (
+                "Prefer not to answer"
+                if entry.get("prefer_not_to_answer")
+                else answer_in_words(asked_about.answer_schema, entry.get("value"))
+                or {"present": "Yes", "absent": "No", "uncertain": "Not sure"}.get(str(entry.get("presence")), "")
+            )
+            context.append(f"- {item.preferred_name if item else 'Context'}: {in_words}")
         lines += section("Context", context)
         lines += section("Reported by you", [describe(o) for o in current if o.presence == "present"])
         lines += section("Explicitly not present", [describe(o) for o in current if o.presence == "absent"])

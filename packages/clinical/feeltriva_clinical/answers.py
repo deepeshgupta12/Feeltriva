@@ -13,6 +13,8 @@ from typing import Any
 ANSWER_TYPES = {"yes_no_unsure", "single_choice", "multiple_choice", "number", "duration", "date", "free_text"}
 DURATION_UNITS = ("hours", "days", "weeks", "months")
 NOT_SURE = "not_sure"
+# Always offered on a question about clinically relevant context (M3.9), whatever the question's own options.
+PREFER_NOT_TO_ANSWER = "prefer_not_to_answer"
 # A date question may bound its answer with `earliest` and `latest`: a calendar date, or the word "today".
 TODAY = "today"
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -42,8 +44,11 @@ def validate_answer_schema(schema: dict[str, Any]) -> None:
         if not isinstance(options, list) or not options:
             raise AnswerValidationError("choice questions require options")
         values = [o.get("value") for o in options if isinstance(o, dict)]
-        if len(values) != len(options) or len(set(values)) != len(values) or NOT_SURE in values:
-            raise AnswerValidationError("options need unique values distinct from 'not_sure'")
+        taken = {NOT_SURE, PREFER_NOT_TO_ANSWER} & set(values)
+        if len(values) != len(options) or len(set(values)) != len(values) or taken:
+            raise AnswerValidationError(
+                "options need unique values distinct from 'not_sure' and 'prefer_not_to_answer'"
+            )
     if kind == "date":
         fixed = {}
         for key in ("earliest", "latest"):
@@ -195,6 +200,8 @@ def answer_in_words(schema: dict[str, Any] | None, answer: Any) -> str | None:
         return None
     if answer == NOT_SURE:
         return "Not sure"
+    if answer == PREFER_NOT_TO_ANSWER:
+        return "Prefer not to answer"
     schema = schema or {}
     kind = schema.get("type")
     labels = {

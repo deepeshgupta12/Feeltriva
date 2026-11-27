@@ -346,7 +346,12 @@ def test_a_question_keeps_what_the_reviewer_gave_it_on_the_way_to_a_published_ru
     with owner_db.transaction(None, role="migration") as tx:
         # The synthetic rule set is stored by the test setup, through the same function as on any installation.
         stored = tx.get(FollowupQuestion, "fx.q.gamma").branch_rules
-        assert stored == {"option_presence": {"none": "absent"}, "priority": 20, "essential": False}
+        assert stored == {
+            "option_presence": {"none": "absent"},
+            "priority": 20,
+            "essential": False,
+            "stores": "observation",
+        }
 
         tag = uuid.uuid4().hex[:8]
         tx.add(

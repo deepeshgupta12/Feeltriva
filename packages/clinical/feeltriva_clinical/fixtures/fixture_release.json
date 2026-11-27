@@ -12,7 +12,9 @@
     {"feature_id": "fx.signal_delta", "preferred_name": "Fixture measurement delta (sample)", "kind": "measurement", "value_type": "number", "aliases": ["delta"]},
     {"feature_id": "fx.context_duration", "preferred_name": "Fixture duration (sample)", "value_type": "text", "aliases": []},
     {"feature_id": "fx.escalation_marker", "preferred_name": "Fixture escalation marker (sample)", "aliases": ["escalation marker", "escalation-marker"]},
-    {"feature_id": "fx.scope_marker", "preferred_name": "Fixture scope marker (sample)", "aliases": ["scope marker", "scope-marker"]}
+    {"feature_id": "fx.scope_marker", "preferred_name": "Fixture scope marker (sample)", "aliases": ["scope marker", "scope-marker"]},
+    {"feature_id": "fx.signal_epsilon", "preferred_name": "Fixture signal epsilon (sample)", "aliases": ["epsilon"]},
+    {"feature_id": "fx.context_zeta", "preferred_name": "Fixture context factor zeta (sample)", "kind": "history", "aliases": []}
   ],
   "rules": [
     {
@@ -78,6 +80,15 @@
       "answer_schema": {"type": "duration", "allow_not_sure": true},
       "applicability": {"op": "present", "feature": "fx.signal_alpha"},
       "priority": 40
+    },
+    {
+      "question_id": "fx.q.context",
+      "feature_id": "fx.context_zeta",
+      "wording": "Sample question: does fixture context factor zeta apply to you?",
+      "answer_schema": {"type": "yes_no_unsure", "help_text": "Sample explanation: this synthetic question stands for a clinically relevant context question. It is asked only because fixture signal epsilon was reported."},
+      "applicability": {"op": "present", "feature": "fx.signal_epsilon"},
+      "stores": "context",
+      "priority": 50
     }
   ],
   "candidates": [

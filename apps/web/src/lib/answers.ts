@@ -5,6 +5,7 @@
 import {
   DURATION_UNITS,
   NOT_SURE,
+  PREFER_NOT_TO_ANSWER,
   TODAY,
   isCalendarDate,
   type AnswerOption,
@@ -14,6 +15,7 @@ import {
 } from '@/api/types';
 
 export const NOT_SURE_LABEL = 'I’m not sure';
+export const PREFER_NOT_TO_ANSWER_LABEL = 'Prefer not to answer';
 /** The service accepts a free-text answer of up to 2,000 characters; a longer one would be refused there. */
 export const MAX_FREE_TEXT_LENGTH = 2_000;
 
@@ -33,14 +35,20 @@ const YES_NO_UNSURE_OPTIONS: readonly AnswerOption[] = [
   { value: NOT_SURE, label: NOT_SURE_LABEL },
 ];
 
-/** Options to render for single-answer questions, including "I'm not sure" when allowed. */
+/**
+ * Options to render for single-answer questions, including "I'm not sure" when allowed and, last, "Prefer
+ * not to answer" on a question about clinically relevant context, where declining is always an answer.
+ */
 export function choiceOptions(schema: AnswerSchema): readonly AnswerOption[] {
-  if (schema.type === 'yes_no_unsure') {
-    return YES_NO_UNSURE_OPTIONS;
+  const options = schema.type === 'yes_no_unsure' ? YES_NO_UNSURE_OPTIONS : (schema.options ?? []);
+  const offered = [...options];
+  if (schema.type !== 'yes_no_unsure' && schema.allow_not_sure && !offered.some((o) => o.value === NOT_SURE)) {
+    offered.push({ value: NOT_SURE, label: NOT_SURE_LABEL });
   }
-  const options = schema.options ?? [];
-  const hasNotSure = options.some((option) => option.value === NOT_SURE);
-  return schema.allow_not_sure && !hasNotSure ? [...options, { value: NOT_SURE, label: NOT_SURE_LABEL }] : options;
+  if (schema.allow_prefer_not_to_answer && !offered.some((o) => o.value === PREFER_NOT_TO_ANSWER)) {
+    offered.push({ value: PREFER_NOT_TO_ANSWER, label: PREFER_NOT_TO_ANSWER_LABEL });
+  }
+  return offered;
 }
 
 /** Units offered for a number question. One unit means it is shown as fixed text. */

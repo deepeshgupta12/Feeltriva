@@ -103,6 +103,7 @@ def _content(tx: Any, bundle: RuleBundle) -> tuple[dict[str, Any], list[str]]:
                 "option_presence": dict((question.branch_rules or {}).get("option_presence") or {}),
                 "priority": int((question.branch_rules or {}).get("priority", 100)),
                 "essential": bool((question.branch_rules or {}).get("essential", False)),
+                "stores": str((question.branch_rules or {}).get("stores", "observation")),
             }
             for question in questions
             if question.status == "approved"

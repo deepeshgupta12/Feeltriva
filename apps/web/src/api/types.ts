@@ -92,6 +92,8 @@ export interface AnswerSchema {
   type: AnswerType;
   options?: AnswerOption[];
   allow_not_sure?: boolean;
+  /** Set by the service on a question about clinically relevant context: declining is always an answer. */
+  allow_prefer_not_to_answer?: boolean;
   unit?: string;
   units?: string[];
   min?: number;
@@ -104,6 +106,8 @@ export interface AnswerSchema {
 }
 
 export const NOT_SURE = 'not_sure';
+/** The answer that declines a question about clinically relevant context. */
+export const PREFER_NOT_TO_ANSWER = 'prefer_not_to_answer';
 /** A bound of a date question that means the day of whoever answers. */
 export const TODAY = 'today';
 
@@ -174,6 +178,9 @@ export function parseAnswerSchema(raw: unknown): AnswerSchema | null {
   }
   if (typeof raw.allow_not_sure === 'boolean') {
     schema.allow_not_sure = raw.allow_not_sure;
+  }
+  if (raw.allow_prefer_not_to_answer === true) {
+    schema.allow_prefer_not_to_answer = true;
   }
   if (typeof raw.unit === 'string' && raw.unit.length > 0) {
     schema.unit = raw.unit;

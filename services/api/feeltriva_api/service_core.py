@@ -38,6 +38,7 @@ from .settings import Settings
 
 log = logging.getLogger(__name__)
 REASSESS_STATES = {"result_ready", "insufficient_information", "system_unavailable", "assessing"}
+CONTEXT = "clinically_relevant_context"  # the part of a session's demographics that holds context answers
 PAUSED_STATES = {"urgent_handoff", "out_of_scope", "closed"}
 
 
@@ -172,9 +173,16 @@ class ServiceCore:
         superseded = {r.supersedes for r in rows if r.supersedes is not None}
         return [r for r in rows if r.observation_id not in superseded]
 
-    @staticmethod
-    def _facts(current: list[SessionObservation], demographics: dict[str, Any], *, confirmed_only: bool) -> Facts:
+    def _facts(self, current: list[SessionObservation], demographics: dict[str, Any], *, confirmed_only: bool) -> Facts:
         presence = {o.feature_id: o.presence for o in current if o.feature_id and (o.confirmed or not confirmed_only)}
+        # What the person answered about clinically relevant context (M3.9), for the context questions of the rule
+        # set only. It is kept apart from what they report, and the self-described gender is never read: nothing
+        # about a person is concluded from it.
+        context = (demographics or {}).get(CONTEXT) or {}
+        for question in self._bundle.questions:
+            entry = context.get(question.feature_id) if question.stores == "context" else None
+            if isinstance(entry, dict) and entry.get("presence") in ("present", "absent", "uncertain"):
+                presence[question.feature_id] = entry["presence"]
         return Facts(presence, {"demographics.age_years": (demographics or {}).get("age_years")})
 
     def _record(self, o: SessionObservation) -> sc.ObservationRecord:

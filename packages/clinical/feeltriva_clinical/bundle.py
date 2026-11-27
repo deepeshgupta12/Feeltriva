@@ -62,6 +62,10 @@ class Question(_Strict):
     # The reviewer's mark that the assessment needs this answer whatever else is known (M3.8): such a question is
     # asked before the ones that only tell possible explanations apart.
     essential: bool = False
+    # Where the answer is kept (M3.9). "context": a clinically relevant fact about the person, such as a
+    # sex-related factor, kept in the session's `clinically_relevant_context` apart from what they report and
+    # apart from their self-described gender. Such a question is asked only when its rule says it applies.
+    stores: Literal["observation", "context"] = "observation"
     status: ReviewState = "pending"
 
 
@@ -143,6 +147,17 @@ def validate_bundle(bundle: ReleaseBundle, *, clinical_mode: bool) -> None:
             validate_answer_schema(q.answer_schema)
             if q.applicability is not None:
                 validate_ast(q.applicability, features)
+            if q.stores == "context":
+                if q.applicability is None:
+                    raise BundleError(
+                        f"question {q.question_id} asks for clinically relevant context and has no rule that says "
+                        "when it applies; such a question is never asked of everybody"
+                    )
+                if q.answer_schema["type"] not in ("yes_no_unsure", "single_choice"):
+                    raise BundleError(
+                        f"question {q.question_id} asks for clinically relevant context; it is answered with yes or "
+                        'no or with one choice, so that "prefer not to answer" can always be offered beside them'
+                    )
         for c in bundle.candidates:
             validate_ast(c.condition_ast, features)
     except (RuleValidationError, AnswerValidationError) as exc:

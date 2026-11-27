@@ -192,6 +192,22 @@ describe('FollowUpQuestion', () => {
     expect(onSubmit).toHaveBeenCalledWith({ date: '2026-01-15' }, '15 January 2026');
   });
 
+  it('lets a person decline a question about clinically relevant context', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    render(
+      <FollowUpQuestion
+        question={question({ type: 'yes_no_unsure', allow_prefer_not_to_answer: true })}
+        onSubmit={onSubmit}
+      />,
+    );
+    const declined = screen.getByRole('radio', { name: 'Prefer not to answer' });
+    expect(declined).not.toBeChecked();
+    await user.click(declined);
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(onSubmit).toHaveBeenCalledWith('prefer_not_to_answer', 'Prefer not to answer');
+  });
+
   it('sends "not sure" as the same one value for a date and for several choices', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(true);
